@@ -23,7 +23,9 @@ RUN pnpm --filter @workspace/api-server run build
 FROM base AS runner
 WORKDIR /app
 COPY --from=builder /app /app
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 RUN pnpm install --frozen-lockfile=false
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["sh", "-c", "for i in 1 2 3 4 5; do pnpm --filter @workspace/db run push && break || sleep 10; done && pnpm --filter @workspace/api-server run start"]
+CMD ["/app/start.sh"]
