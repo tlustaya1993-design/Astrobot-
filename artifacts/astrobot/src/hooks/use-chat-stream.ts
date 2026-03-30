@@ -1,0 +1,102 @@
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { getSessionId, getAuthHeaders } from '@/lib/session';
+import { createOpenaiConversation, getListOpenaiConversationsQueryKey, getGetOpenaiConversationQueryKey, OpenaiMessage } from '@workspace/api-client-react';
+
+export function useChatStream(conversationId?: number) {
+  const [localMessages, setLocalMessages] = useState<OpenaiMessage[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingText, setStreamingText] = useState('');
+  const queryClient = useQueryClient();
+
+  const sendMessage = async (content: string, contactId?: number | null) => {
+    const sessionId = getSessionId();
+    let targetId = conversationId;
+
+    const tempUserMsg: OpenaiMessage = {
+      id: Date.now(),
+      conversationId: targetId || 0,
+      role: 'user',
+      content,
+      createdAt: new Date().toISOString()
+    };
+    setLocalMessages(prev => [...prev, tempUserMsg]);
+    setIsStreaming(true);
+    setStreamingText('');
+
+    try {
+      if (!targetId) {
+        const title = content.substring(0, 40) + (content.length > 40 ? '...' : '');
+        const conv = await createOpenaiConversation(
+          { title },
+          { headers: getAuthHeaders() }
+        );
+        targetId = conv.id;
+        queryClient.invalidateQueries({ queryKey: getListOpenaiConversationsQueryKey() });
+      }
+
+      const body: Record<string, unknown> = { content, sessionId };
+      if (contactId != null) body.contactId = contactId;
+
+      const res = await fetch(`/api/openai/conversations/${targetId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) throw new Error('Failed to send message');
+
+      const reader = res.body?.getReader();
+      if (!reader) return targetId;
+      const decoder = new TextDecoder();
+      let assistantMsg = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6).trim();
+            if (!dataStr || dataStr === '[DONE]') continue;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.content) {
+                assistantMsg += data.content;
+                setStreamingText(assistantMsg);
+              }
+              if (data.done) break;
+            } catch {}
+          }
+        }
+      }
+
+      const tempAssistantMsg: OpenaiMessage = {
+        id: Date.now() + 1,
+        conversationId: targetId,
+        role: 'assistant',
+        content: assistantMsg,
+        createdAt: new Date().toISOString()
+      };
+      setLocalMessages(prev => [...prev, tempAssistantMsg]);
+      queryClient.invalidateQueries({ queryKey: getGetOpenaiConversationQueryKey(targetId) });
+
+    } catch (error) {
+      console.error('Chat error:', error);
+    } finally {
+      setIsStreaming(false);
+      setStreamingText('');
+    }
+
+    return targetId;
+  };
+
+  const clearLocalMessages = () => setLocalMessages([]);
+
+  return { localMessages, isStreaming, streamingText, sendMessage, clearLocalMessages };
+}

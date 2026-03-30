@@ -1,0 +1,26 @@
+{
+  "name": "AstroBot — Твой личный астролог",
+  "short_name": "AstroBot",
+  "description": "AI-астролог в формате живого диалога",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a14",
+  "theme_color": "#0a0a14",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/images/avatar-bot.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/images/avatar-bot.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "productivity"],
+  "lang": "ru"
+}

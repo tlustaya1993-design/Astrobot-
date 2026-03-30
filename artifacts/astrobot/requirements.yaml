@@ -1,0 +1,20 @@
+packages:
+  "framer-motion": "For fluid, stunning page transitions and micro-interactions"
+  "uuid": "For generating unique session IDs on the client side"
+  "@types/uuid": "Types for uuid"
+  "date-fns": "For formatting chat timestamps and birth dates"
+  "react-markdown": "For rendering bold, italic, and structure in the AI's markdown responses"
+  "clsx": "For conditional class merging in UI components"
+  "tailwind-merge": "For merging Tailwind classes efficiently"
+
+images:
+  - path: "artifacts/astrobot/public/images/cosmic-bg.png"
+    description: "Deep space cosmic background with subtle purple and gold glowing nebula, dark and mystical but clean and modern, highly polished, dark mode UI background"
+    aspect_ratio: "16:9"
+  - path: "artifacts/astrobot/public/images/avatar-bot.png"
+    description: "Minimalist glowing geometric gold and purple icon representing an AI astrologer, centered on transparent or dark background, premium logo style"
+    aspect_ratio: "1:1"
+
+notes:
+  - Uses x-session-id header for all API calls to authenticate the anonymous user profile
+  - Chat uses Server-Sent Events (SSE) via fetch to stream the assistant's response
