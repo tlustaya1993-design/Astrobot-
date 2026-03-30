@@ -2,10 +2,11 @@
 nixPkgs = ["nodejs_22"]
 
 [phases.install]
-cmds = ["npm install -g pnpm@9 && pnpm install --frozen-lockfile=false"]
+cmds = ["npm install -g pnpm@9", "pnpm install --frozen-lockfile=false"]
 
 [phases.build]
-cmds = ["BASE_PATH=/ pnpm --filter @workspace/astrobot run build && pnpm --filter @workspace/api-server run build"]
+dependsOn = ["install"]
+cmds = ["BASE_PATH=/ pnpm --filter @workspace/astrobot run build", "pnpm --filter @workspace/api-server run build"]
 
 [start]
 cmd = "for i in 1 2 3 4 5; do pnpm --filter @workspace/db run push && break || sleep 10; done && NODE_ENV=production pnpm --filter @workspace/api-server run start"
