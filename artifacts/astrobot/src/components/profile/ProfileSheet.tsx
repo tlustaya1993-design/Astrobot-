@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil } from 'lucide-react';
+import { X, Pencil, LogOut, LogIn } from 'lucide-react';
 import AstroAvatar, {
   HAIR_COLORS, ROBE_COLORS, EYE_COLORS,
   type AvatarConfig, loadAvatar, saveAvatar,
 } from '@/components/ui/AstroAvatar';
 import { getAuthHeaders } from '@/lib/session';
+import { useAuth } from '@/context/AuthContext';
+import AuthModal from '@/components/AuthModal';
 
 interface UserProfile {
   name?: string | null;
@@ -78,9 +80,11 @@ interface Props {
 }
 
 export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChange }: Props) {
+  const { isLoggedIn, email, logout } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [section, setSection] = useState<Section>('view');
   const [localAvatar, setLocalAvatar] = useState<AvatarConfig>(avatarConfig);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => { setLocalAvatar(avatarConfig); }, [avatarConfig]);
 
@@ -192,8 +196,36 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                       Пройди онбординг, чтобы добавить данные
                     </p>
                   )}
+
+                  {/* Auth actions */}
+                  <div className="pt-1 border-t border-border/40 space-y-2">
+                    {isLoggedIn ? (
+                      <>
+                        {email && (
+                          <p className="text-xs text-muted-foreground truncate">{email}</p>
+                        )}
+                        <button
+                          onClick={() => { logout(); onClose(); }}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/10 transition"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          Выйти из аккаунта
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setShowAuthModal(true)}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary/30 text-primary text-sm font-medium hover:bg-primary/10 transition"
+                      >
+                        <LogIn className="w-4 h-4" />
+                        Войти / Зарегистрироваться
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
+
+              <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} initialTab="login" />
 
               {/* ── Avatar editor ── */}
               {section === 'avatar' && (
