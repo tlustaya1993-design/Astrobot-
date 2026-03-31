@@ -65,6 +65,13 @@ export default defineConfig({
       "Cache-Control": "no-store, no-cache, must-revalidate",
       "Pragma": "no-cache",
     } : {},
+    proxy: {
+      "/api": {
+        target: `http://localhost:${process.env.API_PORT || "8080"}`,
+        changeOrigin: false,
+        secure: false,
+      },
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

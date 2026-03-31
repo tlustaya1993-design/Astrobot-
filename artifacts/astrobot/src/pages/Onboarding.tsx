@@ -11,6 +11,7 @@ import { getAuthHeaders } from '@/lib/session';
 export default function Onboarding() {
   const [, setLocation] = useLocation();
   const [step, setStep] = useState(1);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [formData, setFormData] = useState<UpsertUserBody>({
     name: '',
     birthDate: '',
@@ -26,10 +27,11 @@ export default function Onboarding() {
     request: { headers: getAuthHeaders() }
   });
 
-  const handleNext = () => setStep(s => s + 1);
-  const handleBack = () => setStep(s => s - 1);
+  const handleNext = () => { setErrorMsg(null); setStep(s => s + 1); };
+  const handleBack = () => { setErrorMsg(null); setStep(s => s - 1); };
 
   const handleComplete = async () => {
+    setErrorMsg(null);
     try {
       await upsertMutation.mutateAsync({
         data: {
@@ -40,6 +42,7 @@ export default function Onboarding() {
       setLocation('/chat');
     } catch (e) {
       console.error("Onboarding error", e);
+      setErrorMsg('Не удалось сохранить данные. Проверьте подключение и попробуйте снова.');
     }
   };
 
@@ -56,14 +59,14 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex flex-col justify-center px-6 py-12 relative overflow-hidden bg-background">
+    <div className="h-[100dvh] flex flex-col px-6 pt-16 pb-10 relative overflow-hidden bg-background">
       <img
         src={`${import.meta.env.BASE_URL}images/cosmic-bg.png`}
         alt="Cosmic Background"
         className="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-screen pointer-events-none"
       />
 
-      <div className="absolute top-12 left-0 right-0 flex justify-center space-x-2 z-10">
+      <div className="absolute top-8 left-0 right-0 flex justify-center space-x-2 z-10">
         {[1, 2, 3].map(i => (
           <div
             key={i}
@@ -72,7 +75,7 @@ export default function Onboarding() {
         ))}
       </div>
 
-      <div className="relative z-10 w-full max-w-sm mx-auto h-[420px]">
+      <div className="relative z-10 w-full max-w-sm mx-auto flex-1 flex flex-col justify-center overflow-hidden">
         <AnimatePresence mode="wait" custom={1}>
 
           {step === 1 && (
@@ -84,7 +87,7 @@ export default function Onboarding() {
               exit="exit"
               custom={1}
               transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="absolute inset-0 flex flex-col justify-center"
+              className="flex flex-col"
             >
               <div className="w-20 h-20 mx-auto mb-8 rounded-full bg-secondary flex items-center justify-center border border-white/10 shadow-xl shadow-primary/20">
                 <Sparkles className="w-10 h-10 text-primary" />
@@ -119,7 +122,7 @@ export default function Onboarding() {
               exit="exit"
               custom={1}
               transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="absolute inset-0 flex flex-col justify-center"
+              className="flex flex-col"
             >
               <h1 className="text-3xl font-display font-bold text-center mb-2">Данные рождения</h1>
               <p className="text-muted-foreground text-center mb-6">Точные данные нужны для расчёта натальной карты.</p>
@@ -181,7 +184,7 @@ export default function Onboarding() {
               exit="exit"
               custom={1}
               transition={{ duration: 0.4, ease: "easeInOut" }}
-              className="absolute inset-0 flex flex-col justify-center"
+              className="flex flex-col"
             >
               <h1 className="text-3xl font-display font-bold text-center mb-2">Стиль общения</h1>
               <p className="text-muted-foreground text-center mb-6">Как вы хотите, чтобы AstroBot говорил с вами?</p>
@@ -223,7 +226,13 @@ export default function Onboarding() {
                   </div>
                 </div>
 
-                <div className="flex gap-3 pt-2">
+                {errorMsg && (
+                  <p className="text-red-400 text-sm text-center bg-red-500/10 rounded-xl px-3 py-2">
+                    {errorMsg}
+                  </p>
+                )}
+
+                <div className="flex gap-3">
                   <Button variant="outline" className="flex-1" onClick={handleBack}>Назад</Button>
                   <Button
                     className="flex-1"
