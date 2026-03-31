@@ -213,16 +213,18 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                         </button>
                       </>
                     ) : (
-                      <button
-                        onClick={() => setShowAuthModal(true)}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary/30 text-primary text-sm font-medium hover:bg-primary/10 transition"
-                      >
-                        <LogIn className="w-4 h-4" />
-                        Войти / Зарегистрироваться
-                      </button>
-                      <p className="text-xs text-muted-foreground text-center leading-relaxed">
-                        Синхронизирует историю и контекст на всех твоих устройствах
-                      </p>
+                      <>
+                        <button
+                          onClick={() => setShowAuthModal(true)}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary/30 text-primary text-sm font-medium hover:bg-primary/10 transition"
+                        >
+                          <LogIn className="w-4 h-4" />
+                          Войти / Зарегистрироваться
+                        </button>
+                        <p className="text-xs text-muted-foreground text-center leading-relaxed">
+                          Синхронизирует историю и контекст на всех твоих устройствах
+                        </p>
+                      </>
                     )}
                   </div>
                 </div>
