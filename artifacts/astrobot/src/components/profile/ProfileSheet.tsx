@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Pencil, LogOut, LogIn } from 'lucide-react';
 import AstroAvatar, {
-  HAIR_COLORS, ROBE_COLORS, EYE_COLORS,
+  HAIR_COLORS, ROBE_COLORS, EYE_COLORS, HAIR_STYLES,
   type AvatarConfig, loadAvatar, saveAvatar,
 } from '@/components/ui/AstroAvatar';
 import { getAuthHeaders } from '@/lib/session';
@@ -234,6 +234,26 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                   <div className="flex justify-center">
                     <div className="w-28 h-28 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
                       <AstroAvatar config={localAvatar} size={112} />
+                    </div>
+                  </div>
+
+                  {/* Hairstyle */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Причёска</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {HAIR_STYLES.map(s => (
+                        <button
+                          key={s.id}
+                          onClick={() => setLocalAvatar(a => ({ ...a, hairStyle: s.id }))}
+                          className={`py-2 px-1 rounded-xl text-xs font-medium border transition-all ${
+                            localAvatar.hairStyle === s.id
+                              ? 'border-primary bg-primary/15 text-primary shadow-[0_0_8px_rgba(212,175,55,0.25)]'
+                              : 'border-border/40 text-muted-foreground hover:border-primary/30 hover:bg-white/5'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
