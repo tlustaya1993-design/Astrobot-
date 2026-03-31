@@ -21,8 +21,18 @@
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(console.error);
+        window.addEventListener('load', async () => {
+          const SW_VERSION = 'v2';
+          const stored = localStorage.getItem('sw_version');
+          if (stored !== SW_VERSION) {
+            // New version: unregister old SWs and purge all caches
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(r => r.unregister()));
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+            localStorage.setItem('sw_version', SW_VERSION);
+          }
+          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(console.error);
         });
       }
     </script>
