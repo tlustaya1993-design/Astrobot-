@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, User, Trash2 } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAuthHeaders } from '@/lib/session';
 import AddContactModal from './AddContactModal';
+import ProfileSheet from '@/components/profile/ProfileSheet';
+import AstroAvatar, { loadAvatar, type AvatarConfig, DEFAULT_AVATAR } from '@/components/ui/AstroAvatar';
 
 export interface Contact {
   id: number;
@@ -19,7 +21,13 @@ interface PeoplePanelProps {
 export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanelProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
+
+  useEffect(() => {
+    setAvatarConfig(loadAvatar());
+  }, []);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -50,18 +58,21 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 overflow-x-auto scrollbar-none bg-background/60 border-b border-border/50">
-        {/* "Я" chip — always present, deselects contact */}
+
+        {/* "Я" chip — shows avatar, opens profile */}
         <motion.button
-          whileTap={{ scale: 0.95 }}
-          onClick={() => onSelect(null)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium shrink-0 transition-all border ${
+          whileTap={{ scale: 0.93 }}
+          onClick={() => setShowProfile(true)}
+          className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full text-sm font-medium shrink-0 transition-all border ${
             selectedContactId === null
               ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
               : 'bg-card border-border text-muted-foreground hover:border-primary/40'
           }`}
         >
-          <User className="w-3.5 h-3.5" />
-          Я
+          <div className="w-7 h-7 rounded-full overflow-hidden border border-primary/30 shrink-0">
+            <AstroAvatar config={avatarConfig} size={28} />
+          </div>
+          <span>Я</span>
         </motion.button>
 
         {/* Contact chips */}
@@ -113,7 +124,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
           <span>Добавить</span>
         </motion.button>
 
-        {/* Synastry mode indicator */}
+        {/* Synastry indicator */}
         {selectedContactId !== null && (
           <motion.div
             initial={{ opacity: 0, x: 10 }}
@@ -129,6 +140,13 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
         open={showModal}
         onClose={() => setShowModal(false)}
         onAdded={fetchContacts}
+      />
+
+      <ProfileSheet
+        open={showProfile}
+        onClose={() => setShowProfile(false)}
+        avatarConfig={avatarConfig}
+        onAvatarChange={(cfg) => setAvatarConfig(cfg)}
       />
     </>
   );
