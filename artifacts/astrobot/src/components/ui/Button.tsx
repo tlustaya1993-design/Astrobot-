@@ -45,7 +45,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
             <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
           </div>
         ) : null}
-        <span className={cn(isLoading && "opacity-0")}>{children}</span>
+        <span className={cn("inline-flex items-center gap-2 whitespace-nowrap", isLoading && "opacity-0")}>{children}</span>
       </motion.button>
     );
   }
