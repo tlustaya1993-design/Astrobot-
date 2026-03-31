@@ -220,6 +220,9 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                         <LogIn className="w-4 h-4" />
                         Войти / Зарегистрироваться
                       </button>
+                      <p className="text-xs text-muted-foreground text-center leading-relaxed">
+                        Синхронизирует историю и контекст на всех твоих устройствах
+                      </p>
                     )}
                   </div>
                 </div>
