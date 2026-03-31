@@ -6,8 +6,14 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
-// CJS-safe path resolution - works in both dev (ESM) and production (CJS bundle)
-const _dirname: string = process.cwd();
+// Path resolution:
+// - CJS production bundle: __dirname = /app/artifacts/api-server/dist → root 3 levels up
+// - ESM dev (tsx): __dirname is not defined → use process.cwd() (workspace root)
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore - __dirname exists in CJS bundles but not ESM
+const _root: string = typeof __dirname !== "undefined"
+  ? path.resolve(__dirname, "../../..")
+  : process.cwd();
 
 const app: Express = express();
 
@@ -37,12 +43,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 // Serve built frontend in production
-// In CJS bundle: process.cwd() = /app (Docker WORKDIR)
-// In dev: process.cwd() = /home/runner/workspace (Replit root)
-const frontendDist = path.resolve(
-  process.cwd(),
-  "artifacts/astrobot/dist/public",
-);
+const frontendDist = path.resolve(_root, "artifacts/astrobot/dist/public");
 if (process.env.NODE_ENV === "production" && fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   // SPA fallback
