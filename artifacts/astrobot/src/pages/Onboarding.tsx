@@ -4,6 +4,7 @@ import { useLocation } from 'wouter';
 import { User, Sparkles, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { DateInput } from '@/components/ui/DateInput';
 import { CityAutocomplete } from '@/components/ui/CityAutocomplete';
 import { useUpsertMe, UpsertUserBody } from '@workspace/api-client-react';
 import { getAuthHeaders } from '@/lib/session';
@@ -125,11 +126,9 @@ export default function Onboarding() {
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-muted-foreground pl-1">Дата рождения</label>
-                    <input
-                      type="date"
+                    <DateInput
                       value={formData.birthDate || ''}
-                      onChange={e => setFormData({ ...formData, birthDate: e.target.value })}
-                      className="w-full bg-card/50 backdrop-blur-sm border border-border rounded-xl text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all duration-300 px-4 py-3.5"
+                      onChange={date => setFormData({ ...formData, birthDate: date })}
                     />
                   </div>
 

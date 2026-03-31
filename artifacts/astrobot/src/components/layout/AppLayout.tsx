@@ -9,7 +9,7 @@ export function AppLayout({ children, hideNav = false }: { children: React.React
   const [location] = useLocation();
 
   return (
-    <div className="flex flex-col min-h-[100dvh] max-w-2xl mx-auto bg-background/50 relative overflow-hidden shadow-2xl shadow-black/50 border-x border-white/5 pt-safe">
+    <div className="flex flex-col h-[100dvh] max-w-2xl mx-auto bg-background/50 relative overflow-hidden shadow-2xl shadow-black/50 border-x border-white/5 pt-safe">
       <div className="absolute inset-0 z-[-1] pointer-events-none overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
         <img

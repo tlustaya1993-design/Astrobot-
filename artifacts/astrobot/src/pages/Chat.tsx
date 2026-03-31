@@ -181,7 +181,7 @@ export default function Chat() {
       </div>
 
       {/* Input */}
-      <div className="p-4 bg-background/80 backdrop-blur-xl border-t border-border mt-auto">
+      <div className="p-4 bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
         {selectedContactId !== null && (
           <div className="flex items-center gap-1.5 text-xs text-primary/60 mb-2 px-1">
             <span className="text-base leading-none">⚯</span>
