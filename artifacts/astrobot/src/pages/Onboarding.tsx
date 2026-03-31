@@ -65,7 +65,7 @@ export default function Onboarding() {
             key={i}
             className={`h-1.5 rounded-full transition-all duration-500 ${
               step === i
-                ? 'w-8 bg-primary shadow-[0_0_8px_rgba(124,58,237,0.6)]'
+                ? 'w-8 bg-primary shadow-[0_0_8px_rgba(212,175,55,0.6)]'
                 : 'w-4 bg-white/20'
             }`}
           />

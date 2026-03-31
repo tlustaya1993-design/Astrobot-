@@ -1,4 +1,4 @@
-const CACHE_NAME = 'astrobot-v2';
+const CACHE_NAME = 'astrobot-v3';
 const STATIC_ASSETS = ['/'];
 
 self.addEventListener('install', (event) => {

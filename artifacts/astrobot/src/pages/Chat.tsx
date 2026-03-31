@@ -100,7 +100,7 @@ export default function Chat() {
             animate={{ opacity: 1, y: 0 }}
             className="flex flex-col items-center justify-center py-12 text-center"
           >
-            <div className="w-20 h-20 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(124,58,237,0.15)]">
+            <div className="w-20 h-20 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
               <Sparkles className="w-10 h-10 text-primary" />
             </div>
             <h3 className="text-2xl font-display font-semibold mb-2">О чём спросить звёзды?</h3>

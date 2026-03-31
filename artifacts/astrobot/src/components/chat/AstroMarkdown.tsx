@@ -41,7 +41,7 @@ function goldify(text: string): React.ReactNode[] {
             ? 'text-amber-300/80 italic'
             : ''
         }
-        style={isPlanet ? { textShadow: '0 0 8px rgba(124,58,237,0.4)' } : undefined}
+        style={isPlanet ? { textShadow: '0 0 8px rgba(212,175,55,0.4)' } : undefined}
       >
         {m[0]}
       </span>

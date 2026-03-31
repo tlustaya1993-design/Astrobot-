@@ -56,7 +56,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
           onClick={() => onSelect(null)}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium shrink-0 transition-all border ${
             selectedContactId === null
-              ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(124,58,237,0.25)]'
+              ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
               : 'bg-card border-border text-muted-foreground hover:border-primary/40'
           }`}
         >
@@ -78,7 +78,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
                 onClick={() => onSelect(selectedContactId === contact.id ? null : contact.id)}
                 className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
                   selectedContactId === contact.id
-                    ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(124,58,237,0.25)]'
+                    ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
                     : 'bg-card border-border text-muted-foreground hover:border-primary/40'
                 }`}
               >
