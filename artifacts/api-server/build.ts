@@ -64,6 +64,11 @@ async function buildAll() {
     outfile: path.resolve(distDir, "index.cjs"),
     define: {
       "process.env.NODE_ENV": '"production"',
+      // In CJS bundle, import.meta is not available.
+      // esbuild can't always convert ESM import.meta.url to CJS __filename
+      // for all bundled packages, so we define it as undefined to avoid
+      // 'import.meta.url' usage that would otherwise throw at runtime.
+      "import.meta.url": "undefined",
     },
     minify: true,
     external: externals,
