@@ -40,8 +40,8 @@ const frontendDist = process.env.FRONTEND_DIST ||
   path.resolve(process.cwd(), "artifacts/astrobot/dist/public");
 if (process.env.NODE_ENV === "production" && fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
-  // SPA fallback
-  app.get("*", (_req, res) => {
+  // SPA fallback — Express 5 requires named wildcard (path-to-regexp v8)
+  app.get("/{*path}", (_req, res) => {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 }
