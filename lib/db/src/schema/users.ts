@@ -5,6 +5,9 @@ import { z } from "zod/v4";
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
   sessionId: text("session_id").notNull().unique(),
+  // Auth fields — nullable so anonymous sessions keep working
+  email: text("email").unique(),
+  passwordHash: text("password_hash"),
   name: text("name"),
   birthDate: text("birth_date"),
   birthTime: text("birth_time"),

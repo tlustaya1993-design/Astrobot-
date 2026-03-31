@@ -3,6 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { MessageSquare, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AnimatePresence, motion } from 'framer-motion';
+import AccountButton from '@/components/AccountButton';
 
 export function AppLayout({ children, hideNav = false }: { children: React.ReactNode, hideNav?: boolean }) {
   const [location] = useLocation();
@@ -46,6 +47,8 @@ export function AppLayout({ children, hideNav = false }: { children: React.React
               <Clock className="w-6 h-6" />
               <span className="text-[10px] font-medium tracking-wide">История</span>
             </Link>
+
+            <AccountButton />
           </div>
         </div>
       )}

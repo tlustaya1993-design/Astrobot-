@@ -12,9 +12,9 @@ import {
 const router: IRouter = Router();
 
 router.get("/conversations", async (req, res) => {
-  const sessionId = req.headers["x-session-id"] as string | undefined;
+  const sessionId = req.sessionId;
   if (!sessionId) {
-    res.status(400).json({ error: "x-session-id header required" });
+    res.status(401).json({ error: "Требуется авторизация" });
     return;
   }
 
@@ -28,9 +28,9 @@ router.get("/conversations", async (req, res) => {
 });
 
 router.post("/conversations", async (req, res) => {
-  const sessionId = req.headers["x-session-id"] as string | undefined;
+  const sessionId = req.sessionId;
   if (!sessionId) {
-    res.status(400).json({ error: "x-session-id header required" });
+    res.status(401).json({ error: "Требуется авторизация" });
     return;
   }
   const { title } = req.body;
@@ -49,7 +49,7 @@ router.post("/conversations", async (req, res) => {
 
 router.get("/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const sessionId = req.headers["x-session-id"] as string | undefined;
+  const sessionId = req.sessionId;
 
   const [conv] = await db
     .select()
@@ -73,7 +73,7 @@ router.get("/conversations/:id", async (req, res) => {
 
 router.delete("/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const sessionId = req.headers["x-session-id"] as string | undefined;
+  const sessionId = req.sessionId;
 
   const [conv] = await db
     .select()
@@ -104,8 +104,7 @@ router.get("/conversations/:id/messages", async (req, res) => {
 router.post("/conversations/:id/messages", async (req, res) => {
   const id = Number(req.params.id);
   const { content, sessionId: bodySessionId, contactId } = req.body;
-  const sessionId =
-    (req.headers["x-session-id"] as string | undefined) || bodySessionId;
+  const sessionId = req.sessionId || bodySessionId;
 
   if (!content) {
     res.status(400).json({ error: "content required" });

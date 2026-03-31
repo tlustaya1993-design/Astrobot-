@@ -9,6 +9,7 @@ import Onboarding from "@/pages/Onboarding";
 import Chat from "@/pages/Chat";
 import History from "@/pages/History";
 import { getSessionId } from "@/lib/session";
+import { AuthProvider } from "@/context/AuthContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,12 +41,14 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

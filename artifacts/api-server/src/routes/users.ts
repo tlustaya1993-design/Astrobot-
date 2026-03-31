@@ -5,9 +5,9 @@ import { eq } from "drizzle-orm";
 const router: IRouter = Router();
 
 router.get("/me", async (req, res) => {
-  const sessionId = req.headers["x-session-id"] as string | undefined;
+  const sessionId = req.sessionId;
   if (!sessionId) {
-    res.status(400).json({ error: "x-session-id header required" });
+    res.status(401).json({ error: "Требуется авторизация" });
     return;
   }
 
@@ -22,13 +22,15 @@ router.get("/me", async (req, res) => {
     return;
   }
 
-  res.json(user);
+  // Don't expose passwordHash
+  const { passwordHash: _, ...safeUser } = user;
+  res.json(safeUser);
 });
 
 router.put("/me", async (req, res) => {
-  const sessionId = req.headers["x-session-id"] as string | undefined;
+  const sessionId = req.sessionId;
   if (!sessionId) {
-    res.status(400).json({ error: "x-session-id header required" });
+    res.status(401).json({ error: "Требуется авторизация" });
     return;
   }
 
@@ -78,13 +80,15 @@ router.put("/me", async (req, res) => {
       .set({ ...fields, updatedAt: now })
       .where(eq(usersTable.sessionId, sessionId))
       .returning();
-    res.json(updated);
+    const { passwordHash: _, ...safe } = updated;
+    res.json(safe);
   } else {
     const [created] = await db
       .insert(usersTable)
       .values({ sessionId, ...fields })
       .returning();
-    res.json(created);
+    const { passwordHash: _, ...safe } = created;
+    res.json(safe);
   }
 });
 
