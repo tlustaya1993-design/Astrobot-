@@ -28,40 +28,40 @@
 }
 
 :root {
-  /* Deep space dark mode base */
-  --background: 240 25% 4%;
-  --foreground: 0 0% 98%;
-  
-  /* Mystical Gold */
-  --primary: 43 74% 66%;
-  --primary-foreground: 240 25% 4%;
-  
-  /* Deep Space Purple */
-  --secondary: 270 50% 15%;
-  --secondary-foreground: 0 0% 98%;
-  
-  /* Magenta/Violet Accent */
-  --accent: 280 80% 60%;
-  --accent-foreground: 0 0% 98%;
-  
-  /* Glassmorphic Cards */
-  --card: 240 25% 8%;
-  --card-foreground: 0 0% 98%;
-  
-  /* Muted / Subdued */
-  --muted: 240 20% 12%;
-  --muted-foreground: 240 10% 65%;
-  
-  --border: 240 20% 18%;
-  --ring: 43 74% 66%;
+  /* Deep Aurora — dark navy base */
+  --background: 244 47% 7%;
+  --foreground: 240 12% 95%;
+
+  /* Violet primary */
+  --primary: 263 82% 58%;
+  --primary-foreground: 0 0% 100%;
+
+  /* Dark violet card */
+  --secondary: 258 35% 13%;
+  --secondary-foreground: 240 12% 90%;
+
+  /* Indigo accent */
+  --accent: 239 83% 67%;
+  --accent-foreground: 0 0% 100%;
+
+  /* Cards */
+  --card: 252 38% 10%;
+  --card-foreground: 240 12% 92%;
+
+  /* Muted */
+  --muted: 258 28% 14%;
+  --muted-foreground: 248 12% 58%;
+
+  --border: 263 32% 22%;
+  --ring: 263 82% 58%;
 }
 
 @layer base {
   body {
     @apply bg-background text-foreground antialiased font-sans min-h-screen selection:bg-primary/30 selection:text-primary;
-    background-image: 
-      radial-gradient(circle at 15% 0%, hsla(270, 50%, 25%, 0.15) 0%, transparent 50%),
-      radial-gradient(circle at 85% 100%, hsla(43, 74%, 66%, 0.1) 0%, transparent 50%);
+    background-image:
+      radial-gradient(circle at 75% 10%, hsla(263, 82%, 40%, 0.18) 0%, transparent 55%),
+      radial-gradient(circle at 20% 85%, hsla(239, 83%, 55%, 0.12) 0%, transparent 55%);
   }
 
   h1, h2, h3, h4, h5, h6 {

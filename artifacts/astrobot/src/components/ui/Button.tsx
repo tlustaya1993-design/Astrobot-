@@ -12,7 +12,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "primary", size = "md", isLoading, children, disabled, ...props }, ref) => {
     
     const variants = {
-      primary: "bg-gradient-to-r from-primary to-[#b8952d] text-primary-foreground shadow-[0_0_15px_rgba(212,175,55,0.25)] hover:shadow-[0_0_25px_rgba(212,175,55,0.4)] border border-primary/50",
+      primary: "bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-[0_0_15px_rgba(124,58,237,0.25)] hover:shadow-[0_0_25px_rgba(124,58,237,0.45)] border border-primary/40",
       secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-white/5",
       ghost: "bg-transparent text-foreground hover:bg-white/5",
       outline: "bg-transparent border border-border text-foreground hover:bg-white/5 hover:border-primary/50",
