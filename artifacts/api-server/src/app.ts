@@ -1,5 +1,4 @@
 import path from "path";
-import { fileURLToPath } from "url";
 import fs from "fs";
 import express, { type Express } from "express";
 import cors from "cors";
@@ -7,14 +6,8 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
-// CJS-compatible __dirname (import.meta.url is undefined in CJS bundles)
-const _dirname: string = (() => {
-  try {
-    if (import.meta.url) return path.dirname(fileURLToPath(import.meta.url));
-  } catch {}
-  // eslint-disable-next-line no-undef
-  return typeof __dirname !== "undefined" ? __dirname : process.cwd();
-})();
+// CJS-safe path resolution - works in both dev (ESM) and production (CJS bundle)
+const _dirname: string = process.cwd();
 
 const app: Express = express();
 
@@ -44,7 +37,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 // Serve built frontend in production
-const frontendDist = path.resolve(_dirname, "../../astrobot/dist/public");
+// In CJS bundle: process.cwd() = /app (Docker WORKDIR)
+// In dev: process.cwd() = /home/runner/workspace (Replit root)
+const frontendDist = path.resolve(
+  process.cwd(),
+  "artifacts/astrobot/dist/public",
+);
 if (process.env.NODE_ENV === "production" && fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   // SPA fallback
