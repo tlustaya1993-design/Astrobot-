@@ -7,7 +7,14 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// CJS-compatible __dirname (import.meta.url is undefined in CJS bundles)
+const _dirname: string = (() => {
+  try {
+    if (import.meta.url) return path.dirname(fileURLToPath(import.meta.url));
+  } catch {}
+  // eslint-disable-next-line no-undef
+  return typeof __dirname !== "undefined" ? __dirname : process.cwd();
+})();
 
 const app: Express = express();
 
@@ -37,7 +44,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 // Serve built frontend in production
-const frontendDist = path.resolve(__dirname, "../../astrobot/dist/public");
+const frontendDist = path.resolve(_dirname, "../../astrobot/dist/public");
 if (process.env.NODE_ENV === "production" && fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   // SPA fallback
