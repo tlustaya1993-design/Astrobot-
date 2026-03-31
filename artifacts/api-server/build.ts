@@ -60,10 +60,12 @@ async function buildAll() {
     entryPoints: [path.resolve(__dirname, "src/index.ts")],
     platform: "node",
     bundle: true,
-    format: "esm",
-    outfile: path.resolve(distDir, "index.mjs"),
+    format: "cjs",
+    outfile: path.resolve(distDir, "index.cjs"),
     define: {
       "process.env.NODE_ENV": '"production"',
+      // import.meta is undefined in CJS — define to avoid runtime errors
+      "import.meta.url": "undefined",
     },
     minify: true,
     external: externals,
