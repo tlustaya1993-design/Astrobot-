@@ -3,6 +3,7 @@ import healthRouter from "./health.js";
 import authRouter from "./auth.js";
 import usersRouter from "./users.js";
 import openaiRouter from "./openai/conversations.js";
+import dailyForecastRouter from "./openai/daily-forecast.js";
 import astrologyRouter from "./astrology.js";
 import contactsRouter from "./contacts.js";
 
@@ -12,6 +13,7 @@ router.use(healthRouter);
 router.use("/auth", authRouter);
 router.use("/users", usersRouter);
 router.use("/openai", openaiRouter);
+router.use("/openai", dailyForecastRouter);
 router.use("/astrology", astrologyRouter);
 router.use(contactsRouter);
 

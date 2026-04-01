@@ -447,6 +447,50 @@ function calcMidheaven(jd: number, lon: number): number {
   return normalizeAngle(rad2deg(Math.atan2(Math.tan(deg2rad(lst)), Math.cos(deg2rad(eps)))));
 }
 
+// ─── Placidus House System ────────────────────────────────────────────────────
+// Replaces the Equal House (30° each) approximation.
+// Uses the standard Placidus semi-arc formula for intermediate cusps.
+// Falls back to equal houses when lat is extreme (|lat| > 66°, polar regions).
+
+function calcPlacidusHouses(jd: number, lat: number, lon: number): number[] {
+  const eps  = obliquity(jd);
+  const ramc = localSiderealTime(jd, lon);  // RAMC in degrees
+  const mc   = calcMidheaven(jd, lon);
+  const asc  = calcAscendant(jd, lat, lon);
+
+  const epsR = deg2rad(eps);
+  const latR = deg2rad(lat);
+
+  // Simplified Placidus formula for intermediate cusps.
+  // H = atan2(sin(RAMC + offset), cos(RAMC + offset)*cos(ε) + k*tan(φ)*sin(ε))
+  // k = 1/3 for cusps adjacent to MC/IC, 2/3 for those adjacent to ASC/DSC.
+  function placidusIntermediate(ramcOffset: number, k: number): number {
+    const ra = deg2rad(normalizeAngle(ramc + ramcOffset));
+    const raw = rad2deg(Math.atan2(Math.sin(ra), Math.cos(ra) * Math.cos(epsR) + k * Math.tan(latR) * Math.sin(epsR)));
+    return normalizeAngle(raw);
+  }
+
+  // Polar fallback: equal houses
+  if (Math.abs(lat) > 66) {
+    return Array.from({ length: 12 }, (_, i) => normalizeAngle(asc + i * 30));
+  }
+
+  const h11 = placidusIntermediate(60,  2 / 3);  // between MC and ASC
+  const h12 = placidusIntermediate(30,  1 / 3);
+  const h2  = placidusIntermediate(150, 1 / 3);  // between ASC and IC
+  const h3  = placidusIntermediate(120, 2 / 3);
+  const h4  = normalizeAngle(mc  + 180);          // IC
+  const h5  = normalizeAngle(h11 + 180);
+  const h6  = normalizeAngle(h12 + 180);
+  const h7  = normalizeAngle(asc + 180);          // DSC
+  const h8  = normalizeAngle(h2  + 180);
+  const h9  = normalizeAngle(h3  + 180);
+
+  // Houses 1–12 (cusp of 1 = ASC, cusp of 10 = MC)
+  return [asc, h2, h3, h4, h5, h6, h7, h8, h9, mc, h11, h12];
+}
+
+// Keep old equal-house as a thin wrapper (used in progressions that don't have location)
 function calcHouseCusps(asc: number): number[] {
   return Array.from({ length: 12 }, (_, i) => normalizeAngle(asc + i * 30));
 }
@@ -838,7 +882,7 @@ export function calcNatalChart(
   if (lat !== null && lon !== null && timeStr) {
     ascLon      = calcAscendant(jd, lat, lon);
     mcLon       = calcMidheaven(jd, lon);
-    houses      = calcHouseCusps(ascLon);
+    houses      = calcPlacidusHouses(jd, lat, lon);  // Placidus (was Equal House)
     houseRulers = calcHouseRulers(houses);
   }
 
@@ -1225,6 +1269,298 @@ export function formatSolarReturnForPrompt(sr: SolarReturn): string {
     for (const pat of sr.chart.aspectPatterns) {
       lines.push(`  ★ ${pat.type}: ${pat.planets.join(", ")}`);
     }
+  }
+  return lines.join("\n");
+}
+
+// ─── Lunar Return ─────────────────────────────────────────────────────────────
+
+export interface LunarReturn {
+  date: string;       // ISO date of next lunar return
+  moonSign: ZodiacSign;
+  moonDegree: number;
+}
+
+/**
+ * Finds the next date after `fromDate` when the Moon returns to natalMoonLon.
+ * The Moon completes one cycle in ~27.3 days (sidereal month).
+ */
+export function calcLunarReturn(natalMoonLon: number, fromDate: Date): LunarReturn {
+  const fromJD = dateToJD(
+    fromDate.getUTCFullYear(), fromDate.getUTCMonth() + 1, fromDate.getUTCDate(),
+    fromDate.getUTCHours(), fromDate.getUTCMinutes()
+  );
+
+  // Binary search within ±28 days, checking each sidereal month window
+  const SIDEREAL_MONTH = 27.32166;
+  let lo = fromJD;
+  let hi = fromJD + SIDEREAL_MONTH + 2; // small buffer
+
+  // Ensure the interval contains a crossing
+  const moonStart = moonLongitude(lo);
+  const moonEnd   = moonLongitude(hi);
+  const diffStart = normalizeAngle(moonStart - natalMoonLon);
+  const diffEnd   = normalizeAngle(moonEnd   - natalMoonLon);
+
+  // If no crossing in first window, try next window
+  if (!(diffStart > 180 && diffEnd < 180) && !(diffStart < 180 && diffEnd > 180)) {
+    lo = hi;
+    hi = lo + SIDEREAL_MONTH + 2;
+  }
+
+  for (let iter = 0; iter < 60; iter++) {
+    const mid  = (lo + hi) / 2;
+    const diff = normalizeAngle(moonLongitude(mid) - natalMoonLon);
+    if (diff > 180) lo = mid; else hi = mid;
+    if (hi - lo < 0.0001) break;
+  }
+
+  const returnJD = (lo + hi) / 2;
+  const d = jdToDate(returnJD);
+  const moonLon = moonLongitude(returnJD);
+
+  return {
+    date:       d.toISOString().slice(0, 16),
+    moonSign:   longitudeToSign(moonLon),
+    moonDegree: longitudeToDeg(moonLon),
+  };
+}
+
+export function formatLunarReturnForPrompt(lr: LunarReturn): string {
+  return [
+    `=== ЛУННОЕ ВОЗВРАЩЕНИЕ ===`,
+    `Дата следующего Лунного возвращения: ${lr.date}`,
+    `Луна вернётся в ${lr.moonSign} ${lr.moonDegree}°`,
+    `(Лунное возвращение — момент, когда Луна возвращается в точный знак и градус натальной Луны; задаёт эмоциональный тон следующих ~4 недель)`,
+  ].join("\n");
+}
+
+// ─── Solar Arc Directions ─────────────────────────────────────────────────────
+
+export interface SolarArcChart {
+  arc:     number;           // degrees added (≈ 1° per year)
+  date:    string;
+  planets: PlanetPosition[]; // natal planets + solar arc
+  aspects: Aspect[];         // SA planets aspecting natal planets
+}
+
+/**
+ * Secondary progressions: 1 day after birth = 1 year of life.
+ * Solar arc = progressed Sun longitude − natal Sun longitude.
+ * All natal planets are advanced by this same arc.
+ */
+export function calcSolarArcDirections(
+  birthDateStr: string, birthTimeStr: string | null,
+  lat: number | null, lon: number | null,
+  targetDate?: Date
+): SolarArcChart {
+  const [bY, bM, bD] = birthDateStr.split("-").map(Number);
+  let bH = 12, bMin = 0;
+  if (birthTimeStr) { [bH, bMin] = birthTimeStr.split(":").map(Number); }
+
+  const birthJD   = dateToJD(bY, bM, bD, bH, bMin);
+  const natalSunLon = sunLongitude(birthJD);
+
+  const target = targetDate ?? new Date();
+  const ageYears =
+    (target.getTime() - new Date(`${birthDateStr}T${birthTimeStr ?? "12:00"}Z`).getTime()) /
+    (365.25 * 24 * 3600 * 1000);
+
+  // Progressed Sun: birthJD + age (1 day per year)
+  const progJD = birthJD + ageYears;
+  const progSunLon = sunLongitude(progJD);
+  const arc = normalizeAngle(progSunLon - natalSunLon);
+
+  const natalChart = calcNatalChart(birthDateStr, birthTimeStr, lat, lon);
+  const natalPlanets = natalChart.planets;
+
+  // Apply arc to all natal planets
+  const directedPlanets: PlanetPosition[] = natalPlanets.map(p => {
+    const newLon = normalizeAngle(p.longitude + arc);
+    const signIdx = Math.floor(newLon / 30);
+    return {
+      ...p,
+      longitude:  newLon,
+      sign:       SIGNS[signIdx],
+      degree:     longitudeToDeg(newLon),
+      minute:     longitudeToMin(newLon),
+      retrograde: false,
+    };
+  });
+
+  // Find aspects: directed planets to natal planets (cross-aspects)
+  const aspects: Aspect[] = [];
+  for (const dp of directedPlanets) {
+    for (const np of natalPlanets) {
+      if (dp.planet === np.planet) continue;
+      const found = findAspect(dp.longitude, np.longitude);
+      if (found && found.orb <= 2) {
+        aspects.push({
+          planet1:  dp.planet,
+          planet2:  np.planet,
+          aspect:   found.aspect,
+          orb:      found.orb,
+          applying: false,
+          exact:    found.orb <= 0.5,
+        });
+      }
+    }
+  }
+  aspects.sort((a, b) => a.orb - b.orb);
+
+  return {
+    arc:     Math.round(arc * 100) / 100,
+    date:    target.toISOString().slice(0, 10),
+    planets: directedPlanets,
+    aspects,
+  };
+}
+
+export function formatSolarArcForPrompt(sa: SolarArcChart): string {
+  const lines: string[] = [
+    `=== СОЛЯРНАЯ ДУГА (дата ${sa.date}, дуга ${sa.arc}°) ===`,
+    `(Солярная Дуга — «внутренние часы» человека: каждый год жизни все натальные планеты продвигаются примерно на 1°. Активные аспекты дуги к натальным точкам — ключевые темы периода.)`,
+    ``,
+    `Активные аспекты Солярной Дуги к натальным планетам:`,
+  ];
+  if (sa.aspects.length === 0) {
+    lines.push(`  Нет тесных аспектов (орб ≤ 2°) в настоящий момент.`);
+  } else {
+    for (const a of sa.aspects.slice(0, 10)) {
+      const sym = { соединение:"☌", оппозиция:"☍", трин:"△", квадрат:"□", секстиль:"⚹", квинконс:"⚻", полуквадрат:"∠", сесквиквадрат:"⚼" }[a.aspect] ?? a.aspect;
+      const ex = a.exact ? " ⚡ ТОЧНЫЙ" : "";
+      lines.push(`  Дуга ${a.planet1} ${sym} натал. ${a.planet2} (${a.orb}°)${ex}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+// ─── Transit Perfection Dates ─────────────────────────────────────────────────
+
+export interface TransitWithPerfection extends TransitAspect {
+  perfectionDate: string | null;  // ISO date when aspect becomes exact (null if retrograde or unclear)
+}
+
+const PLANET_SPEED_DEG_DAY: Partial<Record<Planet, number>> = {
+  "Луна":          13.2,
+  "Меркурий":       1.3,
+  "Венера":         1.2,
+  "Марс":           0.52,
+  "Юпитер":         0.08,
+  "Сатурн":         0.03,
+  "Уран":           0.012,
+  "Нептун":         0.006,
+  "Плутон":         0.004,
+  "Хирон":          0.02,
+};
+
+const PLANET_SEARCH_WINDOW: Partial<Record<Planet, number>> = {
+  "Луна": 3, "Меркурий": 30, "Венера": 30,
+  "Марс": 60, "Юпитер": 120, "Сатурн": 180,
+  "Уран": 365, "Нептун": 730, "Плутон": 730, "Хирон": 365,
+};
+
+function getPlanetLonByRuName(ruName: Planet, jd: number): number {
+  const map: Partial<Record<Planet, string>> = {
+    "Меркурий":"Mercury","Венера":"Venus","Марс":"Mars",
+    "Юпитер":"Jupiter","Сатурн":"Saturn","Уран":"Uranus",
+    "Нептун":"Neptune","Плутон":"Pluto","Хирон":"Chiron",
+  };
+  if (ruName === "Солнце") return sunLongitude(jd);
+  if (ruName === "Луна")   return moonLongitude(jd);
+  const en = map[ruName];
+  if (en) return planetGeocentric(en, jd);
+  return -1;
+}
+
+/**
+ * For each transit aspect finds the date when it becomes exact (orb = 0).
+ * Searches forward using binary search within the planet's expected window.
+ * Returns null for retrograde planets or cases with no clear perfection.
+ */
+export function calcTransitPerfections(
+  transitAspects: TransitAspect[],
+  _natalChart: NatalChart
+): TransitWithPerfection[] {
+  const now = new Date();
+  const nowJD = dateToJD(
+    now.getUTCFullYear(), now.getUTCMonth() + 1, now.getUTCDate(),
+    now.getUTCHours(), now.getUTCMinutes()
+  );
+
+  return transitAspects.map(ta => {
+    const targetAngle = ASPECT_CONFIG.find(a => a.name === ta.aspect)?.angle ?? -1;
+    if (targetAngle < 0) return { ...ta, perfectionDate: null };
+
+    // Skip retrograde — perfection search gets complex
+    const window = PLANET_SEARCH_WINDOW[ta.transitPlanet] ?? 90;
+
+    // Target ecliptic longitude for the transit planet
+    const natalLon = _natalChart.planets.find(p => p.planet === ta.natalPlanet)?.longitude;
+    if (natalLon === undefined) return { ...ta, perfectionDate: null };
+
+    // Two possible target longitudes (aspect can be approached from two sides)
+    const targets = [
+      normalizeAngle(natalLon + targetAngle),
+      normalizeAngle(natalLon - targetAngle),
+    ];
+
+    let bestDate: string | null = null;
+    let bestDiff = Infinity;
+
+    for (const target of targets) {
+      // Check if applying (moving toward target)
+      let lo = nowJD;
+      let hi = nowJD + window;
+
+      const lonStart = getPlanetLonByRuName(ta.transitPlanet, lo);
+      const lonEnd   = getPlanetLonByRuName(ta.transitPlanet, hi);
+      if (lonStart < 0 || lonEnd < 0) continue;
+
+      const diffStart = angularDiff(lonStart, target);
+      const diffEnd   = angularDiff(lonEnd,   target);
+
+      if (diffEnd > diffStart + 5) continue; // moving away, skip
+
+      // Binary search
+      let searchLo = lo, searchHi = hi;
+      for (let iter = 0; iter < 40; iter++) {
+        const mid     = (searchLo + searchHi) / 2;
+        const lonMid  = getPlanetLonByRuName(ta.transitPlanet, mid);
+        const diffMid = angularDiff(lonMid, target);
+        const diffL   = angularDiff(getPlanetLonByRuName(ta.transitPlanet, searchLo), target);
+        if (diffL < diffMid) searchHi = mid; else searchLo = mid;
+        if (searchHi - searchLo < 0.01) break;
+      }
+
+      const exactJD   = (searchLo + searchHi) / 2;
+      const exactDiff = angularDiff(getPlanetLonByRuName(ta.transitPlanet, exactJD), target);
+
+      if (exactDiff < 0.5 && exactDiff < bestDiff) {
+        bestDiff = exactDiff;
+        bestDate = jdToDate(exactJD).toISOString().slice(0, 10);
+      }
+    }
+
+    return { ...ta, perfectionDate: bestDate };
+  });
+}
+
+export function formatTransitPerfectionsForPrompt(transitsWithDates: TransitWithPerfection[]): string {
+  const withDates = transitsWithDates
+    .filter(t => t.perfectionDate !== null && t.orb <= 5)
+    .sort((a, b) => (a.perfectionDate ?? "").localeCompare(b.perfectionDate ?? ""))
+    .slice(0, 12);
+
+  if (withDates.length === 0) return "";
+
+  const lines: string[] = [`\nДаты точных транзитов (когда аспект станет точным):`];
+  for (const t of withDates) {
+    const sym = { соединение:"☌", оппозиция:"☍", трин:"△", квадрат:"□", секстиль:"⚹", квинконс:"⚻", полуквадрат:"∠", сесквиквадрат:"⚼" }[t.aspect] ?? t.aspect;
+    const app = t.applying ? "↗ применяется" : "↘ разделяется";
+    lines.push(
+      `  ${PLANET_SYMBOL[t.transitPlanet]??""} транз.${t.transitPlanet} ${sym} натал.${t.natalPlanet} — точный: ${t.perfectionDate} (${app}, орб ${t.orb}°)`
+    );
   }
   return lines.join("\n");
 }

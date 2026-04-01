@@ -5,8 +5,10 @@ import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
 import {
   calcNatalChart, calcEphemeris, calcSolarReturn, calcProgressions,
-  calcSynastry, formatNatalForPrompt, formatEphemerisForPrompt,
+  calcSynastry, calcLunarReturn, calcSolarArcDirections, calcTransitPerfections,
+  formatNatalForPrompt, formatEphemerisForPrompt,
   formatSolarReturnForPrompt, formatProgressionsForPrompt, formatSynastryForPrompt,
+  formatLunarReturnForPrompt, formatSolarArcForPrompt, formatTransitPerfectionsForPrompt,
 } from "../../lib/astrology.js";
 
 const router: IRouter = Router();
@@ -269,37 +271,65 @@ type ContactRow = {
 type MemoryRow = { content: string } & Record<string, unknown>;
 
 function calcUserData(user: UserRow) {
-  let natalSection = "", ephemerisSection = "", solarRetSection = "", progressSection = "";
+  let natalSection = "", ephemerisSection = "", solarRetSection = "";
+  let progressSection = "", lunarRetSection = "", solarArcSection = "", transitPerfSection = "";
   let natalChart = null;
+
   if (user?.birthDate) {
     try {
       const lat = user.birthLat ? Number(user.birthLat) : null;
       const lon = user.birthLng ? Number(user.birthLng) : null;
       natalChart = calcNatalChart(user.birthDate, user.birthTime || null, lat, lon);
       natalSection = `\n${formatNatalForPrompt(natalChart)}\n`;
+
       try {
         const sr = calcSolarReturn(user.birthDate, user.birthTime || null, lat, lon, new Date().getFullYear());
         solarRetSection = `\n${formatSolarReturnForPrompt(sr)}\n`;
       } catch { /* no SR */ }
+
       try {
         const birthYear = parseInt(user.birthDate.split("-")[0]);
         const age = new Date().getFullYear() - birthYear;
         const prog = calcProgressions(user.birthDate, user.birthTime || null, lat, lon, age);
         progressSection = `\n${formatProgressionsForPrompt(prog)}\n`;
       } catch { /* no progressions */ }
+
+      try {
+        const natalMoon = natalChart.planets.find(p => p.planet === "Луна");
+        if (natalMoon) {
+          const lr = calcLunarReturn(natalMoon.longitude, new Date());
+          lunarRetSection = `\n${formatLunarReturnForPrompt(lr)}\n`;
+        }
+      } catch { /* no lunar return */ }
+
+      try {
+        const sa = calcSolarArcDirections(user.birthDate, user.birthTime || null, lat, lon);
+        solarArcSection = `\n${formatSolarArcForPrompt(sa)}\n`;
+      } catch { /* no solar arc */ }
     } catch { natalSection = ""; }
   }
+
   try {
     const ephem = calcEphemeris(natalChart ?? undefined);
     ephemerisSection = `\n${formatEphemerisForPrompt(ephem, natalChart ?? undefined)}\n`;
+
+    // Transit perfection dates (only when natal chart available)
+    if (natalChart && ephem.transitAspects && ephem.transitAspects.length > 0) {
+      try {
+        const withDates = calcTransitPerfections(ephem.transitAspects, natalChart);
+        const formatted = formatTransitPerfectionsForPrompt(withDates);
+        if (formatted) transitPerfSection = `\n${formatted}\n`;
+      } catch { /* no perfection dates */ }
+    }
   } catch { /* ephemeris fallback */ }
-  return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection };
+
+  return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection };
 }
 
 function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: MemoryRow[] = []): string {
   const depth = user?.tonePreferredDepth || "deep";
   const style = user?.tonePreferredStyle || "mystical";
-  const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection } = calcUserData(user);
+  const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection } = calcUserData(user);
 
   let synastrySection = "";
   if (contact?.birthDate && natalChart) {
@@ -323,7 +353,7 @@ function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: 
 — Дата рождения: ${user.birthDate || "не указана"}
 — Время рождения: ${user.birthTime || "не указано"}
 — Место рождения: ${user.birthPlace || "не указано"}
-${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${synastrySection}`
+${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRetSection}${solarArcSection}${transitPerfSection}${synastrySection}`
     : "Профиль пользователя ещё не заполнен — отвечай тепло и предложи пройти настройку при возможности.\n";
 
   const synastryModeNote = contact
@@ -346,6 +376,9 @@ ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${synastry
 — Актуальные транзиты с аспектами транзитных планет к натальным
 — Солярную карту (Solar Return) текущего года — даёт тему года
 — Прогрессии (Secondary Progressions) — внутренние изменения на данный возраст
+— Лунное возвращение (Lunar Return) — когда Луна вернётся в натальный знак/градус; задаёт тему ближайших 4 недель
+— Солярную Дугу (Solar Arc Directions) — все натальные планеты продвинуты на дугу (~1°/год); активные аспекты дуги — ключевые темы периода
+— Даты точных транзитов — конкретные даты, когда транзитные аспекты достигнут точности (orb = 0); ИСПОЛЬЗУЙ ЭТО чтобы отвечать на вопросы «КОГДА?»
 — Элементный и модальный баланс карты
 — Часть Удачи (Part of Fortune), мьючуал рецепшн, критические градусы, диспозиторные цепочки, фиксированные звёзды
 

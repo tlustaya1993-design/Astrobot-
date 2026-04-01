@@ -10,6 +10,7 @@ import AstroMarkdown from '@/components/chat/AstroMarkdown';
 import PeoplePanel from '@/components/chat/PeoplePanel';
 import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
+import DailyForecastCard from '@/components/chat/DailyForecastCard';
 
 const SUGGESTED_PROMPTS = [
   "Расскажи о моей натальной карте",
@@ -132,13 +133,20 @@ export default function Chat() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center justify-center py-12 text-center"
+                className="flex flex-col items-center justify-center py-8 text-center"
               >
-                <div className="w-20 h-20 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
-                  <Sparkles className="w-10 h-10 text-primary" />
+                {/* Daily Forecast Card */}
+                {!selectedContactId && (
+                  <div className="w-full max-w-md mb-6">
+                    <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
+                  </div>
+                )}
+
+                <div className="w-16 h-16 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-5 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
+                  <Sparkles className="w-8 h-8 text-primary" />
                 </div>
-                <h3 className="text-2xl font-display font-semibold mb-2">О чём спросить звёзды?</h3>
-                <p className="text-muted-foreground mb-8 max-w-sm">
+                <h3 className="text-xl font-display font-semibold mb-2">О чём спросить звёзды?</h3>
+                <p className="text-muted-foreground mb-6 max-w-sm text-sm">
                   {selectedContactId
                     ? "Режим синастрии активен. Спросите о совместимости."
                     : "Спрашивайте о вашей карте, текущих транзитах или жизненных вопросах."}
