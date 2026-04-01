@@ -156,21 +156,49 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   const systemPrompt = buildSystemPrompt(userProfile, contactProfile);
 
-  // Keep first 4 (early context: names, people) + last 16 (recent thread)
-  // so references from early messages stay available even in long conversations
-  const KEEP_FIRST = 4;
+  // When conversation is long: summarize older messages, keep last 16 recent ones.
+  // The summary captures key facts (names, relationships, events) from the full history
+  // so nothing important is lost even if mentioned in message 5 of 40.
   const KEEP_LAST = 16;
-  const trimmedHistory = history.length <= KEEP_FIRST + KEEP_LAST
-    ? history
-    : [
-        ...history.slice(0, KEEP_FIRST),
-        ...history.slice(-KEEP_LAST),
-      ];
+  let summaryMessage: { role: "system"; content: string } | null = null;
+  let recentHistory = history;
+
+  if (history.length > KEEP_LAST) {
+    const olderMessages = history.slice(0, -KEEP_LAST);
+    recentHistory = history.slice(-KEEP_LAST);
+    try {
+      const summaryRes = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_completion_tokens: 350,
+        stream: false,
+        messages: [
+          {
+            role: "system",
+            content: "Ты — помощник, который извлекает ключевые факты из переписки. Кратко (3–6 предложений) перечисли: имена упомянутых людей и их отношение к пользователю, важные события или обстоятельства, темы которые обсуждались. Без воды."
+          },
+          {
+            role: "user",
+            content: olderMessages
+              .map(m => `${m.role === "user" ? "Пользователь" : "Астролог"}: ${m.content}`)
+              .join("\n\n")
+          }
+        ]
+      });
+      const summary = summaryRes.choices[0]?.message?.content || "";
+      if (summary) {
+        summaryMessage = {
+          role: "system",
+          content: `Ключевые факты из начала этого разговора (краткое резюме для контекста):\n${summary}`
+        };
+      }
+    } catch { /* if summarization fails, continue without summary */ }
+  }
 
   const chatMessages: { role: "system" | "user" | "assistant"; content: string }[] =
     [
       { role: "system", content: systemPrompt },
-      ...trimmedHistory.map((m) => ({
+      ...(summaryMessage ? [summaryMessage] : []),
+      ...recentHistory.map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       })),
