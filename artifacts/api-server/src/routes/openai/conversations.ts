@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, conversations, messages, usersTable, contactsTable, memoriesTable } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
 import {
@@ -163,8 +163,15 @@ router.post("/conversations/:id/messages", async (req, res) => {
       }
     }
 
-    // Save assistant response
-    await db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse });
+    // Save assistant response + increment request counter
+    await Promise.all([
+      db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse }),
+      sessionId
+        ? db.update(usersTable)
+            .set({ requestsUsed: sql`${usersTable.requestsUsed} + 1`, updatedAt: new Date() })
+            .where(eq(usersTable.sessionId, sessionId))
+        : Promise.resolve(),
+    ]);
 
     // Async memory extraction — don't block the response
     if (sessionId && fullResponse) {

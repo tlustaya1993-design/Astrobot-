@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, LogOut, LogIn } from 'lucide-react';
+import { X, Pencil, LogOut, LogIn, BrainCircuit, Trash2 } from 'lucide-react';
 import AstroAvatar, {
   HAIR_COLORS, ROBE_COLORS, EYE_COLORS, HAIR_STYLES,
   type AvatarConfig, loadAvatar, saveAvatar,
@@ -15,37 +15,13 @@ interface UserProfile {
   birthPlace?: string | null;
   birthTime?: string | null;
   gender?: string | null;
+  requestsUsed?: number | null;
 }
 
-function getZodiac(birthDate: string): string {
-  const d = new Date(birthDate);
-  const m = d.getMonth() + 1;
-  const day = d.getDate();
-  const signs: [number, number, string][] = [
-    [3,21,'Овен'],[4,20,'Телец'],[5,21,'Близнецы'],[6,21,'Рак'],
-    [7,23,'Лев'],[8,23,'Дева'],[9,23,'Весы'],[10,23,'Скорпион'],
-    [11,22,'Стрелец'],[12,22,'Козерог'],[1,20,'Козерог'],
-    [1,21,'Водолей'],[2,19,'Водолей'],[2,20,'Рыбы'],[3,20,'Рыбы'],
-  ];
-  const zodiacs: [number, number, string][] = [
-    [1,20,'Козерог'],[2,19,'Водолей'],[3,20,'Рыбы'],[3,21,'Овен'],
-    [4,20,'Телец'],[5,21,'Близнецы'],[6,21,'Рак'],[7,23,'Лев'],
-    [8,23,'Дева'],[9,23,'Весы'],[10,23,'Скорпион'],[11,22,'Стрелец'],
-    [12,21,'Козерог'],
-  ];
-  const table: [string, number, number][] = [
-    ['Козерог',12,22],['Водолей',1,20],['Рыбы',2,19],
-    ['Овен',3,21],['Телец',4,20],['Близнецы',5,21],
-    ['Рак',6,21],['Лев',7,23],['Дева',8,23],
-    ['Весы',9,23],['Скорпион',10,23],['Стрелец',11,22],
-  ];
-  for (const [sign, sm, sd] of table) {
-    if ((m === sm && day >= sd) || (m === (sm % 12) + 1 && day < sd)) {
-      if (m === 12 && day >= 22) return 'Козерог';
-      if (m === sm && day >= sd) return sign;
-    }
-  }
-  return getZodiacSimple(m, day);
+interface Memory {
+  id: number;
+  content: string;
+  updatedAt: string;
 }
 
 function getZodiacSimple(m: number, d: number): string {
@@ -70,7 +46,7 @@ function formatBirthDate(s: string): string {
   } catch { return s; }
 }
 
-type Section = 'view' | 'avatar';
+type Section = 'view' | 'avatar' | 'memories';
 
 interface Props {
   open: boolean;
@@ -85,6 +61,8 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
   const [section, setSection] = useState<Section>('view');
   const [localAvatar, setLocalAvatar] = useState<AvatarConfig>(avatarConfig);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [memories, setMemories] = useState<Memory[]>([]);
+  const [memoriesLoading, setMemoriesLoading] = useState(false);
 
   useEffect(() => { setLocalAvatar(avatarConfig); }, [avatarConfig]);
 
@@ -95,9 +73,30 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
     } catch {}
   }, []);
 
+  const fetchMemories = useCallback(async () => {
+    setMemoriesLoading(true);
+    try {
+      const res = await fetch('/api/openai/memories', { headers: getAuthHeaders() });
+      if (res.ok) setMemories(await res.json());
+    } catch {} finally {
+      setMemoriesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (open) { fetchProfile(); setSection('view'); }
   }, [open, fetchProfile]);
+
+  useEffect(() => {
+    if (section === 'memories') fetchMemories();
+  }, [section, fetchMemories]);
+
+  const handleDeleteMemory = async (id: number) => {
+    try {
+      await fetch(`/api/openai/memories/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+      setMemories(m => m.filter(x => x.id !== id));
+    } catch {}
+  };
 
   const handleSaveAvatar = () => {
     saveAvatar(localAvatar);
@@ -110,11 +109,12 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
     new Date(profile.birthDate).getDate()
   ) : null;
 
+  const backLabel = section === 'avatar' ? '← Назад' : section === 'memories' ? '← Назад' : null;
+
   return (
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
           <motion.div
             className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
@@ -123,7 +123,6 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
             onClick={onClose}
           />
 
-          {/* Sheet */}
           <motion.div
             className="fixed bottom-0 inset-x-0 z-50 flex justify-center"
             initial={{ y: '100%' }}
@@ -139,12 +138,12 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
 
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-3">
-                {section === 'avatar' ? (
+                {backLabel ? (
                   <button
                     onClick={() => setSection('view')}
                     className="text-sm text-muted-foreground hover:text-foreground transition"
                   >
-                    ← Назад
+                    {backLabel}
                   </button>
                 ) : (
                   <span className="text-base font-semibold font-display">Мой профиль</span>
@@ -156,7 +155,7 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
 
               {/* ── View section ── */}
               {section === 'view' && (
-                <div className="px-5 pb-8 space-y-5">
+                <div className="px-5 pb-8 space-y-5 max-h-[80vh] overflow-y-auto">
                   {/* Avatar + name row */}
                   <div className="flex items-center gap-4">
                     <div className="relative shrink-0">
@@ -177,6 +176,11 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                       {zodiac && (
                         <p className="text-sm text-primary font-medium">{zodiac}</p>
                       )}
+                      {profile?.requestsUsed != null && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {profile.requestsUsed} {pluralRequests(profile.requestsUsed)} отправлено
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -196,6 +200,19 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                       Пройди онбординг, чтобы добавить данные
                     </p>
                   )}
+
+                  {/* Memories button */}
+                  <button
+                    onClick={() => setSection('memories')}
+                    className="w-full flex items-center gap-3 py-3 px-4 rounded-2xl border border-border/40 hover:border-primary/30 hover:bg-white/5 transition"
+                  >
+                    <BrainCircuit className="w-4 h-4 text-primary shrink-0" />
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-medium">Моя память</p>
+                      <p className="text-xs text-muted-foreground">Что AstroBot помнит о тебе</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">→</span>
+                  </button>
 
                   {/* Auth actions */}
                   <div className="pt-1 border-t border-border/40 space-y-2">
@@ -232,10 +249,51 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
 
               <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} initialTab="login" />
 
+              {/* ── Memories section ── */}
+              {section === 'memories' && (
+                <div className="px-5 pb-8 space-y-4 max-h-[75vh] overflow-y-auto">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    AstroBot запоминает важные факты из ваших разговоров, чтобы лучше понимать контекст.
+                    Ты можешь удалить любой факт.
+                  </p>
+
+                  {memoriesLoading && (
+                    <div className="flex justify-center py-8">
+                      <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                    </div>
+                  )}
+
+                  {!memoriesLoading && memories.length === 0 && (
+                    <div className="text-center py-10 space-y-2">
+                      <BrainCircuit className="w-10 h-10 text-muted-foreground/30 mx-auto" />
+                      <p className="text-sm text-muted-foreground">Пока ничего не запомнено</p>
+                      <p className="text-xs text-muted-foreground/60">
+                        Память заполнится после нескольких разговоров
+                      </p>
+                    </div>
+                  )}
+
+                  {!memoriesLoading && memories.map(m => (
+                    <div
+                      key={m.id}
+                      className="flex items-start gap-3 py-3 px-4 rounded-2xl border border-border/40 bg-white/[0.02] group"
+                    >
+                      <p className="flex-1 text-sm text-foreground leading-relaxed">{m.content}</p>
+                      <button
+                        onClick={() => handleDeleteMemory(m.id)}
+                        className="shrink-0 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-destructive transition-all"
+                        title="Удалить"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* ── Avatar editor ── */}
               {section === 'avatar' && (
-                <div className="px-5 pb-8 space-y-5">
-                  {/* Preview */}
+                <div className="px-5 pb-8 space-y-5 max-h-[75vh] overflow-y-auto">
                   <div className="flex justify-center">
                     <div className="w-28 h-28 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
                       <AstroAvatar config={localAvatar} size={112} />
@@ -262,23 +320,18 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                     </div>
                   </div>
 
-                  {/* Hair color */}
                   <ColorRow
                     label="Цвет волос"
                     colors={HAIR_COLORS}
                     selected={localAvatar.hairColor}
                     onSelect={(hex) => setLocalAvatar(a => ({ ...a, hairColor: hex }))}
                   />
-
-                  {/* Robe color */}
                   <ColorRow
                     label="Цвет мантии"
                     colors={ROBE_COLORS}
                     selected={localAvatar.robeColor}
                     onSelect={(hex) => setLocalAvatar(a => ({ ...a, robeColor: hex }))}
                   />
-
-                  {/* Eye color */}
                   <ColorRow
                     label="Цвет глаз"
                     colors={EYE_COLORS}
@@ -300,6 +353,15 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
       )}
     </AnimatePresence>
   );
+}
+
+function pluralRequests(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'запросов';
+  if (mod10 === 1) return 'запрос';
+  if (mod10 >= 2 && mod10 <= 4) return 'запроса';
+  return 'запросов';
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {

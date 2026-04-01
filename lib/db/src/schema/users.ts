@@ -1,4 +1,4 @@
-import { pgTable, serial, text, boolean, timestamp, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, boolean, timestamp, doublePrecision, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -21,6 +21,7 @@ export const usersTable = pgTable("users", {
   tonePreferredStyle: text("tone_preferred_style"),
   toneEmotionalSensitivity: text("tone_emotional_sensitivity"),
   toneFamiliarityLevel: text("tone_familiarity_level"),
+  requestsUsed: integer("requests_used").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
