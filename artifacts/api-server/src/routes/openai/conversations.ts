@@ -156,9 +156,16 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   const systemPrompt = buildSystemPrompt(userProfile, contactProfile);
 
-  // Keep last 20 messages to avoid context overflow on long conversations
-  const MAX_HISTORY = 20;
-  const trimmedHistory = history.slice(-MAX_HISTORY);
+  // Keep first 4 (early context: names, people) + last 16 (recent thread)
+  // so references from early messages stay available even in long conversations
+  const KEEP_FIRST = 4;
+  const KEEP_LAST = 16;
+  const trimmedHistory = history.length <= KEEP_FIRST + KEEP_LAST
+    ? history
+    : [
+        ...history.slice(0, KEEP_FIRST),
+        ...history.slice(-KEEP_LAST),
+      ];
 
   const chatMessages: { role: "system" | "user" | "assistant"; content: string }[] =
     [
