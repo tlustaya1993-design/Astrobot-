@@ -156,10 +156,14 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   const systemPrompt = buildSystemPrompt(userProfile, contactProfile);
 
+  // Keep last 20 messages to avoid context overflow on long conversations
+  const MAX_HISTORY = 20;
+  const trimmedHistory = history.slice(-MAX_HISTORY);
+
   const chatMessages: { role: "system" | "user" | "assistant"; content: string }[] =
     [
       { role: "system", content: systemPrompt },
-      ...history.map((m) => ({
+      ...trimmedHistory.map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content,
       })),
@@ -168,14 +172,21 @@ router.post("/conversations/:id/messages", async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
   res.setHeader("Access-Control-Allow-Origin", "*");
+  res.flushHeaders();
+
+  // Heartbeat every 20s so Railway doesn't close idle SSE connections
+  const heartbeat = setInterval(() => {
+    try { res.write(": ping\n\n"); } catch { /* ignore */ }
+  }, 20_000);
 
   let fullResponse = "";
 
   try {
     const stream = await openai.chat.completions.create({
-      model: "gpt-5.2",
-      max_completion_tokens: 8192,
+      model: "gpt-4o",
+      max_completion_tokens: 2048,
       messages: chatMessages,
       stream: true,
     });
@@ -200,6 +211,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
     logger.error({ err }, "OpenAI streaming error");
     res.write(`data: ${JSON.stringify({ error: "Generation failed" })}\n\n`);
     res.end();
+  } finally {
+    clearInterval(heartbeat);
   }
 });
 
