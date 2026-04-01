@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, conversations, messages, usersTable, contactsTable } from "@workspace/db";
+import { db, conversations, messages, usersTable, contactsTable, memoriesTable } from "@workspace/db";
 import { eq, desc, and } from "drizzle-orm";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
 import {
   calcNatalChart, calcEphemeris, calcSolarReturn, calcProgressions,
@@ -17,13 +17,11 @@ router.get("/conversations", async (req, res) => {
     res.status(401).json({ error: "Требуется авторизация" });
     return;
   }
-
   const rows = await db
     .select()
     .from(conversations)
     .where(eq(conversations.sessionId, sessionId))
     .orderBy(desc(conversations.createdAt));
-
   res.json(rows);
 });
 
@@ -38,54 +36,45 @@ router.post("/conversations", async (req, res) => {
     res.status(400).json({ error: "title required" });
     return;
   }
-
   const [created] = await db
     .insert(conversations)
     .values({ sessionId, title })
     .returning();
-
   res.status(201).json(created);
 });
 
 router.get("/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
   const sessionId = req.sessionId;
-
   const [conv] = await db
     .select()
     .from(conversations)
     .where(eq(conversations.id, id))
     .limit(1);
-
   if (!conv || (sessionId && conv.sessionId !== sessionId)) {
     res.status(404).json({ error: "Not found" });
     return;
   }
-
   const msgs = await db
     .select()
     .from(messages)
     .where(eq(messages.conversationId, id))
     .orderBy(messages.createdAt);
-
   res.json({ ...conv, messages: msgs });
 });
 
 router.delete("/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
   const sessionId = req.sessionId;
-
   const [conv] = await db
     .select()
     .from(conversations)
     .where(eq(conversations.id, id))
     .limit(1);
-
   if (!conv || (sessionId && conv.sessionId !== sessionId)) {
     res.status(404).json({ error: "Not found" });
     return;
   }
-
   await db.delete(conversations).where(eq(conversations.id, id));
   res.status(204).end();
 });
@@ -97,7 +86,6 @@ router.get("/conversations/:id/messages", async (req, res) => {
     .from(messages)
     .where(eq(messages.conversationId, id))
     .orderBy(messages.createdAt);
-
   res.json(msgs);
 });
 
@@ -116,93 +104,35 @@ router.post("/conversations/:id/messages", async (req, res) => {
     .from(conversations)
     .where(eq(conversations.id, id))
     .limit(1);
-
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
     return;
   }
 
-  await db.insert(messages).values({
-    conversationId: id,
-    role: "user",
-    content,
-  });
+  await db.insert(messages).values({ conversationId: id, role: "user", content });
 
-  const history = await db
-    .select()
-    .from(messages)
-    .where(eq(messages.conversationId, id))
-    .orderBy(messages.createdAt);
+  // Load all data in parallel
+  const [history, userProfile, contactProfile, userMemories] = await Promise.all([
+    db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
+    sessionId
+      ? db.select().from(usersTable).where(eq(usersTable.sessionId, sessionId)).limit(1).then(r => r[0] || null)
+      : Promise.resolve(null),
+    (contactId && sessionId)
+      ? db.select().from(contactsTable)
+          .where(and(eq(contactsTable.id, Number(contactId)), eq(contactsTable.sessionId, sessionId)))
+          .limit(1).then(r => r[0] || null)
+      : Promise.resolve(null),
+    sessionId
+      ? db.select().from(memoriesTable).where(eq(memoriesTable.sessionId, sessionId)).orderBy(desc(memoriesTable.updatedAt)).limit(20)
+      : Promise.resolve([]),
+  ]);
 
-  let userProfile = null;
-  if (sessionId) {
-    const [u] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.sessionId, sessionId))
-      .limit(1);
-    userProfile = u || null;
-  }
+  const systemPrompt = buildSystemPrompt(userProfile, contactProfile, userMemories);
 
-  let contactProfile = null;
-  if (contactId && sessionId) {
-    const [c] = await db
-      .select()
-      .from(contactsTable)
-      .where(and(eq(contactsTable.id, Number(contactId)), eq(contactsTable.sessionId, sessionId)))
-      .limit(1);
-    contactProfile = c || null;
-  }
-
-  const systemPrompt = buildSystemPrompt(userProfile, contactProfile);
-
-  // When conversation is long: summarize older messages, keep last 16 recent ones.
-  // The summary captures key facts (names, relationships, events) from the full history
-  // so nothing important is lost even if mentioned in message 5 of 40.
-  const KEEP_LAST = 16;
-  let summaryMessage: { role: "system"; content: string } | null = null;
-  let recentHistory = history;
-
-  if (history.length > KEEP_LAST) {
-    const olderMessages = history.slice(0, -KEEP_LAST);
-    recentHistory = history.slice(-KEEP_LAST);
-    try {
-      const summaryRes = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        max_completion_tokens: 350,
-        stream: false,
-        messages: [
-          {
-            role: "system",
-            content: "Ты — помощник, который извлекает ключевые факты из переписки. Кратко (3–6 предложений) перечисли: имена упомянутых людей и их отношение к пользователю, важные события или обстоятельства, темы которые обсуждались. Без воды."
-          },
-          {
-            role: "user",
-            content: olderMessages
-              .map(m => `${m.role === "user" ? "Пользователь" : "Астролог"}: ${m.content}`)
-              .join("\n\n")
-          }
-        ]
-      });
-      const summary = summaryRes.choices[0]?.message?.content || "";
-      if (summary) {
-        summaryMessage = {
-          role: "system",
-          content: `Ключевые факты из начала этого разговора (краткое резюме для контекста):\n${summary}`
-        };
-      }
-    } catch { /* if summarization fails, continue without summary */ }
-  }
-
-  const chatMessages: { role: "system" | "user" | "assistant"; content: string }[] =
-    [
-      { role: "system", content: systemPrompt },
-      ...(summaryMessage ? [summaryMessage] : []),
-      ...recentHistory.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
-    ];
+  const chatMessages = history.map(m => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -219,37 +149,100 @@ router.post("/conversations/:id/messages", async (req, res) => {
   let fullResponse = "";
 
   try {
-    const stream = await openai.chat.completions.create({
-      model: "gpt-4o",
-      max_completion_tokens: 2048,
+    const stream = anthropic.messages.stream({
+      model: "claude-sonnet-4-6",
+      max_tokens: 8192,
+      system: systemPrompt,
       messages: chatMessages,
-      stream: true,
     });
 
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        fullResponse += delta;
-        res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        fullResponse += event.delta.text;
+        res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
       }
     }
 
-    await db.insert(messages).values({
-      conversationId: id,
-      role: "assistant",
-      content: fullResponse,
-    });
+    // Save assistant response
+    await db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse });
+
+    // Async memory extraction — don't block the response
+    if (sessionId && fullResponse) {
+      extractAndSaveMemories(sessionId, content, fullResponse).catch(() => {});
+    }
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err) {
-    logger.error({ err }, "OpenAI streaming error");
+    logger.error({ err }, "Anthropic streaming error");
     res.write(`data: ${JSON.stringify({ error: "Generation failed" })}\n\n`);
     res.end();
   } finally {
     clearInterval(heartbeat);
   }
 });
+
+// ── Memory routes ────────────────────────────────────────────────────────────
+
+router.get("/memories", async (req, res) => {
+  const sessionId = req.sessionId;
+  if (!sessionId) { res.status(401).json({ error: "Unauthorised" }); return; }
+  const mems = await db.select().from(memoriesTable)
+    .where(eq(memoriesTable.sessionId, sessionId))
+    .orderBy(desc(memoriesTable.updatedAt));
+  res.json(mems);
+});
+
+router.delete("/memories/:id", async (req, res) => {
+  const sessionId = req.sessionId;
+  const memId = Number(req.params.id);
+  if (!sessionId) { res.status(401).json({ error: "Unauthorised" }); return; }
+  await db.delete(memoriesTable)
+    .where(and(eq(memoriesTable.id, memId), eq(memoriesTable.sessionId, sessionId)));
+  res.status(204).end();
+});
+
+// ── Memory extraction ────────────────────────────────────────────────────────
+
+async function extractAndSaveMemories(sessionId: string, userMsg: string, assistantMsg: string) {
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 300,
+      system: `Ты — система извлечения фактов. Твоя задача — найти в диалоге конкретные факты о жизни пользователя, которые стоит запомнить для будущих разговоров.
+
+Ищи ТОЛЬКО: имена близких людей и их роль (муж, мама, дочь и т.д.), профессию пользователя или близких, важные жизненные обстоятельства (переезд, беременность, развод, новая работа), важные даты или события.
+
+Отвечай ТОЛЬКО в формате JSON массива строк. Если нет ничего важного — верни [].
+Максимум 3 факта. Каждый факт — одно краткое предложение (до 15 слов).
+Пример: ["Муж пользователя зовут Андрей, работает программистом", "Рассматривают переезд в Берлин"]`,
+      messages: [
+        { role: "user", content: `Пользователь: ${userMsg}\n\nАстролог: ${assistantMsg}` }
+      ]
+    });
+
+    const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : "[]";
+    const facts: string[] = JSON.parse(text);
+    if (!Array.isArray(facts) || facts.length === 0) return;
+
+    // Load existing memories to avoid duplicates
+    const existing = await db.select().from(memoriesTable)
+      .where(eq(memoriesTable.sessionId, sessionId));
+
+    for (const fact of facts) {
+      if (!fact || typeof fact !== "string") continue;
+      // Simple dedup: skip if very similar memory already exists
+      const isDuplicate = existing.some(m =>
+        m.content.toLowerCase().includes(fact.toLowerCase().slice(0, 15))
+      );
+      if (!isDuplicate) {
+        await db.insert(memoriesTable).values({ sessionId, content: fact });
+      }
+    }
+  } catch { /* Memory extraction is non-critical, fail silently */ }
+}
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type UserRow = {
   name?: string | null; birthDate?: string | null; birthTime?: string | null;
@@ -265,22 +258,21 @@ type ContactRow = {
   birthPlace?: string | null; birthLat?: number | null; birthLng?: number | null;
 } | null;
 
+type MemoryRow = { content: string } & Record<string, unknown>;
+
 function calcUserData(user: UserRow) {
   let natalSection = "", ephemerisSection = "", solarRetSection = "", progressSection = "";
   let natalChart = null;
-
   if (user?.birthDate) {
     try {
       const lat = user.birthLat ? Number(user.birthLat) : null;
       const lon = user.birthLng ? Number(user.birthLng) : null;
       natalChart = calcNatalChart(user.birthDate, user.birthTime || null, lat, lon);
       natalSection = `\n${formatNatalForPrompt(natalChart)}\n`;
-
       try {
         const sr = calcSolarReturn(user.birthDate, user.birthTime || null, lat, lon, new Date().getFullYear());
         solarRetSection = `\n${formatSolarReturnForPrompt(sr)}\n`;
       } catch { /* no SR */ }
-
       try {
         const birthYear = parseInt(user.birthDate.split("-")[0]);
         const age = new Date().getFullYear() - birthYear;
@@ -289,19 +281,16 @@ function calcUserData(user: UserRow) {
       } catch { /* no progressions */ }
     } catch { natalSection = ""; }
   }
-
   try {
     const ephem = calcEphemeris(natalChart ?? undefined);
     ephemerisSection = `\n${formatEphemerisForPrompt(ephem, natalChart ?? undefined)}\n`;
   } catch { /* ephemeris fallback */ }
-
   return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection };
 }
 
-function buildSystemPrompt(user: UserRow, contact: ContactRow = null): string {
+function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: MemoryRow[] = []): string {
   const depth = user?.tonePreferredDepth || "deep";
   const style = user?.tonePreferredStyle || "mystical";
-
   const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection } = calcUserData(user);
 
   let synastrySection = "";
@@ -316,6 +305,10 @@ function buildSystemPrompt(user: UserRow, contact: ContactRow = null): string {
     } catch { /* synastry fallback */ }
   }
 
+  const memoriesSection = memories.length > 0
+    ? `\nЧто я помню о пользователе из прошлых разговоров:\n${memories.map(m => `— ${m.content}`).join("\n")}\n`
+    : "";
+
   const profileSection = user
     ? `Профиль пользователя:
 — Имя: ${user.name || "не указано"}
@@ -326,7 +319,7 @@ ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${synastry
     : "Профиль пользователя ещё не заполнен — отвечай тепло и предложи пройти настройку при возможности.\n";
 
   const synastryModeNote = contact
-    ? `\nРЕЖИМ СИНАСТРИИ: Сейчас активна пара ${user?.name || "Пользователь"} + ${contact.name}. Отвечай прежде всего с точки зрения их совместимости и взаимодействия. Данные синастрии уже рассчитаны и представлены выше.\n`
+    ? `\nРЕЖИМ СИНАСТРИИ: Сейчас активна пара ${user?.name || "Пользователь"} + ${contact.name}. Отвечай прежде всего с точки зрения их совместимости и взаимодействия.\n`
     : "";
 
   const toneInstructions = `
@@ -349,28 +342,24 @@ ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${synastry
 — Часть Удачи (Part of Fortune), мьючуал рецепшн, критические градусы, диспозиторные цепочки, фиксированные звёзды
 
 Дополнительно ты знаешь:
-— Синастрию (если включён режим синастрии — данные уже рассчитаны)
-— Лунарные карты, первичные дирекции, Прямые дирекции
-— Арабские части (Часть Удачи и др.), ступени Сабиан, антисции
-— Астероиды Церера, Паллада, Юнона, Веста и их мифологию
-— Астрологические дома: все системы (Плацидус, Кох, Равный, Цельный)
+— Синастрию (если включён режим синастрии)
+— Арабские части, ступени Сабиан, антисции
+— Астероиды Церера, Паллада, Юнона, Веста
 
 Правила ответов:
 — Пиши естественно, как говорит живой человек в разговоре
-— Никогда не пиши служебные маркеры типа "мягкое вхождение", "считываю запрос" и подобные
+— Никогда не пиши служебные маркеры типа "мягкое вхождение", "считываю запрос"
 — Не начинай ответ с "Конечно!", "Отлично!", "Безусловно!"
 — Опирайся ТОЛЬКО на расчётные данные из профиля ниже — не придумывай позиции планет
 — Используй markdown только когда это реально помогает (списки планет, таблицы аспектов)
 — Если данных не хватает (нет времени рождения для домов) — честно скажи об этом
 ${synastryModeNote}
 ЖЁСТКОЕ ОГРАНИЧЕНИЕ — ты ВСЕГДА остаёшься астрологом:
-— Ты не карьерный консультант, не психолог, не коуч, не финансовый советник и не специалист по любой другой теме
-— Если пользователь задаёт вопрос не по астрологии — ты мягко, но однозначно возвращаешь его в астрологическое поле: "Давай посмотрим на это через призму твоей карты..." или "Астрология говорит об этом так..."
-— Любую тему — карьеру, отношения, деньги, здоровье, решения — ты раскрываешь ТОЛЬКО через астрологические инструменты: транзиты, натальные позиции, аспекты, дома, прогрессии
-— Ты никогда не даёшь советы в духе "обновите резюме", "пройдите курсы", "поговорите с HR" без астрологического контекста
-— Если тема вообще никак не связана с астрологией — вежливо скажи, что ты специализируешься только на астрологии, и предложи посмотреть на ситуацию через карту
+— Любую тему — карьеру, отношения, деньги, здоровье — ты раскрываешь ТОЛЬКО через астрологические инструменты
+— Если тема вообще никак не связана с астрологией — вежливо скажи, что специализируешься только на астрологии
 
 ${profileSection}
+${memoriesSection}
 ${toneInstructions}
 
 Сегодняшняя дата: ${new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}`;
