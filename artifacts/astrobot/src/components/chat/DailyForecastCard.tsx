@@ -18,9 +18,23 @@ function getToday(): string {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr + 'T12:00:00Z').toLocaleDateString('ru-RU', {
+  const dt = new Date(dateStr + 'T12:00:00Z');
+  if (Number.isNaN(dt.getTime())) return '';
+  return dt.toLocaleDateString('ru-RU', {
     weekday: 'long', day: 'numeric', month: 'long'
   });
+}
+
+function isForecastData(value: unknown): value is ForecastData {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Partial<ForecastData>;
+  return (
+    typeof v.date === 'string' &&
+    typeof v.text === 'string' &&
+    !!v.moonPhase &&
+    typeof v.moonPhase.name === 'string' &&
+    typeof v.moonPhase.emoji === 'string'
+  );
 }
 
 export default function DailyForecastCard({ onAskQuestion }: Props) {
@@ -35,19 +49,27 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
-        setData(JSON.parse(cached));
-        setLoading(false);
-        return;
+        const parsed = JSON.parse(cached) as unknown;
+        if (isForecastData(parsed)) {
+          setData(parsed);
+          setLoading(false);
+          return;
+        }
+        sessionStorage.removeItem(cacheKey);
       } catch { /* ignore */ }
     }
 
     fetch(`${import.meta.env.BASE_URL}api/openai/daily-forecast`, {
       headers: getAuthHeaders(),
     })
-      .then(r => r.json())
-      .then((d: ForecastData) => {
-        setData(d);
-        sessionStorage.setItem(cacheKey, JSON.stringify(d));
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`daily-forecast failed: ${r.status}`);
+        return r.json();
+      })
+      .then((payload: unknown) => {
+        if (!isForecastData(payload)) throw new Error('Invalid forecast payload');
+        setData(payload);
+        sessionStorage.setItem(cacheKey, JSON.stringify(payload));
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
