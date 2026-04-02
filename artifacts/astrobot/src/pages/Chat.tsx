@@ -81,6 +81,12 @@ export default function Chat() {
 
   const isNew = !conversationId && displayMessages.length === 0;
 
+  const BotBadge = () => (
+    <div className="w-full h-full rounded-full bg-background flex items-center justify-center">
+      <Sparkles className="w-4 h-4 text-primary" />
+    </div>
+  );
+
   return (
     <>
       <AppLayout>
@@ -110,7 +116,7 @@ export default function Chat() {
 
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent p-[1px]">
-                <img src={`${import.meta.env.BASE_URL}images/avatar-bot.png`} alt="AstroBot" className="w-full h-full rounded-full bg-background" />
+                <BotBadge />
               </div>
               <h2 className="font-display font-semibold text-lg">AstroBot</h2>
             </div>
@@ -177,7 +183,7 @@ export default function Chat() {
               >
                 {msg.role === 'assistant' && (
                   <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden">
-                    <img src={`${import.meta.env.BASE_URL}images/avatar-bot.png`} alt="Bot" className="w-full h-full object-cover" />
+                    <Sparkles className="w-4 h-4 text-primary" />
                   </div>
                 )}
                 <div className={`max-w-[82%] rounded-2xl p-4 shadow-lg ${
@@ -193,7 +199,7 @@ export default function Chat() {
             {isStreaming && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
                 <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden">
-                  <img src={`${import.meta.env.BASE_URL}images/avatar-bot.png`} alt="Bot" className="w-full h-full object-cover" />
+                  <Sparkles className="w-4 h-4 text-primary" />
                 </div>
                 <div className="max-w-[82%] rounded-2xl p-4 shadow-lg bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-sm max-w-none">
                   {streamingText ? <AstroMarkdown content={streamingText} /> : (

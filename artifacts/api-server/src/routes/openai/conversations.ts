@@ -13,6 +13,13 @@ import {
 
 const router: IRouter = Router();
 
+function hasAnthropicProvider(): boolean {
+  return Boolean(
+    process.env.ANTHROPIC_API_KEY ||
+      process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+  );
+}
+
 router.get("/conversations", async (req, res) => {
   const sessionId = req.sessionId;
   if (!sessionId) {
@@ -151,18 +158,39 @@ router.post("/conversations/:id/messages", async (req, res) => {
   let fullResponse = "";
 
   try {
-    const stream = anthropic.messages.stream({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8192,
-      temperature: 0.5,
-      system: systemPrompt,
-      messages: chatMessages,
-    });
+    if (hasAnthropicProvider()) {
+      const stream = anthropic.messages.stream({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8192,
+        temperature: 0.5,
+        system: systemPrompt,
+        messages: chatMessages,
+      });
 
-    for await (const event of stream) {
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        fullResponse += event.delta.text;
-        res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+      for await (const event of stream) {
+        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+          fullResponse += event.delta.text;
+          res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+        }
+      }
+    } else {
+      const { openai } = await import("@workspace/integrations-openai-ai-server");
+      const stream = await openai.chat.completions.create({
+        model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+        temperature: 0.5,
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...chatMessages,
+        ],
+      });
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (typeof delta === "string" && delta.length > 0) {
+          fullResponse += delta;
+          res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+        }
       }
     }
 
@@ -184,8 +212,10 @@ router.post("/conversations/:id/messages", async (req, res) => {
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err) {
+    const errorMessage =
+      err instanceof Error && err.message ? err.message : "Generation failed";
     logger.error({ err }, "Anthropic streaming error");
-    res.write(`data: ${JSON.stringify({ error: "Generation failed" })}\n\n`);
+    res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
     res.end();
   } finally {
     clearInterval(heartbeat);
@@ -216,22 +246,49 @@ router.delete("/memories/:id", async (req, res) => {
 
 async function extractAndSaveMemories(sessionId: string, userMsg: string, assistantMsg: string) {
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 300,
-      system: `Ты — система извлечения фактов. Твоя задача — найти в диалоге конкретные факты о жизни пользователя, которые стоит запомнить для будущих разговоров.
+    let text = "[]";
+    if (hasAnthropicProvider()) {
+      const response = await anthropic.messages.create({
+        model: "claude-haiku-4-5",
+        max_tokens: 300,
+        system: `Ты — система извлечения фактов. Твоя задача — найти в диалоге конкретные факты о жизни пользователя, которые стоит запомнить для будущих разговоров.
 
 Ищи ТОЛЬКО: имена близких людей и их роль (муж, мама, дочь и т.д.), профессию пользователя или близких, важные жизненные обстоятельства (переезд, беременность, развод, новая работа), важные даты или события.
 
 Отвечай ТОЛЬКО в формате JSON массива строк. Если нет ничего важного — верни [].
 Максимум 3 факта. Каждый факт — одно краткое предложение (до 15 слов).
 Пример: ["Муж пользователя зовут Андрей, работает программистом", "Рассматривают переезд в Берлин"]`,
-      messages: [
-        { role: "user", content: `Пользователь: ${userMsg}\n\nАстролог: ${assistantMsg}` }
-      ]
-    });
+        messages: [
+          { role: "user", content: `Пользователь: ${userMsg}\n\nАстролог: ${assistantMsg}` }
+        ]
+      });
+      text =
+        response.content[0]?.type === "text"
+          ? response.content[0].text.trim()
+          : "[]";
+    } else {
+      const { openai } = await import("@workspace/integrations-openai-ai-server");
+      const response = await openai.chat.completions.create({
+        model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+        temperature: 0.2,
+        messages: [
+          {
+            role: "system",
+            content:
+              `Ты — система извлечения фактов. Твоя задача — найти в диалоге конкретные факты о жизни пользователя, которые стоит запомнить для будущих разговоров.\n\n` +
+              `Ищи ТОЛЬКО: имена близких людей и их роль (муж, мама, дочь и т.д.), профессию пользователя или близких, важные жизненные обстоятельства (переезд, беременность, развод, новая работа), важные даты или события.\n\n` +
+              `Отвечай ТОЛЬКО в формате JSON массива строк. Если нет ничего важного — верни [].\n` +
+              `Максимум 3 факта. Каждый факт — одно краткое предложение (до 15 слов).`,
+          },
+          {
+            role: "user",
+            content: `Пользователь: ${userMsg}\n\nАстролог: ${assistantMsg}`,
+          },
+        ],
+      });
+      text = (response.choices?.[0]?.message?.content || "[]").trim();
+    }
 
-    const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : "[]";
     const facts: string[] = JSON.parse(text);
     if (!Array.isArray(facts) || facts.length === 0) return;
 
