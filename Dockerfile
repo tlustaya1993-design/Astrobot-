@@ -12,6 +12,7 @@ COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/db/package.json ./lib/db/
 COPY lib/integrations-openai-ai-react/package.json ./lib/integrations-openai-ai-react/
 COPY lib/integrations-openai-ai-server/package.json ./lib/integrations-openai-ai-server/
+COPY lib/integrations-anthropic-ai/package.json ./lib/integrations-anthropic-ai/
 COPY scripts/package.json ./scripts/
 RUN pnpm install --frozen-lockfile=false
 
