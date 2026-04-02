@@ -25,13 +25,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center relative overflow-hidden">
-      <div className="absolute inset-0 z-0">
-        <img 
-          src={`${import.meta.env.BASE_URL}images/cosmic-bg.png`} 
-          alt="Cosmic Background" 
-          className="w-full h-full object-cover opacity-30 mix-blend-screen"
-        />
-      </div>
+      <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_20%_10%,rgba(131,58,180,0.22),transparent_45%),radial-gradient(circle_at_80%_90%,rgba(255,196,74,0.12),transparent_40%)]" />
       <div className="relative z-10 flex flex-col items-center">
         <div className="w-16 h-16 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
         <p className="text-primary tracking-widest font-display animate-pulse uppercase text-sm">Выравниваем звёзды...</p>

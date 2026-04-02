@@ -52,10 +52,12 @@ export default function Onboarding() {
 
   return (
     <div className="h-[100dvh] relative overflow-hidden bg-background">
-      <img
-        src={`${import.meta.env.BASE_URL}images/cosmic-bg.png`}
-        alt=""
-        className="absolute inset-0 w-full h-full object-cover opacity-30 mix-blend-screen pointer-events-none"
+      <div
+        className="absolute inset-0 pointer-events-none opacity-40"
+        style={{
+          background:
+            "radial-gradient(circle at 20% 0%, rgba(139, 92, 246, 0.22), transparent 45%), radial-gradient(circle at 80% 100%, rgba(212, 175, 55, 0.18), transparent 45%)",
+        }}
       />
 
       {/* Progress dots */}

@@ -70,6 +70,9 @@ export function useChatStream(conversationId?: number) {
                 assistantMsg += data.content;
                 setStreamingText(assistantMsg);
               }
+              if (data.error) {
+                throw new Error(typeof data.error === 'string' ? data.error : 'Generation failed');
+              }
               if (data.done) break;
             } catch {}
           }
@@ -88,6 +91,18 @@ export function useChatStream(conversationId?: number) {
 
     } catch (error) {
       console.error('Chat error:', error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Сервис временно недоступен. Попробуйте чуть позже.';
+      const tempAssistantError: OpenaiMessage = {
+        id: Date.now() + 1,
+        conversationId: targetId || 0,
+        role: 'assistant',
+        content: `Не удалось получить ответ: ${message}`,
+        createdAt: new Date().toISOString(),
+      };
+      setLocalMessages(prev => [...prev, tempAssistantError]);
     } finally {
       setIsStreaming(false);
       setStreamingText('');
