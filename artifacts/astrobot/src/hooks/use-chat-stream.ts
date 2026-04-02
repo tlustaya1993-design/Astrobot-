@@ -53,12 +53,16 @@ export function useChatStream(conversationId?: number) {
       if (!reader) return targetId;
       const decoder = new TextDecoder();
       let assistantMsg = '';
+      let streamError: string | null = null;
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        buffer += chunk;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -71,12 +75,21 @@ export function useChatStream(conversationId?: number) {
                 setStreamingText(assistantMsg);
               }
               if (data.error) {
-                throw new Error(typeof data.error === 'string' ? data.error : 'Generation failed');
+                streamError = typeof data.error === 'string' ? data.error : 'Generation failed';
+                break;
               }
               if (data.done) break;
-            } catch {}
+            } catch {
+              // ignore malformed SSE chunks
+            }
           }
         }
+
+        if (streamError) break;
+      }
+
+      if (streamError) {
+        throw new Error(streamError);
       }
 
       const tempAssistantMsg: OpenaiMessage = {
