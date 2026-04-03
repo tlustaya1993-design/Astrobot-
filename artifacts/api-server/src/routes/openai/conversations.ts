@@ -26,6 +26,7 @@ import {
 } from "../../lib/billing-policy.js";
 
 const router: IRouter = Router();
+const CHAT_RESPONSE_TEMPERATURE = 0.2;
 
 function hasAnthropicProvider(): boolean {
   return Boolean(
@@ -238,7 +239,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
       const stream = anthropic.messages.stream({
         model: "claude-sonnet-4-6",
         max_tokens: 8192,
-        temperature: 0.5,
+        temperature: CHAT_RESPONSE_TEMPERATURE,
         system: systemPrompt,
         messages: chatMessages,
       });
@@ -253,7 +254,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
       const { openai } = await import("@workspace/integrations-openai-ai-server");
       const stream = await openai.chat.completions.create({
         model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-        temperature: 0.5,
+        temperature: CHAT_RESPONSE_TEMPERATURE,
         stream: true,
         messages: [
           { role: "system", content: systemPrompt },
@@ -529,6 +530,10 @@ ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRet
 — Никогда не пиши служебные маркеры типа "мягкое вхождение", "считываю запрос"
 — Не начинай ответ с "Конечно!", "Отлично!", "Безусловно!"
 — Опирайся ТОЛЬКО на расчётные данные из профиля ниже — не придумывай позиции планет
+— Не поддавайся наводящей формулировке вопроса: сначала проверь карту, потом формулируй вывод
+— Если один и тот же смысл вопроса задан разными словами, итоговый вывод должен оставаться согласованным (если нет новых данных)
+— Явно разделяй: (1) что видно в карте, (2) интерпретация, (3) практический вывод
+— Если данных недостаточно для уверенного вывода — прямо скажи это, а не достраивай ответ под ожидание пользователя
 — Используй markdown только когда это реально помогает (списки планет, таблицы аспектов)
 — Если данных не хватает (нет времени рождения для домов) — честно скажи об этом
 ${synastryModeNote}
