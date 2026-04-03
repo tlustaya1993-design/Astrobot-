@@ -13,6 +13,7 @@ export default function Onboarding() {
   const [, setLocation] = useLocation();
   const [step, setStep] = useState(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [birthTimeUnknown, setBirthTimeUnknown] = useState(false);
   const [formData, setFormData] = useState<UpsertUserBody>({
     name: '',
     birthDate: '',
@@ -35,7 +36,11 @@ export default function Onboarding() {
     setErrorMsg(null);
     try {
       await upsertMutation.mutateAsync({
-        data: { ...formData, onboardingDone: true }
+        data: {
+          ...formData,
+          birthTime: birthTimeUnknown ? '12:00' : formData.birthTime,
+          onboardingDone: true,
+        }
       });
       setLocation('/chat');
     } catch (e) {
@@ -140,11 +145,36 @@ export default function Onboarding() {
                     </label>
                     <input
                       type="time"
-                      value={formData.birthTime || ''}
-                      onChange={e => setFormData({ ...formData, birthTime: e.target.value })}
+                      value={birthTimeUnknown ? '12:00' : (formData.birthTime || '')}
+                      onChange={e => {
+                        setBirthTimeUnknown(false);
+                        setFormData({ ...formData, birthTime: e.target.value });
+                      }}
+                      disabled={birthTimeUnknown}
                       className="w-full bg-card/50 backdrop-blur-sm border border-border rounded-xl text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all duration-300 px-4 py-3.5"
                     />
                   </div>
+
+                  <label className="flex items-start gap-2 rounded-xl border border-border bg-card/30 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={birthTimeUnknown}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setBirthTimeUnknown(checked);
+                        setFormData({
+                          ...formData,
+                          birthTime: checked ? '12:00' : '',
+                        });
+                      }}
+                      className="mt-0.5"
+                    />
+                    <span className="text-xs text-muted-foreground leading-relaxed">
+                      Я не знаю точное время рождения.
+                      <br />
+                      Используем 12:00 по умолчанию. Ответы будут менее конкретными.
+                    </span>
+                  </label>
 
                   <div className="space-y-1">
                     <label className="text-xs font-medium text-muted-foreground pl-1">Город рождения</label>

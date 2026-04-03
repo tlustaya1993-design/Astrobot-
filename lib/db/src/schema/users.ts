@@ -11,6 +11,7 @@ export const usersTable = pgTable("users", {
   name: text("name"),
   birthDate: text("birth_date"),
   birthTime: text("birth_time"),
+  birthTimeUnknown: boolean("birth_time_unknown").notNull().default(false),
   birthPlace: text("birth_place"),
   birthLat: doublePrecision("birth_lat"),
   birthLng: doublePrecision("birth_lng"),

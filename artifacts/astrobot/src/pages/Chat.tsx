@@ -38,6 +38,8 @@ export default function Chat() {
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
 
   // Swipe-from-left-edge detection
   const touchStartX = useRef(0);
@@ -61,8 +63,17 @@ export default function Chat() {
     : (conversation?.messages || []);
 
   useEffect(() => {
+    if (!autoScrollEnabled) return;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [displayMessages, streamingText]);
+  }, [displayMessages, streamingText, autoScrollEnabled]);
+
+  const handleMessagesScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    const shouldStickToBottom = distanceToBottom < 80;
+    setAutoScrollEnabled(shouldStickToBottom);
+  };
 
   useEffect(() => {
     clearLocalMessages();
@@ -128,7 +139,11 @@ export default function Chat() {
           <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          <div
+            ref={messagesContainerRef}
+            onScroll={handleMessagesScroll}
+            className="flex-1 overflow-y-auto p-4 space-y-6"
+          >
             {isLoading && (
               <div className="flex justify-center py-10">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />

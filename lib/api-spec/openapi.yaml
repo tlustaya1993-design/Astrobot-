@@ -235,6 +235,9 @@ components:
         birthTime:
           type: string
           nullable: true
+        birthTimeUnknown:
+          type: boolean
+          nullable: true
         birthPlace:
           type: string
           nullable: true
@@ -290,6 +293,9 @@ components:
           nullable: true
         birthTime:
           type: string
+          nullable: true
+        birthTimeUnknown:
+          type: boolean
           nullable: true
         birthPlace:
           type: string
