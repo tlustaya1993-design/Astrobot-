@@ -26,7 +26,6 @@ WORKDIR /app
 COPY --from=builder /app /app
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
-RUN pnpm install --frozen-lockfile=false
 ENV NODE_ENV=production
 EXPOSE 3000
 CMD ["/app/start.sh"]
