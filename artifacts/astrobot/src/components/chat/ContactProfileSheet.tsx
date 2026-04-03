@@ -1,16 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Pencil, Save, Trash2, X } from 'lucide-react';
-import AstroAvatar, {
-  DEFAULT_AVATAR,
-  EYE_COLORS,
-  HAIR_COLORS,
-  HAIR_STYLES,
-  ROBE_COLORS,
-  type AvatarConfig,
-} from '@/components/ui/AstroAvatar';
+import AstroAvatar, { DEFAULT_AVATAR, type AvatarConfig } from '@/components/ui/AstroAvatar';
 import { getAuthHeaders } from '@/lib/session';
 import type { Contact } from './PeoplePanel';
+import AvatarEditor from '@/components/ui/AvatarEditor';
 
 function normalizeAvatarConfig(input: unknown): AvatarConfig {
   if (!input || typeof input !== 'object') return DEFAULT_AVATAR;
@@ -39,43 +33,6 @@ function initials(name: string): string {
     .join('')
     .toUpperCase()
     .slice(0, 2);
-}
-
-function ColorRow({
-  label,
-  colors,
-  selected,
-  onSelect,
-}: {
-  label: string;
-  colors: { id: string; label: string; hex: string }[];
-  selected: string;
-  onSelect: (hex: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
-      <div className="flex gap-2.5 flex-wrap">
-        {colors.map((c) => (
-          <button
-            key={c.id}
-            title={c.label}
-            onClick={() => onSelect(c.hex)}
-            className="relative w-8 h-8 rounded-full border-2 transition-all"
-            style={{
-              backgroundColor: c.hex,
-              borderColor: selected === c.hex ? '#D4AF37' : 'transparent',
-              boxShadow: selected === c.hex ? `0 0 8px ${c.hex}80` : 'none',
-            }}
-          >
-            {selected === c.hex && (
-              <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold">✓</span>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 interface ContactProfileSheetProps {
@@ -311,48 +268,10 @@ export default function ContactProfileSheet({
 
               {section === 'avatar' && (
                 <div className="px-5 pb-8 space-y-5 max-h-[75vh] overflow-y-auto">
-                  <div className="flex justify-center">
-                    <div className="w-28 h-28 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
-                      <AstroAvatar config={avatarPreview} size={112} />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Причёска</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {HAIR_STYLES.map((s) => (
-                        <button
-                          key={s.id}
-                          onClick={() => setAvatarConfig((a) => ({ ...a, hairStyle: s.id }))}
-                          className={`py-2 px-1 rounded-xl text-xs font-medium border transition-all ${
-                            avatarConfig.hairStyle === s.id
-                              ? 'border-primary bg-primary/15 text-primary shadow-[0_0_8px_rgba(212,175,55,0.25)]'
-                              : 'border-border/40 text-muted-foreground hover:border-primary/30 hover:bg-white/5'
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <ColorRow
-                    label="Цвет волос"
-                    colors={HAIR_COLORS}
-                    selected={avatarConfig.hairColor}
-                    onSelect={(hex) => setAvatarConfig((a) => ({ ...a, hairColor: hex }))}
-                  />
-                  <ColorRow
-                    label="Цвет мантии"
-                    colors={ROBE_COLORS}
-                    selected={avatarConfig.robeColor}
-                    onSelect={(hex) => setAvatarConfig((a) => ({ ...a, robeColor: hex }))}
-                  />
-                  <ColorRow
-                    label="Цвет глаз"
-                    colors={EYE_COLORS}
-                    selected={avatarConfig.eyeColor}
-                    onSelect={(hex) => setAvatarConfig((a) => ({ ...a, eyeColor: hex }))}
+                  <AvatarEditor
+                    avatarConfig={avatarConfig}
+                    onChange={setAvatarConfig}
+                    previewSize={136}
                   />
 
                   <button

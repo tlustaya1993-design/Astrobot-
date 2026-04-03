@@ -1,10 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Pencil, LogOut, LogIn, BrainCircuit, Trash2 } from 'lucide-react';
-import AstroAvatar, {
-  HAIR_COLORS, ROBE_COLORS, EYE_COLORS, HAIR_STYLES,
-  type AvatarConfig, loadAvatar, saveAvatar,
-} from '@/components/ui/AstroAvatar';
+import AstroAvatar, { type AvatarConfig, loadAvatar, saveAvatar } from '@/components/ui/AstroAvatar';
+import AvatarEditor from '@/components/ui/AvatarEditor';
 import { getAuthHeaders } from '@/lib/session';
 import { useAuth } from '@/context/AuthContext';
 import AuthModal from '@/components/AuthModal';
@@ -312,49 +310,10 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
               {/* ── Avatar editor ── */}
               {section === 'avatar' && (
                 <div className="px-5 pb-8 space-y-5 max-h-[75vh] overflow-y-auto">
-                  <div className="flex justify-center">
-                    <div className="w-28 h-28 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
-                      <AstroAvatar config={localAvatar} size={112} />
-                    </div>
-                  </div>
-
-                  {/* Hairstyle */}
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Причёска</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {HAIR_STYLES.map(s => (
-                        <button
-                          key={s.id}
-                          onClick={() => setLocalAvatar(a => ({ ...a, hairStyle: s.id }))}
-                          className={`py-2 px-1 rounded-xl text-xs font-medium border transition-all ${
-                            localAvatar.hairStyle === s.id
-                              ? 'border-primary bg-primary/15 text-primary shadow-[0_0_8px_rgba(212,175,55,0.25)]'
-                              : 'border-border/40 text-muted-foreground hover:border-primary/30 hover:bg-white/5'
-                          }`}
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <ColorRow
-                    label="Цвет волос"
-                    colors={HAIR_COLORS}
-                    selected={localAvatar.hairColor}
-                    onSelect={(hex) => setLocalAvatar(a => ({ ...a, hairColor: hex }))}
-                  />
-                  <ColorRow
-                    label="Цвет мантии"
-                    colors={ROBE_COLORS}
-                    selected={localAvatar.robeColor}
-                    onSelect={(hex) => setLocalAvatar(a => ({ ...a, robeColor: hex }))}
-                  />
-                  <ColorRow
-                    label="Цвет глаз"
-                    colors={EYE_COLORS}
-                    selected={localAvatar.eyeColor}
-                    onSelect={(hex) => setLocalAvatar(a => ({ ...a, eyeColor: hex }))}
+                  <AvatarEditor
+                    value={localAvatar}
+                    onChange={setLocalAvatar}
+                    previewSize={136}
                   />
 
                   <button
@@ -391,36 +350,3 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ColorRow({
-  label, colors, selected, onSelect
-}: {
-  label: string;
-  colors: { id: string; label: string; hex: string }[];
-  selected: string;
-  onSelect: (hex: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
-      <div className="flex gap-2.5 flex-wrap">
-        {colors.map(c => (
-          <button
-            key={c.id}
-            title={c.label}
-            onClick={() => onSelect(c.hex)}
-            className="relative w-8 h-8 rounded-full border-2 transition-all"
-            style={{
-              backgroundColor: c.hex,
-              borderColor: selected === c.hex ? '#D4AF37' : 'transparent',
-              boxShadow: selected === c.hex ? `0 0 8px ${c.hex}80` : 'none',
-            }}
-          >
-            {selected === c.hex && (
-              <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold">✓</span>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
