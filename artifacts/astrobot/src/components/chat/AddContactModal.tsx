@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Loader2, MapPin } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Loader2, MapPin, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAuthHeaders } from '@/lib/session';
 
@@ -7,11 +7,30 @@ interface AddContactModalProps {
   open: boolean;
   onClose: () => void;
   onAdded: () => void;
+  mode?: 'create' | 'edit';
+  initialContact?: {
+    id: number;
+    name: string;
+    relation?: string | null;
+    birthDate: string;
+    birthTime?: string | null;
+    birthPlace?: string | null;
+    birthLat?: number | null;
+    birthLng?: number | null;
+  } | null;
+  onDeleted?: () => void;
 }
 
 const RELATIONS = ["партнёр", "муж", "жена", "подруга", "друг", "начальник", "коллега", "родитель", "ребёнок", "другое"];
 
-export default function AddContactModal({ open, onClose, onAdded }: AddContactModalProps) {
+export default function AddContactModal({
+  open,
+  onClose,
+  onAdded,
+  mode = 'create',
+  initialContact = null,
+  onDeleted,
+}: AddContactModalProps) {
   const [name, setName] = useState('');
   const [relation, setRelation] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -21,6 +40,34 @@ export default function AddContactModal({ open, onClose, onAdded }: AddContactMo
   const [error, setError] = useState('');
   const [geocoding, setGeocoding] = useState(false);
   const [coords, setCoords] = useState<{lat: number; lng: number} | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    if (mode === 'edit' && initialContact) {
+      setName(initialContact.name ?? '');
+      setRelation(initialContact.relation ?? '');
+      setBirthDate(initialContact.birthDate ?? '');
+      setBirthTime(initialContact.birthTime ?? '');
+      setBirthPlace(initialContact.birthPlace ?? '');
+      if (
+        typeof initialContact.birthLat === 'number' &&
+        typeof initialContact.birthLng === 'number'
+      ) {
+        setCoords({ lat: initialContact.birthLat, lng: initialContact.birthLng });
+      } else {
+        setCoords(null);
+      }
+    } else {
+      setName('');
+      setRelation('');
+      setBirthDate('');
+      setBirthTime('');
+      setBirthPlace('');
+      setCoords(null);
+    }
+    setError('');
+  }, [open, mode, initialContact]);
 
   const geocodePlace = async (place: string) => {
     if (!place.trim()) return;
@@ -38,8 +85,10 @@ export default function AddContactModal({ open, onClose, onAdded }: AddContactMo
     if (!name.trim() || !birthDate) { setError('Имя и дата рождения обязательны'); return; }
     setLoading(true); setError('');
     try {
-      const res = await fetch('/api/contacts', {
-        method: 'POST',
+      const res = await fetch(
+        mode === 'edit' && initialContact ? `/api/contacts/${initialContact.id}` : '/api/contacts',
+        {
+          method: mode === 'edit' ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           name: name.trim(), relation: relation || null,
@@ -57,6 +106,29 @@ export default function AddContactModal({ open, onClose, onAdded }: AddContactMo
       setError('Не удалось сохранить. Попробуйте снова.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!initialContact) return;
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm(`Удалить контакт «${initialContact.name}»?`)
+      : true;
+    if (!confirmed) return;
+    setDeleting(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/contacts/${initialContact.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Ошибка удаления');
+      onDeleted?.();
+      onClose();
+    } catch {
+      setError('Не удалось удалить контакт. Попробуйте снова.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -78,7 +150,9 @@ export default function AddContactModal({ open, onClose, onAdded }: AddContactMo
             className="w-full max-w-lg bg-card border border-border rounded-t-2xl p-6 pb-safe"
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-display font-semibold">Добавить человека</h3>
+              <h3 className="text-lg font-display font-semibold">
+                {mode === 'edit' ? 'Редактировать человека' : 'Добавить человека'}
+              </h3>
               <button onClick={onClose} className="p-2 rounded-full hover:bg-white/5 text-muted-foreground">
                 <X className="w-5 h-5" />
               </button>
@@ -146,12 +220,27 @@ export default function AddContactModal({ open, onClose, onAdded }: AddContactMo
 
               {error && <p className="text-sm text-red-400">{error}</p>}
 
-              <button
-                type="submit" disabled={loading}
-                className="w-full py-3.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Добавить'}
-              </button>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="submit" disabled={loading || deleting}
+                  className="w-full py-3.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                >
+                  {loading
+                    ? <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                    : mode === 'edit' ? 'Сохранить изменения' : 'Добавить'}
+                </button>
+                {mode === 'edit' && (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={loading || deleting}
+                    className="w-full py-3.5 bg-destructive/15 text-destructive border border-destructive/40 rounded-xl font-semibold hover:bg-destructive/25 disabled:opacity-50 transition-colors inline-flex items-center justify-center gap-2"
+                  >
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    Удалить
+                  </button>
+                )}
+              </div>
             </form>
           </motion.div>
         </motion.div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Pencil } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAuthHeaders } from '@/lib/session';
 import AddContactModal from './AddContactModal';
@@ -11,6 +11,10 @@ export interface Contact {
   name: string;
   relation?: string | null;
   birthDate: string;
+  birthTime?: string | null;
+  birthPlace?: string | null;
+  birthLat?: number | null;
+  birthLng?: number | null;
 }
 
 interface PeoplePanelProps {
@@ -21,8 +25,9 @@ interface PeoplePanelProps {
 export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanelProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
 
   useEffect(() => {
@@ -38,15 +43,18 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
-  const handleDelete = async (e: React.MouseEvent, id: number) => {
+  const handleOpenEdit = (e: React.MouseEvent, contact: Contact) => {
     e.stopPropagation();
-    setDeleting(id);
-    try {
-      await fetch(`/api/contacts/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      setContacts(prev => prev.filter(c => c.id !== id));
-      if (selectedContactId === id) onSelect(null);
-    } catch {}
-    setDeleting(null);
+    setEditingContact(contact);
+    setShowEditModal(true);
+  };
+
+  const handleDeleted = () => {
+    if (!editingContact) return;
+    setContacts(prev => prev.filter(c => c.id !== editingContact.id));
+    if (selectedContactId === editingContact.id) onSelect(null);
+    setShowEditModal(false);
+    setEditingContact(null);
   };
 
   const getInitials = (name: string) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -102,13 +110,13 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
                 )}
               </button>
 
-              {/* Delete button on hover */}
               <button
-                onClick={(e) => handleDelete(e, contact.id)}
-                disabled={deleting === contact.id}
-                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-white items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex"
+                onClick={(e) => handleOpenEdit(e, contact)}
+                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-card border border-border text-muted-foreground flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                aria-label={`Редактировать ${contact.name}`}
+                title="Редактировать"
               >
-                <Trash2 className="w-2.5 h-2.5" />
+                <Pencil className="w-3 h-3" />
               </button>
             </motion.div>
           ))}
@@ -140,6 +148,18 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
         open={showModal}
         onClose={() => setShowModal(false)}
         onAdded={fetchContacts}
+      />
+
+      <AddContactModal
+        open={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingContact(null);
+        }}
+        onAdded={fetchContacts}
+        mode="edit"
+        initialContact={editingContact}
+        onDeleted={handleDeleted}
       />
 
       <ProfileSheet
