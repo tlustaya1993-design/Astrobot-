@@ -23,6 +23,7 @@ const PACKAGE_CONFIG: Record<
 };
 
 const DEFAULT_RECEIPT_EMAIL = "billing@astrobot.app";
+let paymentsTableReady: Promise<void> | null = null;
 
 function isPackageCode(value: unknown): value is PackageCode {
   return typeof value === "string" && value in PACKAGE_CONFIG;
@@ -60,6 +61,36 @@ function normalizeReceiptEmail(value: string | null | undefined): string {
     return DEFAULT_RECEIPT_EMAIL;
   }
   return email;
+}
+
+async function ensurePaymentsTableExists(): Promise<void> {
+  if (!paymentsTableReady) {
+    paymentsTableReady = (async () => {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS payments (
+          id serial PRIMARY KEY,
+          session_id text NOT NULL,
+          provider text NOT NULL DEFAULT 'yookassa',
+          provider_payment_id text NOT NULL UNIQUE,
+          package_id text NOT NULL,
+          requests_purchased integer NOT NULL,
+          amount_rub integer NOT NULL,
+          currency text NOT NULL DEFAULT 'RUB',
+          status text NOT NULL DEFAULT 'pending',
+          description text,
+          metadata jsonb,
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          credits_applied_at timestamptz
+        )
+      `);
+    })().catch((error) => {
+      paymentsTableReady = null;
+      throw error;
+    });
+  }
+
+  await paymentsTableReady;
 }
 
 router.get("/credits", async (req, res) => {
@@ -111,6 +142,7 @@ router.post("/payments/create", async (req, res) => {
   const appPaymentId = randomUUID();
 
   await ensureUserSession(sessionId);
+  await ensurePaymentsTableExists();
   const [user] = await db
     .select({ email: usersTable.email })
     .from(usersTable)
@@ -192,6 +224,7 @@ router.post("/payments/webhook", async (req, res) => {
     res.status(401).json({ error: "Invalid webhook signature" });
     return;
   }
+  await ensurePaymentsTableExists();
 
   const notification = parseYookassaNotification(req.body);
   if (!notification) {
