@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAuthHeaders } from '@/lib/session';
 import AddContactModal from './AddContactModal';
@@ -28,6 +28,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
   const [showEditModal, setShowEditModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [deletingContactId, setDeletingContactId] = useState<number | null>(null);
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
 
   useEffect(() => {
@@ -55,6 +56,33 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
     if (selectedContactId === editingContact.id) onSelect(null);
     setShowEditModal(false);
     setEditingContact(null);
+  };
+
+  const handleQuickDelete = async (e: React.MouseEvent, contact: Contact) => {
+    e.stopPropagation();
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm(`Удалить контакт «${contact.name}»?`)
+      : true;
+    if (!confirmed) return;
+
+    setDeletingContactId(contact.id);
+    try {
+      const res = await fetch(`/api/contacts/${contact.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('Ошибка удаления');
+      setContacts(prev => prev.filter(c => c.id !== contact.id));
+      if (selectedContactId === contact.id) onSelect(null);
+      if (editingContact?.id === contact.id) {
+        setShowEditModal(false);
+        setEditingContact(null);
+      }
+    } catch {
+      // Silent fail to avoid noisy UX in compact chips row.
+    } finally {
+      setDeletingContactId(null);
+    }
   };
 
   const getInitials = (name: string) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -91,7 +119,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
               initial={{ opacity: 0, scale: 0.8, x: -10 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.8, x: -10 }}
-              className="relative group shrink-0"
+              className="group shrink-0 flex items-center gap-1"
             >
               <button
                 onClick={() => onSelect(selectedContactId === contact.id ? null : contact.id)}
@@ -112,11 +140,21 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
 
               <button
                 onClick={(e) => handleOpenEdit(e, contact)}
-                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-card border border-border text-muted-foreground flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                className="w-7 h-7 rounded-full bg-card border border-border text-muted-foreground flex items-center justify-center hover:text-foreground hover:border-primary/40 transition-colors"
                 aria-label={`Редактировать ${contact.name}`}
                 title="Редактировать"
               >
                 <Pencil className="w-3 h-3" />
+              </button>
+
+              <button
+                onClick={(e) => handleQuickDelete(e, contact)}
+                className="w-7 h-7 rounded-full bg-card border border-border text-muted-foreground flex items-center justify-center hover:text-destructive hover:border-destructive/40 transition-colors disabled:opacity-50"
+                aria-label={`Удалить ${contact.name}`}
+                title="Удалить"
+                disabled={deletingContactId === contact.id}
+              >
+                <Trash2 className="w-3 h-3" />
               </button>
             </motion.div>
           ))}
