@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/AuthContext';
 import { apiLogin, apiRegister } from '@/lib/auth';
 import { getSessionId } from '@/lib/session';
+import { toast } from '@/hooks/use-toast';
 
 interface AuthModalProps {
   open: boolean;
@@ -20,6 +21,23 @@ export default function AuthModal({ open, onClose, initialTab = 'login' }: AuthM
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const handleYandexLogin = () => {
+    try {
+      const sessionId = getSessionId();
+      const returnTo = window.location.pathname + window.location.search;
+      const authUrl = new URL(`${window.location.origin}/api/auth/yandex/start`);
+      authUrl.searchParams.set('sessionId', sessionId);
+      authUrl.searchParams.set('returnTo', returnTo || '/');
+      window.location.href = authUrl.toString();
+    } catch {
+      toast({
+        title: 'Не удалось начать вход через Яндекс',
+        description: 'Попробуйте снова через пару секунд.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,6 +102,23 @@ export default function AuthModal({ open, onClose, initialTab = 'login' }: AuthM
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <Button
+            type="button"
+            onClick={handleYandexLogin}
+            className="w-full bg-[#fc3f1d] hover:bg-[#e83818] text-white font-medium"
+          >
+            Войти через Яндекс
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-[#2a2a3d]" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-[#0f0f1a] px-2 text-gray-500">или</span>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="email" className="text-gray-300">Email</Label>
             <Input

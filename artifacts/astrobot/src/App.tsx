@@ -8,6 +8,7 @@ import Home from "@/pages/Home";
 import Onboarding from "@/pages/Onboarding";
 import Chat from "@/pages/Chat";
 import History from "@/pages/History";
+import AuthCallback from "@/pages/AuthCallback";
 import { getSessionId } from "@/lib/session";
 import { AuthProvider } from "@/context/AuthContext";
 
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/chat" component={Chat} />
       <Route path="/chat/:id" component={Chat} />
       <Route path="/history" component={History} />
+      <Route path="/auth/callback" component={AuthCallback} />
       <Route component={NotFound} />
     </Switch>
   );
