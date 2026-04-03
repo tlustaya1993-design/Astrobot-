@@ -233,6 +233,14 @@ router.post("/conversations/:id/messages", async (req, res) => {
   }, 20_000);
 
   let fullResponse = "";
+  const unknownTimePreface = userProfile?.birthTimeUnknown
+    ? "Важно: время рождения указано неточно (используем 12:00), поэтому вывод по домам и точным таймингам менее конкретный.\n\n"
+    : "";
+
+  if (unknownTimePreface) {
+    fullResponse += unknownTimePreface;
+    res.write(`data: ${JSON.stringify({ content: unknownTimePreface })}\n\n`);
+  }
 
   try {
     if (hasAnthropicProvider()) {
