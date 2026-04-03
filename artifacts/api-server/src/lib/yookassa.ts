@@ -67,8 +67,9 @@ function getBaseUrl(): string {
 
 export async function createYooKassaPayment(
   payload: YooKassaCreatePaymentPayload,
+  options?: { idempotenceKey?: string },
 ): Promise<YooKassaCreatePaymentResponse> {
-  const idempotenceKey = crypto.randomUUID();
+  const idempotenceKey = options?.idempotenceKey ?? crypto.randomUUID();
   const response = await fetch(`${getBaseUrl()}/payments`, {
     method: "POST",
     headers: {

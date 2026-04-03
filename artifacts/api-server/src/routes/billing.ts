@@ -102,18 +102,27 @@ router.post("/payments/create", async (req, res) => {
   await ensureUserSession(sessionId);
 
   try {
-    const ykPayment = await createYookassaPayment({
-      amountRub: pkg.amountRub,
-      description: pkg.title,
-      returnUrl,
-      metadata: {
-        appPaymentId,
-        sessionId,
-        packageCode,
-        credits: String(pkg.credits),
+    const ykPayment = await createYookassaPayment(
+      {
+        amount: {
+          value: pkg.amountRub,
+          currency: "RUB",
+        },
+        capture: true,
+        confirmation: {
+          type: "redirect",
+          return_url: returnUrl,
+        },
+        description: pkg.title,
+        metadata: {
+          appPaymentId,
+          sessionId,
+          packageCode,
+          credits: String(pkg.credits),
+        },
       },
-      idempotenceKey: appPaymentId,
-    });
+      { idempotenceKey: appPaymentId },
+    );
 
     await db.insert(paymentsTable).values({
       sessionId,
@@ -139,8 +148,7 @@ router.post("/payments/create", async (req, res) => {
     });
   } catch (err) {
     logger.error({ err }, "Failed to create yookassa payment");
-    const details = err instanceof Error ? err.message : "unknown error";
-    res.status(500).json({ error: "Не удалось создать платеж", details });
+    res.status(500).json({ error: "Не удалось создать платеж" });
   }
 });
 
