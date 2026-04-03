@@ -1,5 +1,7 @@
 import React from 'react';
+import { Loader2, Save } from 'lucide-react';
 import AstroAvatar, {
+  DEFAULT_AVATAR,
   EYE_COLORS,
   HAIR_COLORS,
   HAIR_STYLES,
@@ -8,8 +10,12 @@ import AstroAvatar, {
 } from '@/components/ui/AstroAvatar';
 
 interface AvatarEditorProps {
-  value: AvatarConfig;
+  value?: AvatarConfig;
+  avatarConfig?: AvatarConfig;
   onChange: (next: AvatarConfig) => void;
+  onSave?: () => void;
+  saving?: boolean;
+  saveLabel?: string;
   previewSize?: number;
 }
 
@@ -52,9 +58,15 @@ function ColorRow({
 
 export default function AvatarEditor({
   value,
+  avatarConfig,
   onChange,
+  onSave,
+  saving = false,
+  saveLabel = 'Сохранить аватар',
   previewSize = 136,
 }: AvatarEditorProps) {
+  const current = value ?? avatarConfig ?? DEFAULT_AVATAR;
+
   return (
     <div className="space-y-5">
       <div className="flex justify-center">
@@ -62,7 +74,7 @@ export default function AvatarEditor({
           className="rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_24px_rgba(212,175,55,0.25)]"
           style={{ width: previewSize, height: previewSize }}
         >
-          <AstroAvatar config={value} size={previewSize} />
+          <AstroAvatar config={current} size={previewSize} />
         </div>
       </div>
 
@@ -72,9 +84,9 @@ export default function AvatarEditor({
           {HAIR_STYLES.map((s) => (
             <button
               key={s.id}
-              onClick={() => onChange({ ...value, hairStyle: s.id })}
+              onClick={() => onChange({ ...current, hairStyle: s.id })}
               className={`py-2 px-1 rounded-xl text-xs font-medium border transition-all ${
-                value.hairStyle === s.id
+                current.hairStyle === s.id
                   ? 'border-primary bg-primary/15 text-primary shadow-[0_0_8px_rgba(212,175,55,0.25)]'
                   : 'border-border/40 text-muted-foreground hover:border-primary/30 hover:bg-white/5'
               }`}
@@ -88,21 +100,32 @@ export default function AvatarEditor({
       <ColorRow
         label="Цвет волос"
         colors={HAIR_COLORS}
-        selected={value.hairColor}
-        onSelect={(hex) => onChange({ ...value, hairColor: hex })}
+        selected={current.hairColor}
+        onSelect={(hex) => onChange({ ...current, hairColor: hex })}
       />
       <ColorRow
         label="Цвет мантии"
         colors={ROBE_COLORS}
-        selected={value.robeColor}
-        onSelect={(hex) => onChange({ ...value, robeColor: hex })}
+        selected={current.robeColor}
+        onSelect={(hex) => onChange({ ...current, robeColor: hex })}
       />
       <ColorRow
         label="Цвет глаз"
         colors={EYE_COLORS}
-        selected={value.eyeColor}
-        onSelect={(hex) => onChange({ ...value, eyeColor: hex })}
+        selected={current.eyeColor}
+        onSelect={(hex) => onChange({ ...current, eyeColor: hex })}
       />
+
+      {onSave && (
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2 disabled:opacity-60"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saveLabel}
+        </button>
+      )}
     </div>
   );
 }
