@@ -1,5 +1,12 @@
 import { Router, type IRouter } from "express";
-import { db, conversations, messages, usersTable, contactsTable, memoriesTable } from "@workspace/db";
+import {
+  db,
+  conversations,
+  messages,
+  usersTable,
+  contactsTable,
+  memoriesTable,
+} from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
@@ -118,7 +125,40 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  await db.insert(messages).values({ conversationId: id, role: "user", content });
+  const [owner] = sessionId
+    ? await db
+        .select({
+          sessionId: usersTable.sessionId,
+          requestsUsed: usersTable.requestsUsed,
+          requestsBalance: usersTable.requestsBalance,
+        })
+        .from(usersTable)
+        .where(eq(usersTable.sessionId, sessionId))
+        .limit(1)
+    : [];
+
+  // Billing unit: 1 request per message, 2 for long message.
+  const requestCost = content.length >= 1200 ? 2 : 1;
+
+  if (!owner || owner.requestsBalance < requestCost) {
+    res.status(402).json({
+      error: "Недостаточно запросов в пакете",
+      required: requestCost,
+      balance: owner?.requestsBalance ?? 0,
+    });
+    return;
+  }
+
+  await Promise.all([
+    db.insert(messages).values({ conversationId: id, role: "user", content }),
+    db
+      .update(usersTable)
+      .set({
+        requestsBalance: sql`${usersTable.requestsBalance} - ${requestCost}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.sessionId, sessionId!)),
+  ]);
 
   // Load all data in parallel
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([

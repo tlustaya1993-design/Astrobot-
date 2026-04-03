@@ -16,6 +16,8 @@ interface UserProfile {
   birthTime?: string | null;
   gender?: string | null;
   requestsUsed?: number | null;
+  requestsBalance?: number | null;
+  requestsTotalPurchased?: number | null;
 }
 
 interface Memory {
@@ -179,6 +181,11 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                       {profile?.requestsUsed != null && (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {profile.requestsUsed} {pluralRequests(profile.requestsUsed)} отправлено
+                        </p>
+                      )}
+                      {profile?.requestsBalance != null && (
+                        <p className="text-xs text-primary/80 mt-0.5">
+                          Осталось: {profile.requestsBalance} {pluralRequests(profile.requestsBalance)}
                         </p>
                       )}
                     </div>
