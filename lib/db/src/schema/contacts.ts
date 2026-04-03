@@ -12,6 +12,7 @@ export const contactsTable = pgTable("contacts", {
   birthPlace: text("birth_place"),
   birthLat: doublePrecision("birth_lat"),
   birthLng: doublePrecision("birth_lng"),
+  avatarJson: text("avatar_json"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

@@ -17,6 +17,7 @@ interface AddContactModalProps {
     birthPlace?: string | null;
     birthLat?: number | null;
     birthLng?: number | null;
+    avatarConfig?: unknown;
   } | null;
   onDeleted?: () => void;
 }

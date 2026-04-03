@@ -50,4 +50,36 @@ router.delete("/contacts/:id", async (req, res) => {
   res.status(204).end();
 });
 
+router.put("/contacts/:id/avatar", async (req, res) => {
+  const id = Number(req.params.id);
+  const sessionId = req.sessionId;
+  if (!sessionId) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Некорректный id контакта" }); return; }
+
+  const {
+    avatarHairStyle,
+    avatarHairColor,
+    avatarRobeColor,
+    avatarEyeColor,
+  } = req.body as {
+    avatarHairStyle?: string | null;
+    avatarHairColor?: string | null;
+    avatarRobeColor?: string | null;
+    avatarEyeColor?: string | null;
+  };
+
+  const [updated] = await db.update(contactsTable)
+    .set({
+      avatarHairStyle: avatarHairStyle ?? null,
+      avatarHairColor: avatarHairColor ?? null,
+      avatarRobeColor: avatarRobeColor ?? null,
+      avatarEyeColor: avatarEyeColor ?? null,
+    })
+    .where(and(eq(contactsTable.id, id), eq(contactsTable.sessionId, sessionId)))
+    .returning();
+
+  if (!updated) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(updated);
+});
+
 export default router;
