@@ -215,7 +215,8 @@ router.post("/payments/create", async (req, res) => {
     });
   } catch (err) {
     logger.error({ err }, "Failed to create yookassa payment");
-    res.status(500).json({ error: "Не удалось создать платеж" });
+    const details = err instanceof Error ? err.message : "unknown error";
+    res.status(500).json({ error: "Не удалось создать платеж", details });
   }
 });
 
