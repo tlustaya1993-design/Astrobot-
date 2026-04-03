@@ -72,12 +72,15 @@ async function ensurePaymentsTableExists(): Promise<void> {
           session_id text NOT NULL,
           provider text NOT NULL DEFAULT 'yookassa',
           provider_payment_id text NOT NULL UNIQUE,
-          package_id text NOT NULL,
-          requests_purchased integer NOT NULL,
-          amount_rub integer NOT NULL,
+          app_payment_id text NOT NULL UNIQUE,
+          package_code text NOT NULL,
+          credits_granted integer NOT NULL,
+          amount_rub text NOT NULL,
           currency text NOT NULL DEFAULT 'RUB',
           status text NOT NULL DEFAULT 'pending',
           description text,
+          metadata_json text,
+          webhook_verified boolean NOT NULL DEFAULT false,
           metadata jsonb,
           created_at timestamptz NOT NULL DEFAULT now(),
           updated_at timestamptz NOT NULL DEFAULT now(),
@@ -195,12 +198,14 @@ router.post("/payments/create", async (req, res) => {
       sessionId,
       provider: "yookassa",
       providerPaymentId: ykPayment.id,
-      packageId: packageCode,
-      requestsPurchased: pkg.credits,
-      amountRub: toKopecks(pkg.amountRub),
+      appPaymentId,
+      packageCode,
+      creditsGranted: pkg.credits,
+      amountRub: pkg.amountRub,
       currency: "RUB",
       status: ykPayment.status,
       description: pkg.title,
+      metadataJson: JSON.stringify(ykPayment),
       metadata: {
         appPaymentId,
         yookassa: ykPayment,
@@ -276,7 +281,7 @@ router.post("/payments/webhook", async (req, res) => {
       await tx
         .update(usersTable)
         .set({
-          requestsBalance: sql`${usersTable.requestsBalance} + ${locked.requestsPurchased}`,
+          requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
           updatedAt: new Date(),
         })
         .where(eq(usersTable.sessionId, paymentRow.sessionId));
