@@ -21,11 +21,17 @@ import ProfileSheet from '@/components/profile/ProfileSheet';
 interface ChatSidebarProps {
   currentConversationId?: number;
   onLoginClick: () => void;
+  onNavigate?: () => void;
+  className?: string;
+  headerRight?: React.ReactNode;
 }
 
 export default function ChatSidebar({
   currentConversationId,
   onLoginClick,
+  onNavigate,
+  className,
+  headerRight,
 }: ChatSidebarProps) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -63,6 +69,7 @@ export default function ChatSidebar({
 
   const openChat = (id?: number) => {
     setLocation(id ? `/chat/${id}` : '/chat');
+    onNavigate?.();
   };
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
@@ -72,8 +79,13 @@ export default function ChatSidebar({
 
   return (
     <>
-      <aside className="h-full w-full border-r border-border/60 bg-card/40 backdrop-blur-sm flex flex-col">
+      <aside className={`h-full w-full border-r border-border/60 bg-card/40 backdrop-blur-sm flex flex-col ${className ?? ''}`}>
         <div className="p-3 border-b border-border/50">
+          {headerRight && (
+            <div className="mb-2 flex justify-end">
+              {headerRight}
+            </div>
+          )}
           <button
             onClick={() => setShowProfile(true)}
             className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition"

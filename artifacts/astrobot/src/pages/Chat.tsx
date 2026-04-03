@@ -38,6 +38,7 @@ export default function Chat() {
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
@@ -102,10 +103,12 @@ export default function Chat() {
   return (
     <>
       <AppLayout>
-        <div className="flex-1 min-h-0 md:grid md:grid-cols-[320px_1fr] lg:grid-cols-[360px_1fr]">
+        <div className="flex-1 min-h-0 flex">
           <div
-            className={`hidden md:block border-r border-border/50 bg-background/60 backdrop-blur-xl ${
-              isDesktopSidebarCollapsed ? 'md:w-0 md:min-w-0 md:overflow-hidden md:border-r-0' : ''
+            className={`hidden md:block border-r border-border/50 bg-background/60 backdrop-blur-xl transition-all duration-200 ${
+              isDesktopSidebarCollapsed
+                ? 'w-0 min-w-0 overflow-hidden border-r-0'
+                : 'w-[320px] lg:w-[360px] shrink-0'
             }`}
           >
             <ChatSidebar

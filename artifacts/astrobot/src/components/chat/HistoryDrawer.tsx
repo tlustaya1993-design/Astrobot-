@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 import ChatSidebar from './ChatSidebar';
 
 interface Props {
