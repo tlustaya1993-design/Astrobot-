@@ -472,17 +472,111 @@ function calcUserData(user: UserRow) {
   return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection };
 }
 
+function calcContactData(contact: ContactRow) {
+  let contactNatalSection = "";
+  let contactEphemerisSection = "";
+  let contactSolarRetSection = "";
+  let contactProgressSection = "";
+  let contactLunarRetSection = "";
+  let contactSolarArcSection = "";
+  let contactTransitPerfSection = "";
+  let contactChart = null;
+
+  if (contact?.birthDate) {
+    try {
+      const lat = contact.birthLat ? Number(contact.birthLat) : null;
+      const lon = contact.birthLng ? Number(contact.birthLng) : null;
+      contactChart = calcNatalChart(contact.birthDate, contact.birthTime || null, lat, lon);
+      contactNatalSection = `\n${formatNatalForPrompt(contactChart)}\n`;
+
+      try {
+        const sr = calcSolarReturn(
+          contact.birthDate,
+          contact.birthTime || null,
+          lat,
+          lon,
+          new Date().getFullYear(),
+        );
+        contactSolarRetSection = `\n${formatSolarReturnForPrompt(sr)}\n`;
+      } catch { /* no SR */ }
+
+      try {
+        const birthYear = parseInt(contact.birthDate.split("-")[0]);
+        const age = new Date().getFullYear() - birthYear;
+        const prog = calcProgressions(
+          contact.birthDate,
+          contact.birthTime || null,
+          lat,
+          lon,
+          age,
+        );
+        contactProgressSection = `\n${formatProgressionsForPrompt(prog)}\n`;
+      } catch { /* no progressions */ }
+
+      try {
+        const natalMoon = contactChart.planets.find((p) => p.planet === "Луна");
+        if (natalMoon) {
+          const lr = calcLunarReturn(natalMoon.longitude, new Date());
+          contactLunarRetSection = `\n${formatLunarReturnForPrompt(lr)}\n`;
+        }
+      } catch { /* no lunar return */ }
+
+      try {
+        const sa = calcSolarArcDirections(
+          contact.birthDate,
+          contact.birthTime || null,
+          lat,
+          lon,
+        );
+        contactSolarArcSection = `\n${formatSolarArcForPrompt(sa)}\n`;
+      } catch { /* no solar arc */ }
+    } catch { /* contact chart fallback */ }
+  }
+
+  try {
+    const ephem = calcEphemeris(contactChart ?? undefined);
+    contactEphemerisSection = `\n${formatEphemerisForPrompt(ephem, contactChart ?? undefined)}\n`;
+
+    if (contactChart && ephem.transitAspects && ephem.transitAspects.length > 0) {
+      try {
+        const withDates = calcTransitPerfections(ephem.transitAspects, contactChart);
+        const formatted = formatTransitPerfectionsForPrompt(withDates);
+        if (formatted) contactTransitPerfSection = `\n${formatted}\n`;
+      } catch { /* no perfection dates */ }
+    }
+  } catch { /* ephemeris fallback */ }
+
+  return {
+    contactChart,
+    contactNatalSection,
+    contactEphemerisSection,
+    contactSolarRetSection,
+    contactProgressSection,
+    contactLunarRetSection,
+    contactSolarArcSection,
+    contactTransitPerfSection,
+  };
+}
+
 function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: MemoryRow[] = []): string {
   const depth = user?.tonePreferredDepth || "deep";
   const style = user?.tonePreferredStyle || "mystical";
   const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection } = calcUserData(user);
 
+  const {
+    contactChart,
+    contactNatalSection,
+    contactEphemerisSection,
+    contactSolarRetSection,
+    contactProgressSection,
+    contactLunarRetSection,
+    contactSolarArcSection,
+    contactTransitPerfSection,
+  } = calcContactData(contact);
+
   let synastrySection = "";
-  if (contact?.birthDate && natalChart) {
+  if (contactChart && natalChart) {
     try {
-      const cLat = contact.birthLat ? Number(contact.birthLat) : null;
-      const cLon = contact.birthLng ? Number(contact.birthLng) : null;
-      const contactChart = calcNatalChart(contact.birthDate, contact.birthTime || null, cLat, cLon);
       const synastry = calcSynastry(natalChart, contactChart);
       const contactName = contact.name + (contact.relation ? ` (${contact.relation})` : "");
       synastrySection = `\n${formatSynastryForPrompt(user?.name || "Пользователь", contactName, synastry)}\n`;
@@ -501,6 +595,16 @@ function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: 
 — Место рождения: ${user.birthPlace || "не указано"}
 ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRetSection}${solarArcSection}${transitPerfSection}${synastrySection}`
     : "Профиль пользователя ещё не заполнен — отвечай тепло и предложи пройти настройку при возможности.\n";
+
+  const contactSection = contact
+    ? `Профиль контакта:
+— Имя: ${contact.name}
+— Связь: ${contact.relation || "не указана"}
+— Дата рождения: ${contact.birthDate || "не указана"}
+— Время рождения: ${contact.birthTime || "не указано"}
+— Место рождения: ${contact.birthPlace || "не указано"}
+${contactNatalSection}${contactEphemerisSection}${contactSolarRetSection}${contactProgressSection}${contactLunarRetSection}${contactSolarArcSection}${contactTransitPerfSection}`
+    : "";
 
   const unknownBirthTimeNote = user?.birthTimeUnknown
     ? `\nВАЖНО: пользователь указал, что точное время рождения неизвестно. Не делай уверенных выводов по домам и углам (ASC/MC/1/6/10/12 дома). Формулируй осторожнее и явно отмечай, что прогноз менее конкретный без точного времени рождения.\n`
@@ -553,6 +657,8 @@ ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRet
 — Используй markdown только когда это реально помогает (списки планет, таблицы аспектов)
 — Если данных не хватает (нет времени рождения для домов) — честно скажи об этом
 ${synastryModeNote}
+— Если активен режим синастрии и данные контакта есть в профиле, считай, что натальная карта контакта и его текущие транзиты УЖЕ рассчитаны и доступны ниже.
+— В этом режиме запрещено писать, что ты «не можешь посчитать» карту/транзиты контакта или что «нет инструмента для расчёта».
 ЖЁСТКОЕ ОГРАНИЧЕНИЕ — ты ВСЕГДА остаёшься астрологом:
 — Любую тему — карьеру, отношения, деньги, здоровье — ты раскрываешь ТОЛЬКО через астрологические инструменты
 — Если тема вообще никак не связана с астрологией — вежливо скажи, что специализируешься только на астрологии
@@ -574,6 +680,7 @@ ${synastryModeNote}
 — Всегда добавляй: «Астрология указывает на предрасположенности, а не диагнозы. Для конкретных вопросов здоровья обращайся к врачу»
 
 ${profileSection}
+${contactSection}
 ${unknownBirthTimeNote}
 — Если время рождения неизвестно, НЕ используй и НЕ интерпретируй дома, Асцендент, МС и домовые показатели; опирайся только на знаки, планеты, их аспекты, фазы и общие транзиты.
 ${memoriesSection}
