@@ -8,6 +8,11 @@ import {
   validateYookassaWebhook,
 } from "../lib/yookassa.js";
 import { logger } from "../lib/logger.js";
+import {
+  FREE_REQUESTS_LIMIT,
+  isUnlimitedEmail,
+  normalizeEmail,
+} from "../lib/billing-policy.js";
 
 const router: IRouter = Router();
 
@@ -105,6 +110,7 @@ router.get("/credits", async (req, res) => {
 
   const [user] = await db
     .select({
+      email: usersTable.email,
       requestsUsed: usersTable.requestsUsed,
       requestsBalance: usersTable.requestsBalance,
     })
@@ -114,9 +120,18 @@ router.get("/credits", async (req, res) => {
 
   const used = user?.requestsUsed ?? 0;
   const balance = user?.requestsBalance ?? 0;
-  const remaining = Math.max(0, balance);
+  const freeRemaining = Math.max(0, FREE_REQUESTS_LIMIT - used);
+  const isUnlimited = isUnlimitedEmail(user?.email);
+  const remaining = isUnlimited ? Number.MAX_SAFE_INTEGER : freeRemaining + Math.max(0, balance);
 
-  res.json({ used, balance, remaining });
+  res.json({
+    used,
+    balance,
+    freeRemaining,
+    remaining,
+    isUnlimited,
+    freeLimit: FREE_REQUESTS_LIMIT,
+  });
 });
 
 router.post("/payments/create", async (req, res) => {

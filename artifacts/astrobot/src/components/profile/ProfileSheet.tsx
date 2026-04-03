@@ -17,6 +17,9 @@ interface UserProfile {
   gender?: string | null;
   requestsUsed?: number | null;
   requestsBalance?: number | null;
+  freeRemaining?: number | null;
+  freeLimit?: number | null;
+  isUnlimited?: boolean;
   requestsTotalPurchased?: number | null;
 }
 
@@ -181,6 +184,14 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                       {profile?.requestsUsed != null && (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {profile.requestsUsed} {pluralRequests(profile.requestsUsed)} отправлено
+                        </p>
+                      )}
+                      {profile?.isUnlimited && (
+                        <p className="text-xs text-emerald-400 mt-0.5">Безлимитный доступ активен</p>
+                      )}
+                      {!profile?.isUnlimited && profile?.freeRemaining != null && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Бесплатно: {profile.freeRemaining}/{profile.freeLimit ?? 5}
                         </p>
                       )}
                       {profile?.requestsBalance != null && (

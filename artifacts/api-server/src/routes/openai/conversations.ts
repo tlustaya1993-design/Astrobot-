@@ -17,6 +17,13 @@ import {
   formatSolarReturnForPrompt, formatProgressionsForPrompt, formatSynastryForPrompt,
   formatLunarReturnForPrompt, formatSolarArcForPrompt, formatTransitPerfectionsForPrompt,
 } from "../../lib/astrology.js";
+import {
+  FREE_REQUESTS_LIMIT,
+  isUnlimitedUser,
+  getRemainingFreeRequests,
+  canAffordRequest,
+  getBalanceAfterCharge,
+} from "../../lib/billing-policy.js";
 
 const router: IRouter = Router();
 
@@ -110,6 +117,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
   const { content, sessionId: bodySessionId, contactId } = req.body;
   const sessionId = req.sessionId || bodySessionId;
 
+  if (!sessionId || typeof sessionId !== "string") {
+    res.status(401).json({ error: "Требуется авторизация" });
+    return;
+  }
+
   if (!content) {
     res.status(400).json({ error: "content required" });
     return;
@@ -125,39 +137,63 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  const [owner] = sessionId
-    ? await db
-        .select({
-          sessionId: usersTable.sessionId,
-          requestsUsed: usersTable.requestsUsed,
-          requestsBalance: usersTable.requestsBalance,
-        })
-        .from(usersTable)
-        .where(eq(usersTable.sessionId, sessionId))
-        .limit(1)
-    : [];
+  let [owner] = await db
+    .select({
+      sessionId: usersTable.sessionId,
+      email: usersTable.email,
+      requestsUsed: usersTable.requestsUsed,
+      requestsBalance: usersTable.requestsBalance,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.sessionId, sessionId))
+    .limit(1);
+
+  if (!owner) {
+    await db.insert(usersTable).values({ sessionId }).onConflictDoNothing();
+    [owner] = await db
+      .select({
+        sessionId: usersTable.sessionId,
+        email: usersTable.email,
+        requestsUsed: usersTable.requestsUsed,
+        requestsBalance: usersTable.requestsBalance,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.sessionId, sessionId))
+      .limit(1);
+  }
 
   // Billing unit: 1 request per message, 2 for long message.
   const requestCost = content.length >= 1200 ? 2 : 1;
+  const remainingFree = getRemainingFreeRequests(owner?.requestsUsed ?? 0);
+  const isUnlimited = isUnlimitedUser(owner?.email);
 
-  if (!owner || owner.requestsBalance < requestCost) {
+  if (!owner || !canAffordRequest(owner.requestsUsed, owner.requestsBalance, requestCost, owner.email)) {
     res.status(402).json({
-      error: "Недостаточно запросов в пакете",
+      error: `Лимит бесплатных запросов (${FREE_REQUESTS_LIMIT}) исчерпан. Пополните пакет, чтобы продолжить.`,
       required: requestCost,
       balance: owner?.requestsBalance ?? 0,
+      freeRemaining: remainingFree,
+      isUnlimited,
     });
     return;
   }
+
+  const nextBalance = getBalanceAfterCharge(
+    owner.requestsUsed,
+    owner.requestsBalance,
+    requestCost,
+    owner.email,
+  );
 
   await Promise.all([
     db.insert(messages).values({ conversationId: id, role: "user", content }),
     db
       .update(usersTable)
       .set({
-        requestsBalance: sql`${usersTable.requestsBalance} - ${requestCost}`,
+        requestsBalance: nextBalance,
         updatedAt: new Date(),
       })
-      .where(eq(usersTable.sessionId, sessionId!)),
+      .where(eq(usersTable.sessionId, sessionId)),
   ]);
 
   // Load all data in parallel
@@ -234,12 +270,16 @@ router.post("/conversations/:id/messages", async (req, res) => {
       }
     }
 
-    // Save assistant response + increment request counter
+    // Save assistant response + increment request counter.
+    // `requestsUsed` is tracked in billing units (long message can cost 2).
     await Promise.all([
       db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse }),
       sessionId
         ? db.update(usersTable)
-            .set({ requestsUsed: sql`${usersTable.requestsUsed} + 1`, updatedAt: new Date() })
+            .set({
+              requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
+              updatedAt: new Date(),
+            })
             .where(eq(usersTable.sessionId, sessionId))
         : Promise.resolve(),
     ]);

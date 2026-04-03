@@ -47,7 +47,21 @@ export function useChatStream(conversationId?: number) {
         body: JSON.stringify(body)
       });
 
-      if (!res.ok) throw new Error('Failed to send message');
+      if (!res.ok) {
+        let message = 'Failed to send message';
+        try {
+          const payload = await res.json() as { error?: string; freeRemaining?: number; required?: number; balance?: number };
+          if (payload?.error) {
+            message = payload.error;
+            if (typeof payload.freeRemaining === 'number') {
+              message += `. Бесплатно осталось: ${payload.freeRemaining}`;
+            }
+          }
+        } catch {
+          // keep generic fallback
+        }
+        throw new Error(message);
+      }
 
       const reader = res.body?.getReader();
       if (!reader) return targetId;
