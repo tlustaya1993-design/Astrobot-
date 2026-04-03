@@ -22,6 +22,8 @@ const PACKAGE_CONFIG: Record<
   pack100: { amountRub: "2499.00", credits: 100, title: "AstroBot — 100 запросов" },
 };
 
+const DEFAULT_RECEIPT_EMAIL = "billing@astrobot.app";
+
 function isPackageCode(value: unknown): value is PackageCode {
   return typeof value === "string" && value in PACKAGE_CONFIG;
 }
@@ -49,6 +51,15 @@ async function ensureUserSession(sessionId: string) {
     .returning();
 
   return created;
+}
+
+function normalizeReceiptEmail(value: string | null | undefined): string {
+  if (!value || typeof value !== "string") return DEFAULT_RECEIPT_EMAIL;
+  const email = value.trim().toLowerCase();
+  if (!email.includes("@") || email.startsWith("@") || email.endsWith("@")) {
+    return DEFAULT_RECEIPT_EMAIL;
+  }
+  return email;
 }
 
 router.get("/credits", async (req, res) => {
@@ -100,6 +111,12 @@ router.post("/payments/create", async (req, res) => {
   const appPaymentId = randomUUID();
 
   await ensureUserSession(sessionId);
+  const [user] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.sessionId, sessionId))
+    .limit(1);
+  const receiptEmail = normalizeReceiptEmail(user?.email);
 
   try {
     const ykPayment = await createYookassaPayment(
@@ -119,6 +136,24 @@ router.post("/payments/create", async (req, res) => {
           sessionId,
           packageCode,
           credits: String(pkg.credits),
+        },
+        receipt: {
+          customer: {
+            email: receiptEmail,
+          },
+          items: [
+            {
+              description: pkg.title,
+              quantity: "1.00",
+              amount: {
+                value: pkg.amountRub,
+                currency: "RUB",
+              },
+              vat_code: 1,
+              payment_mode: "full_payment",
+              payment_subject: "service",
+            },
+          ],
         },
       },
       { idempotenceKey: appPaymentId },

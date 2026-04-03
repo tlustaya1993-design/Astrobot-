@@ -12,6 +12,52 @@ type YooKassaCreatePaymentPayload = {
   };
   description?: string;
   metadata?: Record<string, string>;
+  receipt?: {
+    customer?: {
+      email?: string;
+      phone?: string;
+    };
+    items: Array<{
+      description: string;
+      quantity: string;
+      amount: {
+        value: string;
+        currency: "RUB";
+      };
+      vat_code: number;
+      payment_mode:
+        | "full_prepayment"
+        | "prepayment"
+        | "advance"
+        | "full_payment"
+        | "partial_payment"
+        | "credit"
+        | "credit_payment";
+      payment_subject:
+        | "commodity"
+        | "excise"
+        | "job"
+        | "service"
+        | "gambling_bet"
+        | "gambling_prize"
+        | "lottery"
+        | "lottery_prize"
+        | "intellectual_activity"
+        | "payment"
+        | "agent_commission"
+        | "composite"
+        | "another";
+      country_of_origin_code?: string;
+      customs_declaration_number?: string;
+      excise?: string;
+      supplier?: {
+        name: string;
+        phone?: string;
+        inn?: string;
+      };
+    }>;
+    tax_system_code?: 1 | 2 | 3 | 4 | 5 | 6;
+  };
 };
 
 type YooKassaCreatePaymentResponse = {
