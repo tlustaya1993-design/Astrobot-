@@ -567,6 +567,7 @@ ${synastryModeNote}
 
 ${profileSection}
 ${unknownBirthTimeNote}
+— Если время рождения неизвестно, НЕ используй и НЕ интерпретируй дома, Асцендент, МС и домовые показатели; опирайся только на знаки, планеты, их аспекты, фазы и общие транзиты.
 ${memoriesSection}
 ${toneInstructions}
 
