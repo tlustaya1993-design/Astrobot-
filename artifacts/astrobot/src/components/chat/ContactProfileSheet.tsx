@@ -12,24 +12,15 @@ import AstroAvatar, {
 import { getAuthHeaders } from '@/lib/session';
 import type { Contact } from './PeoplePanel';
 
-const CONTACT_AVATAR_PREFIX = 'astrobot_contact_avatar_';
-
-function getStorageKey(contactId: number): string {
-  return `${CONTACT_AVATAR_PREFIX}${contactId}`;
-}
-
-function loadContactAvatar(contactId: number): AvatarConfig {
-  try {
-    const raw = localStorage.getItem(getStorageKey(contactId));
-    if (!raw) return DEFAULT_AVATAR;
-    return { ...DEFAULT_AVATAR, ...JSON.parse(raw) } as AvatarConfig;
-  } catch {
-    return DEFAULT_AVATAR;
-  }
-}
-
-function saveContactAvatar(contactId: number, cfg: AvatarConfig): void {
-  localStorage.setItem(getStorageKey(contactId), JSON.stringify(cfg));
+function normalizeAvatarConfig(input: unknown): AvatarConfig {
+  if (!input || typeof input !== 'object') return DEFAULT_AVATAR;
+  const v = input as Record<string, unknown>;
+  return {
+    hairStyle: typeof v.hairStyle === 'string' ? v.hairStyle : DEFAULT_AVATAR.hairStyle,
+    hairColor: typeof v.hairColor === 'string' ? v.hairColor : DEFAULT_AVATAR.hairColor,
+    robeColor: typeof v.robeColor === 'string' ? v.robeColor : DEFAULT_AVATAR.robeColor,
+    eyeColor: typeof v.eyeColor === 'string' ? v.eyeColor : DEFAULT_AVATAR.eyeColor,
+  };
 }
 
 function formatBirthDate(input: string): string {
@@ -91,7 +82,7 @@ interface ContactProfileSheetProps {
   open: boolean;
   contact: Contact | null;
   onClose: () => void;
-  onUpdated: () => void;
+  onUpdated: (contact: Contact) => void;
   onDeleted: (id: number) => void;
 }
 
@@ -122,7 +113,7 @@ export default function ContactProfileSheet({
     if (!open || !contact) return;
     setSection('view');
     setError(null);
-    setAvatarConfig(loadContactAvatar(contact.id));
+    setAvatarConfig(normalizeAvatarConfig(contact.avatarConfig));
     setName(contact.name ?? '');
     setRelation(contact.relation ?? '');
     setBirthDate(contact.birthDate ?? '');
@@ -134,10 +125,28 @@ export default function ContactProfileSheet({
 
   const avatarPreview = useMemo(() => avatarConfig, [avatarConfig]);
 
-  const handleSaveAvatar = () => {
+  const handleSaveAvatar = async () => {
     if (!contact) return;
-    saveContactAvatar(contact.id, avatarConfig);
-    setSection('view');
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/contacts/${contact.id}/avatar`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ avatarConfig }),
+      });
+      if (!res.ok) throw new Error('Не удалось сохранить аватар');
+      const updated = await res.json() as Contact;
+      onUpdated(updated);
+      setSection('view');
+    } catch {
+      setError('Не удалось сохранить аватар');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveProfile = async () => {
@@ -166,7 +175,8 @@ export default function ContactProfileSheet({
         }),
       });
       if (!res.ok) throw new Error('Не удалось сохранить');
-      onUpdated();
+      const updated = await res.json() as Contact;
+      onUpdated(updated);
       setSection('view');
     } catch {
       setError('Не удалось сохранить изменения');
@@ -347,9 +357,10 @@ export default function ContactProfileSheet({
 
                   <button
                     onClick={handleSaveAvatar}
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2"
+                    disabled={loading}
+                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2 disabled:opacity-60"
                   >
-                    <Save className="w-4 h-4" />
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Сохранить аватар
                   </button>
                 </div>
