@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Menu } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useGetOpenaiConversation } from '@workspace/api-client-react';
@@ -9,6 +9,7 @@ import { useChatStream } from '@/hooks/use-chat-stream';
 import AstroMarkdown from '@/components/chat/AstroMarkdown';
 import PeoplePanel from '@/components/chat/PeoplePanel';
 import HistoryDrawer from '@/components/chat/HistoryDrawer';
+import ChatSidebar from '@/components/chat/ChatSidebar';
 import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
 
@@ -101,49 +102,73 @@ export default function Chat() {
   return (
     <>
       <AppLayout>
-        <div
-          className="flex-1 flex flex-col min-h-0"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-        >
-          {/* Header */}
-          <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 flex items-center justify-between shadow-sm">
-            {conversationId ? (
-              <button
-                onClick={() => setLocation('/chat')}
-                className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
-              >
-                <ChevronLeft className="w-6 h-6" />
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowHistory(true)}
-                className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
-                aria-label="Открыть историю"
-              >
-                <Menu className="w-6 h-6" />
-              </button>
-            )}
-
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent p-[1px]">
-                <BotBadge />
-              </div>
-              <h2 className="font-display font-semibold text-lg">AstroBot</h2>
-            </div>
-
-            <div className="w-10" />
-          </header>
-
-          {/* People Panel */}
-          <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
-
-          {/* Messages */}
+        <div className="flex-1 min-h-0 md:grid md:grid-cols-[320px_1fr] lg:grid-cols-[360px_1fr]">
           <div
-            ref={messagesContainerRef}
-            onScroll={handleMessagesScroll}
-            className="flex-1 overflow-y-auto p-4 space-y-6"
+            className={`hidden md:block border-r border-border/50 bg-background/60 backdrop-blur-xl ${
+              isDesktopSidebarCollapsed ? 'md:w-0 md:min-w-0 md:overflow-hidden md:border-r-0' : ''
+            }`}
           >
+            <ChatSidebar
+              currentConversationId={conversationId}
+              onLoginClick={() => setShowAuthModal(true)}
+            />
+          </div>
+
+          <div
+            className="flex-1 flex flex-col min-h-0"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            {/* Header */}
+            <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 flex items-center justify-between shadow-sm">
+              {conversationId ? (
+                <button
+                  onClick={() => setLocation('/chat')}
+                  className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition md:hidden"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition md:hidden"
+                  aria-label="Открыть историю"
+                >
+                  <Menu className="w-6 h-6" />
+                </button>
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsDesktopSidebarCollapsed((prev) => !prev)}
+                  className="hidden md:inline-flex p-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
+                  aria-label={isDesktopSidebarCollapsed ? "Показать список чатов" : "Скрыть список чатов"}
+                  title={isDesktopSidebarCollapsed ? "Показать список чатов" : "Скрыть список чатов"}
+                >
+                  {isDesktopSidebarCollapsed ? (
+                    <PanelLeftOpen className="w-5 h-5" />
+                  ) : (
+                    <PanelLeftClose className="w-5 h-5" />
+                  )}
+                </button>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent p-[1px]">
+                  <BotBadge />
+                </div>
+                <h2 className="font-display font-semibold text-lg">AstroBot</h2>
+              </div>
+
+              <div className="w-10 md:hidden" />
+            </header>
+
+            {/* People Panel */}
+            <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
+
+            {/* Messages */}
+            <div
+              ref={messagesContainerRef}
+              onScroll={handleMessagesScroll}
+              className="flex-1 overflow-y-auto p-4 space-y-6"
+            >
             {isLoading && (
               <div className="flex justify-center py-10">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -228,34 +253,35 @@ export default function Chat() {
               </motion.div>
             )}
 
-            <div ref={messagesEndRef} className="h-4" />
-          </div>
+              <div ref={messagesEndRef} className="h-4" />
+            </div>
 
-          {/* Input */}
-          <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
-            {selectedContactId !== null && (
-              <div className="flex items-center gap-1.5 text-xs text-primary/60 mb-2 px-1">
-                <span className="text-base leading-none">⚯</span>
-                <span>Синастрия активна — вопросы будут разобраны с учётом карты выбранного человека</span>
-              </div>
-            )}
-            <form onSubmit={handleSend} className="relative flex items-center">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                placeholder={selectedContactId ? "Спросите о совместимости..." : "Спросите звёзды..."}
-                className="w-full bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-full py-3.5 pl-5 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50"
-                disabled={isStreaming}
-              />
-              <button
-                type="submit"
-                disabled={!inputValue.trim() || isStreaming}
-                className="absolute right-2 p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <Send className="w-4 h-4 ml-0.5" />
-              </button>
-            </form>
+            {/* Input */}
+            <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
+              {selectedContactId !== null && (
+                <div className="flex items-center gap-1.5 text-xs text-primary/60 mb-2 px-1">
+                  <span className="text-base leading-none">⚯</span>
+                  <span>Синастрия активна — вопросы будут разобраны с учётом карты выбранного человека</span>
+                </div>
+              )}
+              <form onSubmit={handleSend} className="relative flex items-center">
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder={selectedContactId ? "Спросите о совместимости..." : "Спросите звёзды..."}
+                  className="w-full bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-full py-3.5 pl-5 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50"
+                  disabled={isStreaming}
+                />
+                <button
+                  type="submit"
+                  disabled={!inputValue.trim() || isStreaming}
+                  className="absolute right-2 p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Send className="w-4 h-4 ml-0.5" />
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       </AppLayout>
