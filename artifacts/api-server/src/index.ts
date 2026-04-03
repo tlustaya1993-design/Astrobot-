@@ -1,6 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { runDbMigrations } from "@workspace/db";
+import { pool as dbPool, runDbMigrations } from "@workspace/db";
 
 const rawPort = process.env["PORT"];
 
@@ -17,7 +17,7 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function start(): Promise<void> {
-  await runDbMigrations();
+  await runDbMigrations(dbPool);
   app.listen(port, () => {
     logger.info({ port }, "Server listening");
   });
