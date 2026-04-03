@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, LogOut, LogIn, BrainCircuit, Trash2 } from 'lucide-react';
+import { X, Pencil, LogOut, LogIn, BrainCircuit, Sparkles, Trash2 } from 'lucide-react';
 import AstroAvatar, { type AvatarConfig, loadAvatar, saveAvatar } from '@/components/ui/AstroAvatar';
 import AvatarEditor from '@/components/ui/AvatarEditor';
 import { getAuthHeaders } from '@/lib/session';
@@ -200,6 +200,14 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                     </div>
                   </div>
 
+                  <button
+                    onClick={() => setSection('avatar')}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary/35 text-primary text-sm font-medium hover:bg-primary/10 transition"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Редактировать аватар
+                  </button>
+
                   {/* Info cards */}
                   {profile?.birthDate && (
                     <InfoRow label="Дата рождения" value={formatBirthDate(profile.birthDate)} />
@@ -311,17 +319,12 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
               {section === 'avatar' && (
                 <div className="px-5 pb-8 space-y-5 max-h-[75vh] overflow-y-auto">
                   <AvatarEditor
-                    value={localAvatar}
+                    avatarConfig={localAvatar}
                     onChange={setLocalAvatar}
-                    previewSize={136}
+                    onSave={handleSaveAvatar}
+                    saveLabel="Сохранить аватар"
+                    previewSize={156}
                   />
-
-                  <button
-                    onClick={handleSaveAvatar}
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md"
-                  >
-                    Сохранить аватар
-                  </button>
                 </div>
               )}
             </div>

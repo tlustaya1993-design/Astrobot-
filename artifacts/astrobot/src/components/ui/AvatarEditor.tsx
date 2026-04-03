@@ -1,5 +1,4 @@
 import React from 'react';
-import { Loader2, Save } from 'lucide-react';
 import AstroAvatar, {
   EYE_COLORS,
   HAIR_COLORS,
@@ -11,9 +10,6 @@ import AstroAvatar, {
 interface AvatarEditorProps {
   value: AvatarConfig;
   onChange: (next: AvatarConfig) => void;
-  onSave: () => void;
-  saving?: boolean;
-  saveLabel?: string;
   previewSize?: number;
 }
 
@@ -57,13 +53,10 @@ function ColorRow({
 export default function AvatarEditor({
   value,
   onChange,
-  onSave,
-  saving = false,
-  saveLabel = 'Сохранить аватар',
   previewSize = 136,
 }: AvatarEditorProps) {
   return (
-    <div className="px-5 pb-8 space-y-5 max-h-[75vh] overflow-y-auto">
+    <div className="space-y-5">
       <div className="flex justify-center">
         <div
           className="rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_24px_rgba(212,175,55,0.25)]"
@@ -110,15 +103,6 @@ export default function AvatarEditor({
         selected={value.eyeColor}
         onSelect={(hex) => onChange({ ...value, eyeColor: hex })}
       />
-
-      <button
-        onClick={onSave}
-        disabled={saving}
-        className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2 disabled:opacity-60"
-      >
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        {saveLabel}
-      </button>
     </div>
   );
 }

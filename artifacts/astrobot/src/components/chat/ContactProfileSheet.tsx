@@ -267,22 +267,13 @@ export default function ContactProfileSheet({
               )}
 
               {section === 'avatar' && (
-                <div className="px-5 pb-8 space-y-5 max-h-[75vh] overflow-y-auto">
-                  <AvatarEditor
-                    avatarConfig={avatarConfig}
-                    onChange={setAvatarConfig}
-                    previewSize={136}
-                  />
-
-                  <button
-                    onClick={handleSaveAvatar}
-                    disabled={loading}
-                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2 disabled:opacity-60"
-                  >
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Сохранить аватар
-                  </button>
-                </div>
+                <AvatarEditor
+                  value={avatarConfig}
+                  onChange={setAvatarConfig}
+                  onSave={handleSaveAvatar}
+                  saving={loading}
+                  previewSize={152}
+                />
               )}
 
               {section === 'edit' && (
