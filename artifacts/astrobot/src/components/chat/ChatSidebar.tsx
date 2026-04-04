@@ -16,6 +16,7 @@ import AstroAvatar, {
   loadAvatar,
   type AvatarConfig,
 } from '@/components/ui/AstroAvatar';
+import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import ProfileSheet from '@/components/profile/ProfileSheet';
 
 interface ChatSidebarProps {
@@ -91,7 +92,7 @@ export default function ChatSidebar({
             className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition"
           >
             <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
-              <AstroAvatar config={avatarConfig} size={40} />
+              <IllustratedAvatar config={avatarConfig} size={40} />
             </div>
             <div className="text-left min-w-0 flex-1">
               <p className="text-sm font-semibold leading-tight truncate">

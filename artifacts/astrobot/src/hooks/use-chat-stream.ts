@@ -7,6 +7,13 @@ export function useChatStream(conversationId?: number) {
   const [localMessages, setLocalMessages] = useState<OpenaiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
+  const [paywallState, setPaywallState] = useState<{
+    open: boolean;
+    message: string;
+    freeRemaining?: number;
+    required?: number;
+    balance?: number;
+  } | null>(null);
   const queryClient = useQueryClient();
 
   const sendMessage = async (content: string, contactId?: number | null) => {
@@ -49,6 +56,7 @@ export function useChatStream(conversationId?: number) {
 
       if (!res.ok) {
         let message = 'Failed to send message';
+        let payloadMeta: { freeRemaining?: number; required?: number; balance?: number } = {};
         try {
           const payload = await res.json() as { error?: string; freeRemaining?: number; required?: number; balance?: number };
           if (payload?.error) {
@@ -56,6 +64,18 @@ export function useChatStream(conversationId?: number) {
             if (typeof payload.freeRemaining === 'number') {
               message += `. Бесплатно осталось: ${payload.freeRemaining}`;
             }
+          }
+          payloadMeta = {
+            freeRemaining: payload?.freeRemaining,
+            required: payload?.required,
+            balance: payload?.balance,
+          };
+          if (res.status === 402) {
+            setPaywallState({
+              open: true,
+              message: payload?.error || 'Лимит запросов исчерпан. Пополните пакет.',
+              ...payloadMeta,
+            });
           }
         } catch {
           // keep generic fallback
@@ -139,6 +159,7 @@ export function useChatStream(conversationId?: number) {
   };
 
   const clearLocalMessages = () => setLocalMessages([]);
+  const closePaywall = () => setPaywallState(null);
 
-  return { localMessages, isStreaming, streamingText, sendMessage, clearLocalMessages };
+  return { localMessages, isStreaming, streamingText, paywallState, closePaywall, sendMessage, clearLocalMessages };
 }

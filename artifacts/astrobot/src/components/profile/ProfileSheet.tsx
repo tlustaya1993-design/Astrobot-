@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, LogOut, LogIn, BrainCircuit, Sparkles, Trash2 } from 'lucide-react';
-import AstroAvatar, { type AvatarConfig, loadAvatar, saveAvatar } from '@/components/ui/AstroAvatar';
+import { type AvatarConfig, loadAvatar, saveAvatar } from '@/components/ui/AstroAvatar';
+import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import AvatarEditor from '@/components/ui/AvatarEditor';
 import { getAuthHeaders } from '@/lib/session';
 import { useAuth } from '@/context/AuthContext';
@@ -163,7 +164,7 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                   <div className="flex items-center gap-4">
                     <div className="relative shrink-0">
                       <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_16px_rgba(212,175,55,0.2)]">
-                        <AstroAvatar config={avatarConfig} size={80} />
+                        <IllustratedAvatar config={avatarConfig} size={80} />
                       </div>
                     </div>
                     <div className="flex-1 min-w-0">

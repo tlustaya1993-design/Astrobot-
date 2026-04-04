@@ -115,8 +115,8 @@ router.get("/conversations/:id/messages", async (req, res) => {
 
 router.post("/conversations/:id/messages", async (req, res) => {
   const id = Number(req.params.id);
-  const { content, sessionId: bodySessionId, contactId } = req.body;
-  const sessionId = req.sessionId || bodySessionId;
+  const { content, contactId } = req.body;
+  const sessionId = req.sessionId;
 
   if (!sessionId || typeof sessionId !== "string") {
     res.status(401).json({ error: "Требуется авторизация" });
