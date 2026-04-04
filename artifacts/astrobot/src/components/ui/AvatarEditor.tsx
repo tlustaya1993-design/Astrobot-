@@ -4,6 +4,8 @@ import {
   AVATAR_PRESETS,
   DEFAULT_AVATAR,
   EYE_COLORS,
+  GALACTIC_ALLOWED_HAIR_COLORS,
+  GALACTIC_ALLOWED_HAIR_STYLES,
   HAIR_COLORS,
   HAIR_STYLES,
   type AvatarConfig,
@@ -66,6 +68,15 @@ export default function AvatarEditor({
   const current = value ?? avatarConfig ?? DEFAULT_AVATAR;
   const archetype = current.archetype ?? DEFAULT_AVATAR.archetype ?? 'mage';
   const hairStyles = HAIR_STYLES.filter((s) => ['short', 'medium', 'long', 'curly'].includes(s.id));
+  const isGalactic = archetype === 'galactic';
+  const visibleHairStyles = isGalactic
+    ? hairStyles.filter((s) => GALACTIC_ALLOWED_HAIR_STYLES.includes(s.id as (typeof GALACTIC_ALLOWED_HAIR_STYLES)[number]))
+    : hairStyles;
+  const visibleHairColors = isGalactic
+    ? HAIR_COLORS.filter((c) =>
+        GALACTIC_ALLOWED_HAIR_COLORS.includes(c.hex as (typeof GALACTIC_ALLOWED_HAIR_COLORS)[number]),
+      )
+    : HAIR_COLORS;
 
   const presets = AVATAR_PRESETS.map((preset) => ({
     id: preset.id,
@@ -76,7 +87,7 @@ export default function AvatarEditor({
       : 'Волшебница',
     image:
       preset.id === 'galactic_default'
-        ? '/avatar-presets/miss-galactica.png'
+        ? '/avatar-presets/miss-galactica/galactic-medium-brunette.png'
         : preset.id === 'cosmonaut_default'
         ? '/avatar-presets/cosmonautka.png'
         : '/avatar-presets/volshebnitsa.png',
@@ -104,7 +115,7 @@ export default function AvatarEditor({
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-11 h-11 rounded-full overflow-hidden border border-primary/45 shrink-0 shadow-[0_0_10px_rgba(212,175,55,0.28)]">
+                  <div className="w-14 h-14 rounded-full overflow-hidden border border-primary/45 shrink-0 shadow-[0_0_10px_rgba(212,175,55,0.28)]">
                     <img
                       src={p.image}
                       alt={p.label}
@@ -125,7 +136,7 @@ export default function AvatarEditor({
       <div className="space-y-2">
         <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Причёска</p>
         <div className="grid grid-cols-4 gap-2">
-          {hairStyles.map((s) => (
+          {visibleHairStyles.map((s) => (
             <button
               key={s.id}
               onClick={() => onChange({ ...current, hairStyle: s.id })}
@@ -142,8 +153,8 @@ export default function AvatarEditor({
       </div>
 
       <ColorRow
-        label="Цвет волос"
-        colors={HAIR_COLORS}
+        label={isGalactic ? 'Цвет волос (3 варианта)' : 'Цвет волос'}
+        colors={visibleHairColors}
         selected={current.hairColor}
         onSelect={(hex) => onChange({ ...current, hairColor: hex })}
       />

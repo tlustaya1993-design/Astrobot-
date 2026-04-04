@@ -10,12 +10,23 @@ import AvatarEditor from '@/components/ui/AvatarEditor';
 function normalizeAvatarConfig(input: unknown): AvatarConfig {
   if (!input || typeof input !== 'object') return DEFAULT_AVATAR;
   const v = input as Record<string, unknown>;
+  const archetype = v.archetype === 'cosmonaut' || v.archetype === 'mage' || v.archetype === 'galactic'
+    ? v.archetype
+    : DEFAULT_AVATAR.archetype;
+  const hairStyleRaw = typeof v.hairStyle === 'string' ? v.hairStyle : DEFAULT_AVATAR.hairStyle;
+  const hairColorRaw = typeof v.hairColor === 'string' ? v.hairColor : DEFAULT_AVATAR.hairColor;
+  const allowedGalacticStyles = new Set(['short', 'medium', 'long', 'curly']);
+  const allowedGalacticColors = new Set(['#F0C040', '#7B3F1E', '#C0392B']);
+  const hairStyle = archetype === 'galactic' && !allowedGalacticStyles.has(hairStyleRaw)
+    ? 'medium'
+    : hairStyleRaw;
+  const hairColor = archetype === 'galactic' && !allowedGalacticColors.has(hairColorRaw.toUpperCase())
+    ? '#7B3F1E'
+    : hairColorRaw;
   return {
-    archetype: v.archetype === 'cosmonaut' || v.archetype === 'mage' || v.archetype === 'galactic'
-      ? v.archetype
-      : DEFAULT_AVATAR.archetype,
-    hairStyle: typeof v.hairStyle === 'string' ? v.hairStyle : DEFAULT_AVATAR.hairStyle,
-    hairColor: typeof v.hairColor === 'string' ? v.hairColor : DEFAULT_AVATAR.hairColor,
+    archetype,
+    hairStyle,
+    hairColor,
     robeColor: typeof v.robeColor === 'string' ? v.robeColor : DEFAULT_AVATAR.robeColor,
     eyeColor: typeof v.eyeColor === 'string' ? v.eyeColor : DEFAULT_AVATAR.eyeColor,
   };
@@ -56,6 +67,10 @@ export default function ContactProfileSheet({
   onUpdated,
   onDeleted,
 }: ContactProfileSheetProps) {
+  const asHexColor = (value: unknown, fallback: string): string => {
+    if (typeof value !== 'string') return fallback;
+    return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+  };
   const [section, setSection] = useState<Section>('view');
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
   const [loading, setLoading] = useState(false);
@@ -70,6 +85,28 @@ export default function ContactProfileSheet({
   const [birthLat, setBirthLat] = useState<string>('');
   const [birthLng, setBirthLng] = useState<string>('');
 
+  const hairColorByName = useMemo(
+    () =>
+      new Map([
+        ['блонд', '#F0C040'],
+        ['блондинка', '#F0C040'],
+        ['brunette', '#7B3F1E'],
+        ['брюнетка', '#7B3F1E'],
+        ['рыжая', '#C0392B'],
+      ]),
+    [],
+  );
+  const hairStyleByName = useMemo(
+    () =>
+      new Map([
+        ['короткие', 'short'],
+        ['средние', 'medium'],
+        ['длинные', 'long'],
+        ['кудрявые', 'curly'],
+      ]),
+    [],
+  );
+
   useEffect(() => {
     if (!open || !contact) return;
     setSection('view');
@@ -83,6 +120,23 @@ export default function ContactProfileSheet({
     setBirthLat(typeof contact.birthLat === 'number' ? String(contact.birthLat) : '');
     setBirthLng(typeof contact.birthLng === 'number' ? String(contact.birthLng) : '');
   }, [open, contact]);
+
+  useEffect(() => {
+    if (!contact || !contact.relation) return;
+    const relationLower = contact.relation.toLowerCase();
+    const suggestedHairColor = [...hairColorByName.entries()].find(([token]) =>
+      relationLower.includes(token),
+    )?.[1];
+    const suggestedHairStyle = [...hairStyleByName.entries()].find(([token]) =>
+      relationLower.includes(token),
+    )?.[1];
+    if (!suggestedHairColor && !suggestedHairStyle) return;
+    setAvatarConfig((prev) => ({
+      ...prev,
+      hairColor: asHexColor(suggestedHairColor, prev.hairColor),
+      hairStyle: typeof suggestedHairStyle === 'string' ? suggestedHairStyle : prev.hairStyle,
+    }));
+  }, [contact, hairColorByName, hairStyleByName]);
 
   const avatarPreview = useMemo(() => avatarConfig, [avatarConfig]);
 
