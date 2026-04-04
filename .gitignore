@@ -48,3 +48,9 @@ Thumbs.db
 .cache/
 .local/
 attached_assets/
+
+# Secrets & local env (never commit)
+.env
+.env.local
+.env.*.local
+.railway/

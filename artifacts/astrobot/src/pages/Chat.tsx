@@ -149,12 +149,21 @@ export default function Chat() {
           </div>
 
           <div
-            className="flex-1 flex flex-col min-h-0"
+            className="flex-1 flex flex-col min-h-0 relative"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
+            <div
+              className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
+              aria-hidden="true"
+            >
+              <div className="chat-column-stars-far" />
+              <div className="chat-column-stars" />
+              <div className="chat-column-dim" />
+            </div>
+
             {/* Header */}
-            <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 flex items-center justify-between shadow-sm">
+            <header className="relative z-40 sticky top-0 bg-background/85 backdrop-blur-xl border-b border-white/5 p-4 flex items-center justify-between shadow-sm">
               {conversationId ? (
                 <button
                   onClick={() => setLocation('/chat')}
@@ -195,13 +204,15 @@ export default function Chat() {
             </header>
 
             {/* People Panel */}
-            <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
+            <div className="relative z-30 shrink-0">
+              <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
+            </div>
 
             {/* Messages */}
             <div
               ref={messagesContainerRef}
               onScroll={handleMessagesScroll}
-              className={`flex-1 p-4 space-y-6 overflow-x-hidden ${
+              className={`relative z-10 flex-1 p-4 space-y-6 overflow-x-hidden ${
                 lockIntroViewport ? 'overflow-y-hidden' : 'overflow-y-auto'
               }`}
             >
@@ -264,10 +275,10 @@ export default function Chat() {
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 shadow-lg break-words ${
+                <div className={`max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 break-words backdrop-blur-sm shadow-lg shadow-black/35 ${
                   msg.role === 'user'
-                    ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm'
-                    : 'bg-secondary/35 border border-primary/20 text-foreground rounded-tl-sm'
+                    ? 'bg-gradient-to-br from-primary/30 to-accent/28 border border-primary/45 text-foreground rounded-tr-sm'
+                    : 'bg-secondary/60 border border-primary/35 text-foreground rounded-tl-sm'
                 }`}>
                   {msg.role === 'assistant' ? (
                     <div className="assistant-bubble prose prose-invert prose-p:leading-relaxed prose-sm max-w-none">
@@ -280,7 +291,7 @@ export default function Chat() {
 
             {isStreaming && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
-                <div className="max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 shadow-lg break-words bg-secondary/35 border border-primary/20 text-foreground rounded-tl-sm">
+                <div className="max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 break-words backdrop-blur-sm shadow-lg shadow-black/35 bg-secondary/60 border border-primary/35 text-foreground rounded-tl-sm">
                   {streamingText ? (
                     <div className="assistant-bubble prose prose-invert prose-sm max-w-none">
                       <AstroMarkdown content={streamingText} />
@@ -300,7 +311,7 @@ export default function Chat() {
             </div>
 
             {/* Input */}
-            <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
+            <div className="relative z-40 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background/88 backdrop-blur-xl border-t border-border shrink-0">
               {selectedContactId !== null && (
                 <div className="flex items-center gap-1.5 text-xs text-primary/60 mb-2 px-1">
                   <span className="text-base leading-none">⚯</span>
