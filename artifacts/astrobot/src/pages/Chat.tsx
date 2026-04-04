@@ -158,9 +158,13 @@ export default function Chat() {
               aria-hidden="true"
             >
               <div className="chat-column-base" />
+              <div
+                className="chat-column-photo"
+                style={{
+                  backgroundImage: `url(${import.meta.env.BASE_URL}images/chat-night-sky.png)`,
+                }}
+              />
               <div className="chat-column-dim" />
-              <div className="chat-column-stars-far" />
-              <div className="chat-column-stars" />
             </div>
 
             {/* Header */}
