@@ -159,8 +159,10 @@ export default function Chat() {
             >
               <div className="chat-column-base" />
               <div className="chat-column-dim" />
-              <div className="chat-column-stars-far" />
-              <div className="chat-column-stars" />
+              <div className="chat-column-stars-dense-a" />
+              <div className="chat-column-stars-dense-b" />
+              <div className="chat-column-stars-dense-c" />
+              <div className="chat-column-stars-accent" />
             </div>
 
             {/* Header */}
