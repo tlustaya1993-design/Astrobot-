@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Pencil, Save, Trash2, X } from 'lucide-react';
 import { DEFAULT_AVATAR, type AvatarConfig } from '@/components/ui/AstroAvatar';
-import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
+import IllustratedAvatar, { resolveAvatarImage } from '@/components/ui/IllustratedAvatar';
 import { getAuthHeaders } from '@/lib/session';
 import type { Contact } from './PeoplePanel';
 import AvatarEditor from '@/components/ui/AvatarEditor';
@@ -187,7 +187,7 @@ export default function ContactProfileSheet({
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
           >
-            <div className="w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible">
+            <div className="relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible">
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 rounded-full bg-border" />
               </div>
@@ -207,6 +207,20 @@ export default function ContactProfileSheet({
                   <X className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
+
+              {section === 'avatar' && (
+                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-24 md:-top-28 z-10">
+                  <div className="relative rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[250px] h-[250px] md:w-[286px] md:h-[286px] overflow-hidden">
+                    <img
+                      src={resolveAvatarImage(avatarConfig)}
+                      alt="Аватар контакта"
+                      className="w-full h-full object-cover scale-[1.34] origin-center object-[50%_22%]"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 rounded-full ring-1 ring-white/10" />
+                  </div>
+                </div>
+              )}
 
               {section === 'view' && (
                 <div className="px-5 pb-8 space-y-5 max-h-[80vh] overflow-y-auto">
@@ -270,13 +284,14 @@ export default function ContactProfileSheet({
               )}
 
               {section === 'avatar' && (
-                <AvatarEditor
-                  value={avatarConfig}
-                  onChange={setAvatarConfig}
-                  onSave={handleSaveAvatar}
-                  saving={loading}
-                  previewSize={152}
-                />
+                <div className="px-5 pb-8 pt-[11.5rem] md:pt-[13.25rem] space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
+                  <AvatarEditor
+                    value={avatarConfig}
+                    onChange={setAvatarConfig}
+                    onSave={handleSaveAvatar}
+                    saving={loading}
+                  />
+                </div>
               )}
 
               {section === 'edit' && (

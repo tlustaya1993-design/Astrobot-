@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, LogOut, LogIn, BrainCircuit, Sparkles, Trash2 } from 'lucide-react';
-import { type AvatarConfig, loadAvatar, saveAvatar } from '@/components/ui/AstroAvatar';
-import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
+import { type AvatarConfig, saveAvatar } from '@/components/ui/AstroAvatar';
+import IllustratedAvatar, { resolveAvatarImage } from '@/components/ui/IllustratedAvatar';
 import AvatarEditor from '@/components/ui/AvatarEditor';
 import { getAuthHeaders } from '@/lib/session';
 import { useAuth } from '@/context/AuthContext';
@@ -134,7 +134,7 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
           >
-            <div className="w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible">
+            <div className="relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible">
               {/* Handle */}
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 rounded-full bg-border" />
@@ -156,6 +156,20 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                   <X className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
+
+              {section === 'avatar' && (
+                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-24 md:-top-28 z-10">
+                  <div className="relative rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[250px] h-[250px] md:w-[286px] md:h-[286px] overflow-hidden">
+                    <img
+                      src={resolveAvatarImage(localAvatar)}
+                      alt="Аватар персонажа"
+                      className="w-full h-full object-cover scale-[1.34] origin-center object-[50%_22%]"
+                      loading="lazy"
+                    />
+                    <div className="absolute inset-0 rounded-full ring-1 ring-white/10" />
+                  </div>
+                </div>
+              )}
 
               {/* ── View section ── */}
               {section === 'view' && (
@@ -312,13 +326,12 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
 
               {/* ── Avatar editor ── */}
               {section === 'avatar' && (
-                <div className="px-5 pb-8 pt-12 space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
+                <div className="px-5 pb-8 pt-[11.5rem] md:pt-[13.25rem] space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
                   <AvatarEditor
                     avatarConfig={localAvatar}
                     onChange={setLocalAvatar}
                     onSave={handleSaveAvatar}
                     saveLabel="Сохранить аватар"
-                    previewSize={156}
                   />
                 </div>
               )}
