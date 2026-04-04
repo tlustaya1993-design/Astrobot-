@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Loader2, Save } from 'lucide-react';
 import {
   AVATAR_PRESETS,
@@ -19,6 +19,21 @@ interface AvatarEditorProps {
   saving?: boolean;
   saveLabel?: string;
 }
+
+const GALACTIC_VARIANT_IMAGES = [
+  '/avatar-presets/miss-galactica/galactic-short-blonde.png',
+  '/avatar-presets/miss-galactica/galactic-short-brunette.png',
+  '/avatar-presets/miss-galactica/galactic-short-red.png',
+  '/avatar-presets/miss-galactica/galactic-medium-blonde.png',
+  '/avatar-presets/miss-galactica/galactic-medium-brunette.png',
+  '/avatar-presets/miss-galactica/galactic-medium-red.png',
+  '/avatar-presets/miss-galactica/galactic-long-blonde.png',
+  '/avatar-presets/miss-galactica/galactic-long-brunette.png',
+  '/avatar-presets/miss-galactica/galactic-long-red.png',
+  '/avatar-presets/miss-galactica/galactic-curly-blonde.png',
+  '/avatar-presets/miss-galactica/galactic-curly-brunette.png',
+  '/avatar-presets/miss-galactica/galactic-curly-red.png',
+];
 
 function ColorRow({
   label,
@@ -65,6 +80,15 @@ export default function AvatarEditor({
   saving = false,
   saveLabel = 'Сохранить аватар',
 }: AvatarEditorProps) {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    for (const src of GALACTIC_VARIANT_IMAGES) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+    }
+  }, []);
+
   const current = value ?? avatarConfig ?? DEFAULT_AVATAR;
   const archetype = current.archetype ?? DEFAULT_AVATAR.archetype ?? 'mage';
   const hairStyles = HAIR_STYLES.filter((s) => ['short', 'medium', 'long', 'curly'].includes(s.id));
@@ -115,12 +139,12 @@ export default function AvatarEditor({
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-14 h-14 rounded-full overflow-hidden border border-primary/45 shrink-0 shadow-[0_0_10px_rgba(212,175,55,0.28)]">
+                  <div className="w-14 h-14 rounded-full overflow-hidden shrink-0 shadow-[0_0_10px_rgba(212,175,55,0.28)]">
                     <img
                       src={p.image}
                       alt={p.label}
                       className="w-full h-full object-cover scale-[1.35] origin-center object-[50%_34%]"
-                      loading="lazy"
+                      loading="eager"
                     />
                   </div>
                   <span className={`text-xs font-medium ${selected ? 'text-primary' : 'text-foreground'}`}>

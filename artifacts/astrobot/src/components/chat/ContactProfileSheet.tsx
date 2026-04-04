@@ -263,15 +263,15 @@ export default function ContactProfileSheet({
               </div>
 
               {section === 'avatar' && (
-                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-24 md:-top-28 z-10">
-                  <div className="relative rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[250px] h-[250px] md:w-[286px] md:h-[286px] overflow-hidden">
+                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-12 md:-top-20 z-10">
+                  <div className="relative rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[220px] h-[220px] md:w-[274px] md:h-[274px] overflow-hidden">
                     <img
                       src={resolveAvatarImage(avatarConfig)}
                       alt="Аватар контакта"
                       className="w-full h-full object-cover scale-[1.34] origin-center object-[50%_22%]"
                       loading="lazy"
                     />
-                    <div className="absolute inset-0 rounded-full ring-1 ring-white/10" />
+                    <div className="absolute inset-0 rounded-full ring-1 ring-white/10 pointer-events-none" />
                   </div>
                 </div>
               )}
@@ -338,7 +338,7 @@ export default function ContactProfileSheet({
               )}
 
               {section === 'avatar' && (
-                <div className="px-5 pb-8 pt-[11.5rem] md:pt-[13.25rem] space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
+                <div className="px-5 pb-8 pt-[10.25rem] md:pt-[12.5rem] space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
                   <AvatarEditor
                     value={avatarConfig}
                     onChange={setAvatarConfig}

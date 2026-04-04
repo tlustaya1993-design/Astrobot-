@@ -158,8 +158,8 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
               </div>
 
               {section === 'avatar' && (
-                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-24 md:-top-28 z-10">
-                  <div className="relative rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[250px] h-[250px] md:w-[286px] md:h-[286px] overflow-hidden">
+                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-2 md:-top-16 z-10">
+                  <div className="relative rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[220px] h-[220px] md:w-[286px] md:h-[286px] overflow-hidden">
                     <img
                       src={resolveAvatarImage(localAvatar)}
                       alt="Аватар персонажа"
@@ -326,7 +326,7 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
 
               {/* ── Avatar editor ── */}
               {section === 'avatar' && (
-                <div className="px-5 pb-8 pt-[11.5rem] md:pt-[13.25rem] space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
+                <div className="px-5 pb-8 pt-[14rem] md:pt-[13.25rem] space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
                   <AvatarEditor
                     avatarConfig={localAvatar}
                     onChange={setLocalAvatar}
