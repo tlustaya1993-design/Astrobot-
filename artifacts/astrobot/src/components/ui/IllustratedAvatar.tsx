@@ -40,9 +40,13 @@ const MAGE_NORMALIZED_CIRCLE_R = 470;
 
 /**
  * Mage: после нормализации круг контента r=470 в квадрате 1024; вписанная в квадрат окружность r=512.
- * Лёгкий zoom, чтобы золотая рамка заполняла круг клипа без тёмного зазора.
+ * Базовый zoom подгоняет рамку к клипу; overscan добавляем, чтобы не было видно прямых кромок
+ * квадратного PNG и «лотка» внутри круга — остаётся только круглое обрезание.
  */
-const MAGE_CIRCLE_FILL_SCALE = (MAGE_NORMALIZED_SIZE / 2) / MAGE_NORMALIZED_CIRCLE_R;
+const MAGE_CIRCLE_BASE_SCALE = (MAGE_NORMALIZED_SIZE / 2) / MAGE_NORMALIZED_CIRCLE_R;
+/** Подстройка 1.1–1.25 при необходимости (Railway / разные DPI). */
+const MAGE_CLIP_OVERSCAN = 1.18;
+const MAGE_CIRCLE_FILL_SCALE = MAGE_CIRCLE_BASE_SCALE * MAGE_CLIP_OVERSCAN;
 
 export function getAvatarCropStyle(archetype?: string | null): { objectPosition: string; scale: number } {
   switch (archetype) {
