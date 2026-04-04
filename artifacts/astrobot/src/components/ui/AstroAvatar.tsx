@@ -1,5 +1,13 @@
 import React, { useId } from 'react';
 
+export type AvatarArchetype = 'mage' | 'cosmonaut' | 'galactic';
+
+export const AVATAR_ARCHETYPES: { id: AvatarArchetype; label: string }[] = [
+  { id: 'cosmonaut', label: 'Космонавтка' },
+  { id: 'mage', label: 'Маг / Волшебница' },
+  { id: 'galactic', label: 'Галактический образ' },
+];
+
 export const HAIR_STYLES = [
   { id: 'short',     label: 'Короткие' },
   { id: 'medium',    label: 'Средние'  },
@@ -37,6 +45,7 @@ export const EYE_COLORS = [
 ];
 
 export interface AvatarConfig {
+  archetype?: AvatarArchetype;
   hairStyle: string;
   hairColor: string;
   robeColor: string;
@@ -44,6 +53,7 @@ export interface AvatarConfig {
 }
 
 export const DEFAULT_AVATAR: AvatarConfig = {
+  archetype: 'mage',
   hairStyle: 'medium',
   hairColor: HAIR_COLORS[0].hex,
   robeColor: ROBE_COLORS[0].hex,
@@ -81,7 +91,7 @@ export default function AstroAvatar({ config = DEFAULT_AVATAR, size = 80, classN
     hair: `hr-${uid}`,
   };
 
-  const { hairStyle, hairColor, robeColor, eyeColor } = config;
+  const { archetype = 'mage', hairStyle, hairColor, robeColor, eyeColor } = config;
   const hairShadow = shadeHex(hairColor, -35);
   const hairHi    = shadeHex(hairColor, 40);
   const robeDark  = shadeHex(robeColor, -35);
@@ -148,10 +158,14 @@ export default function AstroAvatar({ config = DEFAULT_AVATAR, size = 80, classN
         <path d="M44,64 L50,73 L56,64" fill={robeDark} opacity="0.7" />
         {/* Robe shine line */}
         <path d="M22,82 Q28,76 36,80" stroke={robeHi} strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.45" />
-        {/* Stars on robe */}
-        <StarDot cx={30} cy={93} r={2.8} color="#FFD700" op={0.65} />
-        <StarDot cx={70} cy={87} r={2.1} color="#FFD700" op={0.55} />
-        <circle cx="50" cy="103" r="1.4" fill="#FFD700" opacity="0.5" />
+        {/* Stars on robe (mage style) */}
+        {archetype === 'mage' && (
+          <>
+            <StarDot cx={30} cy={93} r={2.8} color="#FFD700" op={0.65} />
+            <StarDot cx={70} cy={87} r={2.1} color="#FFD700" op={0.55} />
+            <circle cx="50" cy="103" r="1.4" fill="#FFD700" opacity="0.5" />
+          </>
+        )}
 
         {/* ── NECK ─────────────────────────────────────────── */}
         <path d="M43,58 Q43,68 50,69 Q57,68 57,58 L57,63 Q57,66 50,66 Q43,66 43,63 Z" fill={`url(#${ids.skin})`} />
@@ -196,6 +210,9 @@ export default function AstroAvatar({ config = DEFAULT_AVATAR, size = 80, classN
 
         {/* Face highlight — Pixar forehead sheen */}
         <ellipse cx="47" cy="34" rx="7" ry="4" fill="white" opacity="0.1" transform="rotate(-10,47,34)" />
+
+        {archetype === 'cosmonaut' && <CosmonautOverlay accentColor={robeColor} />}
+        {archetype === 'galactic' && <GalacticOverlay accentColor={robeColor} />}
       </g>
     </svg>
   );
@@ -360,6 +377,42 @@ function HairFront({ style, color, shadow, hi, gradId }: { style: string; color:
     default:
       return null;
   }
+}
+
+function CosmonautOverlay({ accentColor }: { accentColor: string }) {
+  return (
+    <g>
+      <circle cx="50" cy="50" r="46" fill="none" stroke="#B8C1D9" strokeWidth="5.5" opacity="0.9" />
+      <circle cx="50" cy="50" r="41.5" fill="none" stroke={shadeHex('#B8C1D9', 25)} strokeWidth="1.3" opacity="0.8" />
+      <circle cx="50" cy="47" r="37.5" fill="#B8C1D9" opacity="0.1" />
+      <ellipse cx="37" cy="20" rx="7" ry="3" fill="white" opacity="0.35" transform="rotate(-18,37,20)" />
+
+      <circle cx="18" cy="50" r="2.3" fill={accentColor} opacity="0.9" />
+      <circle cx="82" cy="50" r="2.3" fill={accentColor} opacity="0.9" />
+
+      <rect x="42" y="74.5" width="16" height="11" rx="2.5" fill={shadeHex(accentColor, -18)} opacity="0.95" />
+      <rect x="44.2" y="76.8" width="4" height="2.8" rx="0.9" fill="#69E3FF" opacity="0.9" />
+      <rect x="49.2" y="76.8" width="4" height="2.8" rx="0.9" fill="#FFD166" opacity="0.9" />
+      <rect x="54.2" y="76.8" width="2.2" height="6.2" rx="0.8" fill="#FF5C8A" opacity="0.9" />
+    </g>
+  );
+}
+
+function GalacticOverlay({ accentColor }: { accentColor: string }) {
+  return (
+    <g>
+      <ellipse cx="50" cy="51" rx="44" ry="23" fill="none" stroke={accentColor} strokeWidth="1.8" opacity="0.48" />
+      <ellipse cx="50" cy="51" rx="36" ry="17" fill="none" stroke={shadeHex(accentColor, 30)} strokeWidth="1.1" opacity="0.5" />
+      <ellipse cx="50" cy="51" rx="27" ry="12" fill="none" stroke={shadeHex(accentColor, 45)} strokeWidth="0.9" opacity="0.46" />
+
+      <circle cx="17" cy="26" r="1.4" fill={shadeHex(accentColor, 40)} opacity="0.8" />
+      <circle cx="83" cy="30" r="1.2" fill={shadeHex(accentColor, 28)} opacity="0.75" />
+      <circle cx="24" cy="72" r="1.1" fill={shadeHex(accentColor, 45)} opacity="0.75" />
+      <circle cx="76" cy="69" r="1.3" fill={shadeHex(accentColor, 35)} opacity="0.76" />
+      <StarDot cx={13} cy={44} r={1.8} color={shadeHex(accentColor, 48)} op={0.72} />
+      <StarDot cx={87} cy={55} r={1.8} color={shadeHex(accentColor, 42)} op={0.68} />
+    </g>
+  );
 }
 
 /* ── Small star decoration ──────────────────────────────────── */

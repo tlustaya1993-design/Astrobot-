@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Pencil, LogOut, LogIn, BrainCircuit, Sparkles, Trash2 } from 'lucide-react';
+import { X, LogOut, LogIn, BrainCircuit, Sparkles, Trash2 } from 'lucide-react';
 import AstroAvatar, { type AvatarConfig, loadAvatar, saveAvatar } from '@/components/ui/AstroAvatar';
 import AvatarEditor from '@/components/ui/AvatarEditor';
 import { getAuthHeaders } from '@/lib/session';
@@ -165,12 +165,6 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                       <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_16px_rgba(212,175,55,0.2)]">
                         <AstroAvatar config={avatarConfig} size={80} />
                       </div>
-                      <button
-                        onClick={() => setSection('avatar')}
-                        className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/80 transition"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-lg font-semibold font-display truncate">

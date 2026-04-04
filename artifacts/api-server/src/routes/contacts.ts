@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 const router: IRouter = Router();
 
 type ContactAvatarConfig = {
+  archetype: "mage" | "cosmonaut" | "galactic";
   hairStyle: string;
   hairColor: string;
   robeColor: string;
@@ -12,6 +13,7 @@ type ContactAvatarConfig = {
 };
 
 const DEFAULT_CONTACT_AVATAR: ContactAvatarConfig = {
+  archetype: "mage",
   hairStyle: "medium",
   hairColor: "#1c1c2e",
   robeColor: "#3730A3",
@@ -19,17 +21,20 @@ const DEFAULT_CONTACT_AVATAR: ContactAvatarConfig = {
 };
 
 const ALLOWED_HAIR_STYLES = new Set(["short", "medium", "long", "curly", "ponytail", "bun"]);
+const ALLOWED_ARCHETYPES = new Set(["mage", "cosmonaut", "galactic"]);
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 function normalizeAvatarConfig(input: unknown): ContactAvatarConfig | null {
   if (!input || typeof input !== "object") return null;
   const v = input as Record<string, unknown>;
+  const archetype = typeof v.archetype === "string" ? v.archetype : DEFAULT_CONTACT_AVATAR.archetype;
   const hairStyle = typeof v.hairStyle === "string" ? v.hairStyle : DEFAULT_CONTACT_AVATAR.hairStyle;
   const hairColor = typeof v.hairColor === "string" ? v.hairColor : DEFAULT_CONTACT_AVATAR.hairColor;
   const robeColor = typeof v.robeColor === "string" ? v.robeColor : DEFAULT_CONTACT_AVATAR.robeColor;
   const eyeColor = typeof v.eyeColor === "string" ? v.eyeColor : DEFAULT_CONTACT_AVATAR.eyeColor;
 
   return {
+    archetype: ALLOWED_ARCHETYPES.has(archetype) ? (archetype as ContactAvatarConfig["archetype"]) : DEFAULT_CONTACT_AVATAR.archetype,
     hairStyle: ALLOWED_HAIR_STYLES.has(hairStyle) ? hairStyle : DEFAULT_CONTACT_AVATAR.hairStyle,
     hairColor: HEX_COLOR_RE.test(hairColor) ? hairColor : DEFAULT_CONTACT_AVATAR.hairColor,
     robeColor: HEX_COLOR_RE.test(robeColor) ? robeColor : DEFAULT_CONTACT_AVATAR.robeColor,

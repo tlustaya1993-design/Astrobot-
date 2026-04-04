@@ -10,6 +10,9 @@ function normalizeAvatarConfig(input: unknown): AvatarConfig {
   if (!input || typeof input !== 'object') return DEFAULT_AVATAR;
   const v = input as Record<string, unknown>;
   return {
+    archetype: v.archetype === 'cosmonaut' || v.archetype === 'mage' || v.archetype === 'galactic'
+      ? v.archetype
+      : DEFAULT_AVATAR.archetype,
     hairStyle: typeof v.hairStyle === 'string' ? v.hairStyle : DEFAULT_AVATAR.hairStyle,
     hairColor: typeof v.hairColor === 'string' ? v.hairColor : DEFAULT_AVATAR.hairColor,
     robeColor: typeof v.robeColor === 'string' ? v.robeColor : DEFAULT_AVATAR.robeColor,
@@ -211,13 +214,6 @@ export default function ContactProfileSheet({
                       <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_16px_rgba(212,175,55,0.2)]">
                         <AstroAvatar config={avatarPreview} size={80} />
                       </div>
-                      <button
-                        onClick={() => setSection('avatar')}
-                        className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/80 transition"
-                        aria-label="Редактировать аватар"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-lg font-semibold font-display truncate">{contact.name}</p>
@@ -225,6 +221,14 @@ export default function ContactProfileSheet({
                       <p className="text-xs text-muted-foreground mt-0.5">ID: {initials(contact.name)}</p>
                     </div>
                   </div>
+
+                  <button
+                    onClick={() => setSection('avatar')}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary/35 text-primary text-sm font-medium hover:bg-primary/10 transition"
+                  >
+                    <Pencil className="w-4 h-4" />
+                    Редактировать аватар
+                  </button>
 
                   <div className="space-y-3">
                     <div className="flex justify-between items-start gap-3 py-2.5 border-b border-border/40">
