@@ -69,6 +69,10 @@ export interface CreateOpenaiConversationBody {
   title: string;
 }
 
+export interface UpdateOpenaiConversationBody {
+  title: string;
+}
+
 export interface SendOpenaiMessageBody {
   content: string;
   sessionId: string;

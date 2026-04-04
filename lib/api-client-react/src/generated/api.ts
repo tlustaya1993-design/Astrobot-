@@ -27,6 +27,7 @@ import type {
   OpenaiError,
   OpenaiMessage,
   SendOpenaiMessageBody,
+  UpdateOpenaiConversationBody,
   UpsertUserBody,
   User,
 } from "./api.schemas";
@@ -518,6 +519,94 @@ export function useGetOpenaiConversation<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update conversation title
+ */
+export const getUpdateOpenaiConversationUrl = (id: number) => {
+  return `/api/openai/conversations/${id}`;
+};
+
+export const updateOpenaiConversation = async (
+  id: number,
+  updateOpenaiConversationBody: UpdateOpenaiConversationBody,
+  options?: RequestInit,
+): Promise<OpenaiConversation> => {
+  return customFetch<OpenaiConversation>(getUpdateOpenaiConversationUrl(id), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateOpenaiConversationBody),
+  });
+};
+
+export const getUpdateOpenaiConversationMutationOptions = <
+  TError = ErrorType<OpenaiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOpenaiConversation>>,
+    TError,
+    { id: number; data: BodyType<UpdateOpenaiConversationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateOpenaiConversation>>,
+  TError,
+  { id: number; data: BodyType<UpdateOpenaiConversationBody> },
+  TContext
+> => {
+  const mutationKey = ["updateOpenaiConversation"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateOpenaiConversation>>,
+    { id: number; data: BodyType<UpdateOpenaiConversationBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateOpenaiConversation(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateOpenaiConversationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateOpenaiConversation>>
+>;
+export type UpdateOpenaiConversationMutationBody =
+  BodyType<UpdateOpenaiConversationBody>;
+export type UpdateOpenaiConversationMutationError = ErrorType<OpenaiError>;
+
+/**
+ * @summary Update conversation title
+ */
+export const useUpdateOpenaiConversation = <
+  TError = ErrorType<OpenaiError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateOpenaiConversation>>,
+    TError,
+    { id: number; data: BodyType<UpdateOpenaiConversationBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateOpenaiConversation>>,
+  TError,
+  { id: number; data: BodyType<UpdateOpenaiConversationBody> },
+  TContext
+> => {
+  return useMutation(getUpdateOpenaiConversationMutationOptions(options));
+};
 
 /**
  * @summary Delete a conversation
