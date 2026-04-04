@@ -3,17 +3,19 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getSessionId, getAuthHeaders } from '@/lib/session';
 import { createOpenaiConversation, getListOpenaiConversationsQueryKey, getGetOpenaiConversationQueryKey, OpenaiMessage } from '@workspace/api-client-react';
 
+type PaywallState = {
+  open: boolean;
+  message: string;
+  freeRemaining?: number;
+  required?: number;
+  balance?: number;
+};
+
 export function useChatStream(conversationId?: number) {
   const [localMessages, setLocalMessages] = useState<OpenaiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
-  const [paywallState, setPaywallState] = useState<{
-    open: boolean;
-    message: string;
-    freeRemaining?: number;
-    required?: number;
-    balance?: number;
-  } | null>(null);
+  const [paywallState, setPaywallState] = useState<PaywallState | null>(null);
   const queryClient = useQueryClient();
 
   const sendMessage = async (content: string, contactId?: number | null) => {
@@ -80,7 +82,7 @@ export function useChatStream(conversationId?: number) {
         } catch {
           // keep generic fallback
         }
-        throw new Error(message);
+        throw Object.assign(new Error(message), { code: res.status, payloadMeta });
       }
 
       const reader = res.body?.getReader();
@@ -142,6 +144,12 @@ export function useChatStream(conversationId?: number) {
         error instanceof Error && error.message
           ? error.message
           : 'Сервис временно недоступен. Попробуйте чуть позже.';
+      const errorCode = typeof (error as { code?: unknown })?.code === 'number'
+        ? (error as { code: number }).code
+        : undefined;
+      if (errorCode === 402) {
+        return targetId;
+      }
       const tempAssistantError: OpenaiMessage = {
         id: Date.now() + 1,
         conversationId: targetId || 0,

@@ -92,15 +92,15 @@ export default function AvatarEditor({
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-center -mt-14 md:-mt-16">
+      <div className="flex justify-center -mt-20 md:-mt-24 relative z-20">
         <div
           className="relative rounded-full overflow-hidden border-[4px] border-primary/70 shadow-[0_0_42px_rgba(212,175,55,0.35)] bg-[#08081a]"
-          style={{ width: previewSize + 68, height: previewSize + 68 }}
+          style={{ width: previewSize + 92, height: previewSize + 92 }}
         >
           <img
             src={activePreset.image}
             alt={activePreset.label}
-            className="w-full h-full object-cover scale-[1.18] origin-center"
+            className="w-full h-full object-cover scale-[1.26] origin-center object-[50%_30%]"
             loading="lazy"
           />
           <div className="absolute inset-0 ring-1 ring-white/10 rounded-full pointer-events-none" />
@@ -127,7 +127,7 @@ export default function AvatarEditor({
                     <img
                       src={p.image}
                       alt={p.label}
-                      className="w-full h-full object-cover scale-[1.2] origin-center"
+                      className="w-full h-full object-cover scale-[1.35] origin-center object-[50%_34%]"
                       loading="lazy"
                     />
                   </div>

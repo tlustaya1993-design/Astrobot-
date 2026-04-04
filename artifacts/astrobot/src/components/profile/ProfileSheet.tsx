@@ -312,7 +312,7 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
 
               {/* ── Avatar editor ── */}
               {section === 'avatar' && (
-                <div className="px-5 pb-8 space-y-5 max-h-[75vh] overflow-y-auto">
+                <div className="px-5 pb-8 pt-12 space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
                   <AvatarEditor
                     avatarConfig={localAvatar}
                     onChange={setLocalAvatar}
