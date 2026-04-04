@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Pencil, Save, Trash2, X } from 'lucide-react';
-import AstroAvatar, { DEFAULT_AVATAR, type AvatarConfig } from '@/components/ui/AstroAvatar';
+import { DEFAULT_AVATAR, type AvatarConfig } from '@/components/ui/AstroAvatar';
+import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import { getAuthHeaders } from '@/lib/session';
 import type { Contact } from './PeoplePanel';
 import AvatarEditor from '@/components/ui/AvatarEditor';
@@ -211,9 +212,7 @@ export default function ContactProfileSheet({
                 <div className="px-5 pb-8 space-y-5 max-h-[80vh] overflow-y-auto">
                   <div className="flex items-center gap-4">
                     <div className="relative shrink-0">
-                      <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_16px_rgba(212,175,55,0.2)]">
-                        <AstroAvatar config={avatarPreview} size={80} />
-                      </div>
+                      <IllustratedAvatar config={avatarPreview} size={80} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-lg font-semibold font-display truncate">{contact.name}</p>

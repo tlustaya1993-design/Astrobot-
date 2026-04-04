@@ -5,7 +5,8 @@ import { getAuthHeaders } from '@/lib/session';
 import AddContactModal from './AddContactModal';
 import ProfileSheet from '@/components/profile/ProfileSheet';
 import ContactProfileSheet from './ContactProfileSheet';
-import AstroAvatar, { loadAvatar, type AvatarConfig, DEFAULT_AVATAR } from '@/components/ui/AstroAvatar';
+import { loadAvatar, type AvatarConfig, DEFAULT_AVATAR } from '@/components/ui/AstroAvatar';
+import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 
 export interface Contact {
   id: number;
@@ -85,7 +86,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
           }`}
         >
           <div className="w-7 h-7 rounded-full overflow-hidden border border-primary/30 shrink-0">
-            <AstroAvatar config={avatarConfig} size={28} />
+            <IllustratedAvatar config={avatarConfig} size={28} />
           </div>
           <span>Я</span>
         </motion.button>
@@ -110,7 +111,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
               >
                 <div className="w-5 h-5 rounded-full overflow-hidden border border-white/10 shrink-0">
                   {contact.avatarConfig ? (
-                    <AstroAvatar config={contact.avatarConfig} size={20} />
+                    <IllustratedAvatar config={contact.avatarConfig} size={20} />
                   ) : (
                     <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${getColor(contact.id)} flex items-center justify-center text-[9px] text-white font-bold shrink-0`}>
                       {getInitials(contact.name)}
