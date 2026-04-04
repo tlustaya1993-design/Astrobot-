@@ -1,47 +1,54 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 
-const PLANETS_RU = [
-  "Солнце","Луна","Меркурий","Венера","Марс","Юпитер","Сатурн","Уран","Нептун","Плутон",
-  "Хирон","Лилит","Северный Узел","Южный Узел","Северный узел","Южный узел","Асцендент","МС","Часть Удачи",
-];
-const SIGNS_RU = [
-  "Овен","Телец","Близнецы","Рак","Лев","Дева","Весы","Скорпион","Стрелец","Козерог","Водолей","Рыбы",
-];
-const ASPECTS_RU = [
-  "соединение","оппозиция","трин","квадрат","секстиль","квинконс","полуквадрат","сесквиквадрат",
-  "Соединение","Оппозиция","Трин","Квадрат","Секстиль","Квинконс","Полуквадрат","Сесквиквадрат",
+const KEY_PHRASES = [
+  'самое важное',
+  'ключевая мысль',
+  'коротко',
+  'в двух словах',
+  'итог',
+  'вывод',
+  'что делать',
+  'на что обратить внимание',
+  'лучше сделать',
+  'лучше не',
+  'не делай',
+  'сделай так',
+  'риск',
+  'сильная сторона',
+  'слабое место',
+  'главный фокус',
+  'практический шаг',
 ];
 
 function goldify(text: string): React.ReactNode[] {
-  const sentenceParts = text.split(/([.!?]+(?:\s+|$))/);
-  const highlightSentences: React.ReactNode[] = [];
-  const sentenceRegex = /(важно|главное|ключ|итог|вывод|лучше|стоит|риск|внимание|фокус|совет|сейчас|сегодня|завтра|на практике|чтобы|поэтому)/i;
-  const keyPhraseRegex = /(самое важное|коротко|в двух словах|ключевая мысль|что делать|на что обратить внимание|лучше сделать|не делай|сделай так)/i;
+  if (!text) return [text];
+
+  const escaped = KEY_PHRASES
+    .map((phrase) => phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  const re = new RegExp(`(${escaped})`, 'gi');
+
+  const parts: React.ReactNode[] = [];
+  let last = 0;
   let idx = 0;
+  let m: RegExpExecArray | null;
 
-  for (let i = 0; i < sentenceParts.length; i += 2) {
-    const sentence = sentenceParts[i] ?? '';
-    const punct = sentenceParts[i + 1] ?? '';
-    const full = `${sentence}${punct}`;
-    if (!full) continue;
-    const shouldHighlight = keyPhraseRegex.test(full) || sentenceRegex.test(full);
-    if (shouldHighlight) {
-      highlightSentences.push(
-        <span
-          key={`hl-${idx++}`}
-          className="text-amber-300 font-medium"
-          style={{ textShadow: '0 0 6px rgba(212,175,55,0.32)' }}
-        >
-          {full}
-        </span>,
-      );
-    } else {
-      highlightSentences.push(full);
-    }
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(
+      <strong
+        key={`hl-${idx++}`}
+        className="font-semibold text-amber-300"
+        style={{ textShadow: '0 0 6px rgba(212,175,55,0.32)' }}
+      >
+        {m[0]}
+      </strong>,
+    );
+    last = m.index + m[0].length;
   }
-
-  return highlightSentences;
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
 }
 
 function processNode(node: React.ReactNode): React.ReactNode {
