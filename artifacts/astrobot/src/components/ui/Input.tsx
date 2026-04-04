@@ -1,34 +1,22 @@
-import React from "react";
-import { cn } from "@/lib/utils";
+import * as React from "react"
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  icon?: React.ReactNode;
-}
+import { cn } from "@/lib/utils"
 
-export const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, icon, ...props }, ref) => {
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  ({ className, type, ...props }, ref) => {
     return (
-      <div className="relative w-full">
-        {icon && (
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
-            {icon}
-          </div>
+      <input
+        type={type}
+        className={cn(
+          "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+          className
         )}
-        <input
-          ref={ref}
-          className={cn(
-            "w-full bg-card/50 backdrop-blur-sm border border-border rounded-xl",
-            "text-foreground placeholder:text-muted-foreground",
-            "focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50",
-            "transition-all duration-300",
-            "px-4 py-3.5",
-            icon && "pl-11",
-            className
-          )}
-          {...props}
-        />
-      </div>
-    );
+        ref={ref}
+        {...props}
+      />
+    )
   }
-);
-Input.displayName = "Input";
+)
+Input.displayName = "Input"
+
+export { Input }

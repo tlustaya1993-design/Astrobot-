@@ -1,53 +1,65 @@
-import React from "react";
-import { cn } from "@/lib/utils";
-import { motion, HTMLMotionProps } from "framer-motion";
+import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
 
-interface ButtonProps extends HTMLMotionProps<"button"> {
-  variant?: "primary" | "secondary" | "ghost" | "outline";
-  size?: "sm" | "md" | "lg" | "icon";
-  isLoading?: boolean;
+import { cn } from "@/lib/utils"
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0" +
+" hover-elevate active-elevate-2",
+  {
+    variants: {
+      variant: {
+        default:
+           // @replit: no hover, and add primary border
+           "bg-primary text-primary-foreground border border-primary-border",
+        destructive:
+          "bg-destructive text-destructive-foreground shadow-sm border-destructive-border",
+        outline:
+          // @replit Shows the background color of whatever card / sidebar / accent background it is inside of.
+          // Inherits the current text color. Uses shadow-xs. no shadow on active
+          // No hover state
+          " border [border-color:var(--button-outline)] shadow-xs active:shadow-none ",
+        secondary:
+          // @replit border, no hover, no shadow, secondary border.
+          "border bg-secondary text-secondary-foreground border border-secondary-border ",
+        // @replit no hover, transparent border
+        ghost: "border border-transparent",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        // @replit changed sizes
+        default: "min-h-9 px-4 py-2",
+        sm: "min-h-8 rounded-md px-3 text-xs",
+        lg: "min-h-10 rounded-md px-8",
+        icon: "h-9 w-9",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
 }
 
-export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = "primary", size = "md", isLoading, children, disabled, ...props }, ref) => {
-    
-    const variants = {
-      primary: "bg-gradient-to-r from-primary to-[#b8952d] text-primary-foreground shadow-[0_0_15px_rgba(212,175,55,0.25)] hover:shadow-[0_0_25px_rgba(212,175,55,0.4)] border border-primary/50",
-      secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-white/5",
-      ghost: "bg-transparent text-foreground hover:bg-white/5",
-      outline: "bg-transparent border border-border text-foreground hover:bg-white/5 hover:border-primary/50",
-    };
-
-    const sizes = {
-      sm: "px-4 py-2 text-sm",
-      md: "px-6 py-3 text-base font-medium",
-      lg: "px-8 py-4 text-lg font-semibold",
-      icon: "p-3",
-    };
-
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button"
     return (
-      <motion.button
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        whileHover={{ scale: disabled || isLoading ? 1 : 1.02 }}
-        whileTap={{ scale: disabled || isLoading ? 1 : 0.98 }}
-        disabled={disabled || isLoading}
-        className={cn(
-          "relative flex items-center justify-center rounded-2xl transition-all duration-300",
-          "disabled:opacity-50 disabled:cursor-not-allowed",
-          variants[variant],
-          sizes[size],
-          className
-        )}
         {...props}
-      >
-        {isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : null}
-        <span className={cn("inline-flex items-center gap-2 whitespace-nowrap", isLoading && "opacity-0")}>{children}</span>
-      </motion.button>
-    );
+      />
+    )
   }
-);
-Button.displayName = "Button";
+)
+Button.displayName = "Button"
+
+export { Button, buttonVariants }
