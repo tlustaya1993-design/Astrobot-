@@ -11,7 +11,7 @@ import {
 import { getAuthHeaders } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import AstroAvatar, {
+import {
   DEFAULT_AVATAR,
   loadAvatar,
   type AvatarConfig,

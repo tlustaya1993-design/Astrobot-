@@ -97,6 +97,13 @@ export const AVATAR_PRESETS: Array<{
   },
 ];
 
+export const GALACTIC_ALLOWED_HAIR_STYLES = ['short', 'medium', 'long', 'curly'] as const;
+export const GALACTIC_ALLOWED_HAIR_COLORS = [
+  HAIR_COLORS[2].hex, // blonde
+  HAIR_COLORS[1].hex, // brunette
+  HAIR_COLORS[3].hex, // red
+] as const;
+
 const AVATAR_KEY = 'astrobot_avatar';
 
 export function loadAvatar(): AvatarConfig {

@@ -4,13 +4,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getAuthHeaders } from '@/lib/session';
 import AddContactModal from './AddContactModal';
 import ProfileSheet from '@/components/profile/ProfileSheet';
-import AstroAvatar, { loadAvatar, type AvatarConfig, DEFAULT_AVATAR } from '@/components/ui/AstroAvatar';
+import { loadAvatar, type AvatarConfig, DEFAULT_AVATAR } from '@/components/ui/AstroAvatar';
+import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 
 export interface Contact {
   id: number;
   name: string;
   relation?: string | null;
   birthDate: string;
+  avatarConfig?: AvatarConfig | null;
 }
 
 interface PeoplePanelProps {
@@ -63,14 +65,14 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
         <motion.button
           whileTap={{ scale: 0.93 }}
           onClick={() => setShowProfile(true)}
-          className={`flex items-center gap-1.5 pl-1 pr-3 py-1 rounded-full text-sm font-medium shrink-0 transition-all border ${
+          className={`flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium shrink-0 transition-all border ${
             selectedContactId === null
               ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
               : 'bg-card border-border text-muted-foreground hover:border-primary/40'
           }`}
         >
-          <div className="w-7 h-7 rounded-full overflow-hidden border border-primary/30 shrink-0">
-            <AstroAvatar config={avatarConfig} size={28} />
+          <div className="w-9 h-9 rounded-full overflow-hidden border border-primary/30 shrink-0">
+            <IllustratedAvatar config={avatarConfig} size={36} />
           </div>
           <span>Я</span>
         </motion.button>
@@ -93,8 +95,16 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
                     : 'bg-card border-border text-muted-foreground hover:border-primary/40'
                 }`}
               >
-                <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${getColor(contact.id)} flex items-center justify-center text-[9px] text-white font-bold shrink-0`}>
-                  {getInitials(contact.name)}
+                <div className={`w-7 h-7 rounded-full overflow-hidden border border-primary/30 shrink-0 ${
+                  contact.avatarConfig ? '' : `bg-gradient-to-br ${getColor(contact.id)}`
+                }`}>
+                  {contact.avatarConfig ? (
+                    <IllustratedAvatar config={contact.avatarConfig} size={28} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[9px] text-white font-bold">
+                      {getInitials(contact.name)}
+                    </div>
+                  )}
                 </div>
                 <span className="max-w-[90px] truncate">{contact.name}</span>
                 {contact.relation && (
