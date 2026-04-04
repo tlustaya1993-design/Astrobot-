@@ -21,18 +21,18 @@ interface AvatarEditorProps {
 }
 
 const GALACTIC_VARIANT_IMAGES = [
-  '/avatar-presets/miss-galactica/galactic-short-blonde.png',
-  '/avatar-presets/miss-galactica/galactic-short-brunette.png',
-  '/avatar-presets/miss-galactica/galactic-short-red.png',
-  '/avatar-presets/miss-galactica/galactic-medium-blonde.png',
-  '/avatar-presets/miss-galactica/galactic-medium-brunette.png',
-  '/avatar-presets/miss-galactica/galactic-medium-red.png',
-  '/avatar-presets/miss-galactica/galactic-long-blonde.png',
-  '/avatar-presets/miss-galactica/galactic-long-brunette.png',
-  '/avatar-presets/miss-galactica/galactic-long-red.png',
-  '/avatar-presets/miss-galactica/galactic-curly-blonde.png',
-  '/avatar-presets/miss-galactica/galactic-curly-brunette.png',
-  '/avatar-presets/miss-galactica/galactic-curly-red.png',
+  '/avatar-presets/miss-galactica/galactic-short-blonde.webp',
+  '/avatar-presets/miss-galactica/galactic-short-brunette.webp',
+  '/avatar-presets/miss-galactica/galactic-short-red.webp',
+  '/avatar-presets/miss-galactica/galactic-medium-blonde.webp',
+  '/avatar-presets/miss-galactica/galactic-medium-brunette.webp',
+  '/avatar-presets/miss-galactica/galactic-medium-red.webp',
+  '/avatar-presets/miss-galactica/galactic-long-blonde.webp',
+  '/avatar-presets/miss-galactica/galactic-long-brunette.webp',
+  '/avatar-presets/miss-galactica/galactic-long-red.webp',
+  '/avatar-presets/miss-galactica/galactic-curly-blonde.webp',
+  '/avatar-presets/miss-galactica/galactic-curly-brunette.webp',
+  '/avatar-presets/miss-galactica/galactic-curly-red.webp',
 ];
 
 function ColorRow({
@@ -82,7 +82,8 @@ export default function AvatarEditor({
 }: AvatarEditorProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    for (const src of GALACTIC_VARIANT_IMAGES) {
+    // Mobile freeze fix: do not preload all 12 heavy images at once.
+    for (const src of GALACTIC_VARIANT_IMAGES.slice(0, 4)) {
       const img = new Image();
       img.decoding = 'async';
       img.src = src;
@@ -111,7 +112,7 @@ export default function AvatarEditor({
       : 'Волшебница',
     image:
       preset.id === 'galactic_default'
-        ? '/avatar-presets/miss-galactica/galactic-medium-brunette.png'
+        ? '/avatar-presets/miss-galactica/galactic-medium-brunette.webp'
         : preset.id === 'cosmonaut_default'
         ? '/avatar-presets/cosmonautka.png'
         : '/avatar-presets/volshebnitsa.png',
@@ -131,7 +132,16 @@ export default function AvatarEditor({
             return (
               <button
                 key={p.id}
-                onClick={() => onChange(p.cfg)}
+                onClick={() => {
+                  onChange(p.cfg);
+                  if (p.cfg.archetype === 'galactic') {
+                    for (const src of GALACTIC_VARIANT_IMAGES) {
+                      const img = new Image();
+                      img.decoding = 'async';
+                      img.src = src;
+                    }
+                  }
+                }}
                 className={`rounded-2xl border p-2 text-left transition-all ${
                   selected
                     ? 'border-primary bg-primary/15 shadow-[0_0_18px_rgba(212,175,55,0.24)]'
