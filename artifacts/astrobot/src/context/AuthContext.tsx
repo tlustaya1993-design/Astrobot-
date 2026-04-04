@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getStoredEmail, getToken, saveAuth, clearAuth, getSessionId } from '@/lib/session';
 import { apiVerifyToken } from '@/lib/auth';
+import AuthModal from '@/components/AuthModal';
 
 interface AuthState {
   isLoggedIn: boolean;
@@ -89,10 +90,5 @@ function AuthModalHost({
   tab: 'login' | 'register';
   onClose: () => void;
 }) {
-  const AuthModal = require('@/components/AuthModal').default as React.ComponentType<{
-    open: boolean;
-    onClose: () => void;
-    initialTab?: 'login' | 'register';
-  }>;
   return <AuthModal open={open} onClose={onClose} initialTab={tab} />;
 }
