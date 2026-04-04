@@ -18,3 +18,14 @@
 | `mage-curly-red.png` | Кудрявая_волшебница_рыжая.png |
 
 Пока файла нет, в интерфейсе показывается запасной портрет `volshebnitsa.png`.
+
+## Нормализация (после замены исходников)
+
+Сырые PNG с разным кадром приводятся к одному формату скриптом `scripts/normalize_avatar_circles.py` (поиск золотой рамки → масштаб → квадратный холст 1024×1024).
+
+```bash
+pip install -r scripts/requirements-avatar-normalize.txt
+python scripts/normalize_avatar_circles.py --apply
+```
+
+Из корня монорепозитория также: `pnpm run normalize-avatars` (нужны Python и зависимости выше).
