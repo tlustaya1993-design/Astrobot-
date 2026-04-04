@@ -52,6 +52,47 @@ export interface AvatarConfig {
   eyeColor: string;
 }
 
+export type AvatarPresetId = 'galactic_default' | 'mage_default' | 'cosmonaut_default';
+
+export const AVATAR_PRESETS: { id: AvatarPresetId; label: string; archetype: AvatarArchetype; config: AvatarConfig }[] = [
+  {
+    id: 'galactic_default',
+    label: 'Галактический',
+    archetype: 'galactic',
+    config: {
+      archetype: 'galactic',
+      hairStyle: 'medium',
+      hairColor: '#7B3F1E',
+      robeColor: '#6D28D9',
+      eyeColor: '#3B82F6',
+    },
+  },
+  {
+    id: 'mage_default',
+    label: 'Волшебница',
+    archetype: 'mage',
+    config: {
+      archetype: 'mage',
+      hairStyle: 'medium',
+      hairColor: '#C0392B',
+      robeColor: '#3730A3',
+      eyeColor: '#D97706',
+    },
+  },
+  {
+    id: 'cosmonaut_default',
+    label: 'Космонавтка',
+    archetype: 'cosmonaut',
+    config: {
+      archetype: 'cosmonaut',
+      hairStyle: 'ponytail',
+      hairColor: '#7B3F1E',
+      robeColor: '#1E3A5F',
+      eyeColor: '#16A34A',
+    },
+  },
+];
+
 export const DEFAULT_AVATAR: AvatarConfig = {
   archetype: 'mage',
   hairStyle: 'medium',
