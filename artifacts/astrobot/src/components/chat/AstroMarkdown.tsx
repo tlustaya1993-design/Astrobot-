@@ -14,42 +14,34 @@ const ASPECTS_RU = [
 ];
 
 function goldify(text: string): React.ReactNode[] {
-  const allTerms = [...PLANETS_RU, ...SIGNS_RU];
-  const aspectTerms = ASPECTS_RU;
+  const sentenceParts = text.split(/([.!?]+(?:\s+|$))/);
+  const highlightSentences: React.ReactNode[] = [];
+  const sentenceRegex = /(важно|главное|ключ|итог|вывод|лучше|стоит|риск|внимание|фокус|совет|сейчас|сегодня|завтра|на практике|чтобы|поэтому)/i;
+  const keyPhraseRegex = /(самое важное|коротко|в двух словах|ключевая мысль|что делать|на что обратить внимание|лучше сделать|не делай|сделай так)/i;
+  let idx = 0;
 
-  const planetPattern  = allTerms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  const aspectPattern  = aspectTerms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  const combined = `(${planetPattern})|(${aspectPattern})`;
-  const re = new RegExp(combined, 'g');
-
-  const parts: React.ReactNode[] = [];
-  let last = 0;
-  let m: RegExpExecArray | null;
-  let key = 0;
-
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(text.slice(last, m.index));
-    const isPlanet = !!m[1];
-    const isAspect = !!m[2];
-    parts.push(
-      <span
-        key={key++}
-        className={
-          isPlanet
-            ? 'text-amber-400 font-semibold'
-            : isAspect
-            ? 'text-amber-300/80 italic'
-            : ''
-        }
-        style={isPlanet ? { textShadow: '0 0 8px rgba(212,175,55,0.4)' } : undefined}
-      >
-        {m[0]}
-      </span>
-    );
-    last = m.index + m[0].length;
+  for (let i = 0; i < sentenceParts.length; i += 2) {
+    const sentence = sentenceParts[i] ?? '';
+    const punct = sentenceParts[i + 1] ?? '';
+    const full = `${sentence}${punct}`;
+    if (!full) continue;
+    const shouldHighlight = keyPhraseRegex.test(full) || sentenceRegex.test(full);
+    if (shouldHighlight) {
+      highlightSentences.push(
+        <span
+          key={`hl-${idx++}`}
+          className="text-amber-300 font-medium"
+          style={{ textShadow: '0 0 6px rgba(212,175,55,0.32)' }}
+        >
+          {full}
+        </span>,
+      );
+    } else {
+      highlightSentences.push(full);
+    }
   }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
+
+  return highlightSentences;
 }
 
 function processNode(node: React.ReactNode): React.ReactNode {
