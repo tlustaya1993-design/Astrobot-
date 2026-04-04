@@ -126,9 +126,16 @@ interface Props {
   config?: AvatarConfig;
   size?: number;
   className?: string;
+  /** Растянуть SVG на весь родительский круг (редактор / превью). */
+  fillParent?: boolean;
 }
 
-export default function AstroAvatar({ config = DEFAULT_AVATAR, size = 80, className = '' }: Props) {
+export default function AstroAvatar({
+  config = DEFAULT_AVATAR,
+  size = 80,
+  className = '',
+  fillParent = false,
+}: Props) {
   const uid = useId().replace(/:/g, '');
   const ids = {
     clip: `c-${uid}`,
@@ -147,7 +154,15 @@ export default function AstroAvatar({ config = DEFAULT_AVATAR, size = 80, classN
   const eyeDark   = shadeHex(eyeColor, -30);
 
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <svg
+      width={fillParent ? '100%' : size}
+      height={fillParent ? '100%' : size}
+      viewBox="0 0 100 100"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={`${fillParent ? 'block h-full w-full max-h-full max-w-full' : ''} ${className}`.trim()}
+      preserveAspectRatio="xMidYMid meet"
+    >
       <defs>
         <clipPath id={ids.clip}><circle cx="50" cy="50" r="50" /></clipPath>
 

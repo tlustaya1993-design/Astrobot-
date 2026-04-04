@@ -39,7 +39,7 @@ export function getAvatarCropStyle(archetype?: string | null): { objectPosition:
     case 'galactic':
       return { objectPosition: '50% 28%', scale: 1.22 };
     case 'mage':
-      return { objectPosition: '50% 42%', scale: 1.06 };
+      return { objectPosition: '50% 43%', scale: 1.16 };
     case 'cosmonaut':
       return { objectPosition: '50% 36%', scale: 1.14 };
     default:
