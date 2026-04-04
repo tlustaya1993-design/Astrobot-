@@ -157,9 +157,10 @@ export default function Chat() {
               className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
               aria-hidden="true"
             >
+              <div className="chat-column-base" />
+              <div className="chat-column-dim" />
               <div className="chat-column-stars-far" />
               <div className="chat-column-stars" />
-              <div className="chat-column-dim" />
             </div>
 
             {/* Header */}

@@ -84,49 +84,57 @@
 }
 
 @layer components {
-  /* Chat column: tiled starfield + dark wash (see Chat.tsx) */
-  .chat-column-stars-far {
+  /* Фон чата: ровная база → мягкое затемнение по краям → звёзды сверху (Chat.tsx) */
+  .chat-column-base {
     position: absolute;
     inset: 0;
-    opacity: 0.32;
-    background-image:
-      radial-gradient(1px 1px at 24px 40px, rgba(255, 255, 255, 0.22), transparent),
-      radial-gradient(1px 1px at 120px 88px, rgba(255, 255, 255, 0.12), transparent),
-      radial-gradient(1px 1px at 188px 32px, rgba(180, 170, 255, 0.14), transparent),
-      radial-gradient(1px 1px at 260px 160px, rgba(255, 255, 255, 0.08), transparent);
-    background-size: 320px 280px;
-    background-position: 53px 17px, 0 0, 101px 73px, 140px 40px;
-  }
-
-  .chat-column-stars {
-    position: absolute;
-    inset: 0;
-    opacity: 0.44;
-    background-image:
-      radial-gradient(1px 1px at 18px 24px, rgba(255, 255, 255, 0.36), transparent),
-      radial-gradient(1px 1px at 52px 78px, rgba(255, 255, 255, 0.16), transparent),
-      radial-gradient(1.5px 1.5px at 96px 14px, rgba(212, 175, 55, 0.2), transparent),
-      radial-gradient(1px 1px at 134px 102px, rgba(196, 181, 253, 0.18), transparent),
-      radial-gradient(1px 1px at 188px 46px, rgba(255, 255, 255, 0.12), transparent),
-      radial-gradient(1px 1px at 72px 156px, rgba(255, 255, 255, 0.1), transparent),
-      radial-gradient(1px 1px at 164px 186px, rgba(255, 248, 220, 0.14), transparent);
-    background-size: 208px 208px;
-    background-position: 0 0, 37px 61px, 11px 131px, 0 0, 89px 19px, 143px 97px, 51px 41px;
+    background-color: hsl(var(--background));
   }
 
   .chat-column-dim {
     position: absolute;
     inset: 0;
     background:
-      radial-gradient(ellipse 100% 72% at 50% 38%, hsl(var(--background) / 0.28) 0%, transparent 55%),
+      radial-gradient(ellipse 110% 75% at 50% 40%, hsl(var(--background) / 0.45) 0%, transparent 58%),
       linear-gradient(
         to bottom,
-        hsl(var(--background) / 0.82) 0%,
-        hsl(var(--background) / 0.5) 45%,
-        hsl(var(--background) / 0.55) 55%,
-        hsl(var(--background) / 0.85) 100%
+        hsl(var(--background) / 0.35) 0%,
+        hsl(var(--background) / 0.12) 38%,
+        hsl(var(--background) / 0.15) 62%,
+        hsl(var(--background) / 0.4) 100%
       );
-    box-shadow: inset 0 0 120px 55px hsl(var(--background) / 0.42);
+    box-shadow: inset 0 0 140px 60px hsl(240 30% 2% / 0.55);
+  }
+
+  /* Крупнее 1–2px, ярче — на планшетах и после сборки не «пропадают» */
+  .chat-column-stars-far {
+    position: absolute;
+    inset: 0;
+    opacity: 0.85;
+    background-image:
+      radial-gradient(circle 1.2px at 24px 40px, rgba(255, 255, 255, 0.55), transparent 2px),
+      radial-gradient(circle 1px at 120px 88px, rgba(255, 255, 255, 0.35), transparent 2px),
+      radial-gradient(circle 1px at 188px 32px, rgba(200, 190, 255, 0.45), transparent 2px),
+      radial-gradient(circle 1px at 260px 160px, rgba(255, 255, 255, 0.28), transparent 2px),
+      radial-gradient(circle 1.5px at 40px 200px, rgba(244, 220, 160, 0.35), transparent 2.5px);
+    background-size: 320px 280px;
+    background-position: 53px 17px, 0 0, 101px 73px, 140px 40px, 200px 100px;
+  }
+
+  .chat-column-stars {
+    position: absolute;
+    inset: 0;
+    opacity: 0.95;
+    background-image:
+      radial-gradient(circle 1.5px at 18px 24px, rgba(255, 255, 255, 0.75), transparent 2.5px),
+      radial-gradient(circle 1px at 52px 78px, rgba(255, 255, 255, 0.4), transparent 2px),
+      radial-gradient(circle 2px at 96px 14px, rgba(230, 200, 120, 0.5), transparent 3px),
+      radial-gradient(circle 1px at 134px 102px, rgba(210, 200, 255, 0.45), transparent 2px),
+      radial-gradient(circle 1px at 188px 46px, rgba(255, 255, 255, 0.35), transparent 2px),
+      radial-gradient(circle 1px at 72px 156px, rgba(255, 255, 255, 0.32), transparent 2px),
+      radial-gradient(circle 1.2px at 164px 186px, rgba(255, 245, 220, 0.42), transparent 2.5px);
+    background-size: 208px 208px;
+    background-position: 0 0, 37px 61px, 11px 131px, 0 0, 89px 19px, 143px 97px, 51px 41px;
   }
 }
 
