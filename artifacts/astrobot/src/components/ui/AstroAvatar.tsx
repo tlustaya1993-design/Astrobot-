@@ -68,10 +68,9 @@ interface Props {
   config?: AvatarConfig;
   size?: number;
   className?: string;
-  portrait?: boolean;
 }
 
-export default function AstroAvatar({ config = DEFAULT_AVATAR, size = 80, className = '', portrait = false }: Props) {
+export default function AstroAvatar({ config = DEFAULT_AVATAR, size = 80, className = '' }: Props) {
   const uid = useId().replace(/:/g, '');
   const ids = {
     clip: `c-${uid}`,
@@ -89,10 +88,8 @@ export default function AstroAvatar({ config = DEFAULT_AVATAR, size = 80, classN
   const robeHi    = shadeHex(robeColor, 50);
   const eyeDark   = shadeHex(eyeColor, -30);
 
-  const viewBox = portrait ? "18 8 64 64" : "0 0 100 100";
-
   return (
-    <svg width={size} height={size} viewBox={viewBox} fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
       <defs>
         <clipPath id={ids.clip}><circle cx="50" cy="50" r="50" /></clipPath>
 

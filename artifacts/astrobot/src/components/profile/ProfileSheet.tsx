@@ -293,18 +293,12 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
 
               {/* ── Avatar editor ── */}
               {section === 'avatar' && (
-                <div className="pb-8 space-y-5 max-h-[82vh] overflow-y-auto">
-                  {/* Hero avatar preview */}
-                  <div className="flex justify-center pt-2 pb-4">
-                    <div
-                      className="rounded-full border-[3px] border-primary/60 shadow-[0_0_40px_rgba(212,175,55,0.35),0_0_80px_rgba(212,175,55,0.12)]"
-                      style={{ width: 200, height: 200 }}
-                    >
-                      <AstroAvatar config={localAvatar} size={200} />
+                <div className="px-5 pb-8 space-y-5 max-h-[75vh] overflow-y-auto">
+                  <div className="flex justify-center">
+                    <div className="w-28 h-28 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_20px_rgba(212,175,55,0.2)]">
+                      <AstroAvatar config={localAvatar} size={112} />
                     </div>
                   </div>
-
-                  <div className="px-5 space-y-5">
 
                   {/* Hairstyle */}
                   <div className="space-y-2">
@@ -351,7 +345,6 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                   >
                     Сохранить аватар
                   </button>
-                  </div>{/* end px-5 */}
                 </div>
               )}
             </div>

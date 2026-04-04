@@ -70,7 +70,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
           }`}
         >
           <div className="w-7 h-7 rounded-full overflow-hidden border border-primary/30 shrink-0">
-            <AstroAvatar config={avatarConfig} size={28} portrait />
+            <AstroAvatar config={avatarConfig} size={28} />
           </div>
           <span>Я</span>
         </motion.button>
