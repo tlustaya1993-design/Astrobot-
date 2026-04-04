@@ -67,6 +67,39 @@ router.post("/conversations", async (req, res) => {
   res.status(201).json(created);
 });
 
+router.put("/conversations/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const sessionId = req.sessionId;
+  if (!sessionId) {
+    res.status(401).json({ error: "Требуется авторизация" });
+    return;
+  }
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: "Invalid conversation id" });
+    return;
+  }
+
+  const { title } = req.body as { title?: unknown };
+  const nextTitle = typeof title === "string" ? title.trim() : "";
+  if (!nextTitle) {
+    res.status(400).json({ error: "title required" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(conversations)
+    .set({ title: nextTitle.slice(0, 140) })
+    .where(and(eq(conversations.id, id), eq(conversations.sessionId, sessionId)))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  res.json(updated);
+});
+
 router.get("/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
   const sessionId = req.sessionId;
