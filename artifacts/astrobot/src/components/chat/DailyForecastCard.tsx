@@ -11,6 +11,8 @@ interface ForecastData {
 
 interface Props {
   onAskQuestion?: (question: string) => void;
+  hidden?: boolean;
+  onToggleHidden?: () => void;
 }
 
 function getToday(): string {
@@ -37,7 +39,7 @@ function isForecastData(value: unknown): value is ForecastData {
   );
 }
 
-export default function DailyForecastCard({ onAskQuestion }: Props) {
+export default function DailyForecastCard({ onAskQuestion, hidden = false, onToggleHidden }: Props) {
   const [data, setData] = useState<ForecastData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
@@ -75,6 +77,31 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
       .finally(() => setLoading(false));
   }, []);
 
+  if (hidden) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, ease: 'easeOut' }}
+        className="mx-auto w-full max-w-md mb-4"
+      >
+        <div className="rounded-2xl border border-border/40 bg-card/80 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">Прогноз на день скрыт</p>
+            {onToggleHidden && (
+              <button
+                onClick={onToggleHidden}
+                className="text-xs px-3 py-1.5 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition"
+              >
+                Показать
+              </button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
   if (error || (!loading && !data)) return null;
 
   const sentences = data?.text
@@ -90,29 +117,39 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
     >
       <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-card via-card/95 to-secondary/30 shadow-[0_0_20px_rgba(212,175,55,0.07)] overflow-hidden">
         {/* Header */}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.03] transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-lg leading-none">
-              {loading ? '🌙' : (data?.moonPhase.emoji || '✨')}
-            </span>
-            <div className="text-left">
-              <p className="text-xs text-primary/70 font-medium tracking-wide uppercase leading-none mb-0.5">
-                Прогноз на сегодня
-              </p>
-              {data && (
-                <p className="text-xs text-muted-foreground leading-none">
-                  {data.moonPhase.name && `${data.moonPhase.name} · `}{formatDate(data.date)}
+        <div className="w-full flex items-center justify-between px-4 py-3">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex-1 min-w-0 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors rounded-lg -my-1 py-1 px-1 -ml-1"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-lg leading-none">
+                {loading ? '🌙' : (data?.moonPhase.emoji || '✨')}
+              </span>
+              <div className="text-left">
+                <p className="text-xs text-primary/70 font-medium tracking-wide uppercase leading-none mb-0.5">
+                  Прогноз на сегодня
                 </p>
-              )}
+                {data && (
+                  <p className="text-xs text-muted-foreground leading-none">
+                    {data.moonPhase.name && `${data.moonPhase.name} · `}{formatDate(data.date)}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="text-muted-foreground/50">
-            {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </div>
-        </button>
+            <div className="text-muted-foreground/50">
+              {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          </button>
+          {onToggleHidden && (
+            <button
+              onClick={onToggleHidden}
+              className="ml-2 text-[11px] px-2.5 py-1 rounded-full border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/30 transition"
+            >
+              Скрыть
+            </button>
+          )}
+        </div>
 
         {/* Preview (first sentence always visible) */}
         <div className="px-4 pb-3">

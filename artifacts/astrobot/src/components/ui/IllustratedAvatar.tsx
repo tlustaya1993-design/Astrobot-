@@ -2,7 +2,7 @@ import React from 'react';
 import type { AvatarConfig } from '@/components/ui/AstroAvatar';
 
 const PRESET_IMAGE_BY_ARCHETYPE: Record<string, string> = {
-  galactic: '/avatar-presets/miss-galactica/galactic-curly-brunette.png',
+  galactic: '/avatar-presets/miss-galactica/galactic-curly-brunette.webp',
   cosmonaut: '/avatar-presets/cosmonautka.png',
   mage: '/avatar-presets/volshebnitsa.png',
 };
@@ -24,7 +24,7 @@ function resolveGalacticVariantImage(config?: AvatarConfig | null): string {
   const normalizedHairColor = (config?.hairColor ?? '').trim().toLowerCase();
   const color = GALACTIC_COLOR_BY_HEX[normalizedHairColor] ?? 'brunette';
   const style = GALACTIC_STYLE_BY_HAIR_STYLE[config?.hairStyle ?? ''] ?? 'medium';
-  return `/avatar-presets/miss-galactica/galactic-${style}-${color}.png`;
+  return `/avatar-presets/miss-galactica/galactic-${style}-${color}.webp`;
 }
 
 interface IllustratedAvatarProps {

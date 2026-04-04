@@ -48,6 +48,7 @@ export default function Chat() {
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isDailyForecastHidden, setIsDailyForecastHidden] = useState(false);
   const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -104,6 +105,24 @@ export default function Chat() {
   };
 
   const isNew = !conversationId && displayMessages.length === 0;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = `daily-forecast-hidden-${new Date().toISOString().slice(0, 10)}`;
+    setIsDailyForecastHidden(localStorage.getItem(key) === '1');
+  }, []);
+
+  const setDailyForecastHidden = (hidden: boolean) => {
+    if (typeof window !== 'undefined') {
+      const key = `daily-forecast-hidden-${new Date().toISOString().slice(0, 10)}`;
+      if (hidden) {
+        localStorage.setItem(key, '1');
+      } else {
+        localStorage.removeItem(key);
+      }
+    }
+    setIsDailyForecastHidden(hidden);
+  };
 
   const BotBadge = () => (
     <div className="w-full h-full rounded-full bg-background flex items-center justify-center">
@@ -198,7 +217,11 @@ export default function Chat() {
                 {/* Daily Forecast Card */}
                 {!selectedContactId && (
                   <div className="w-full max-w-md mb-6">
-                    <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
+                    <DailyForecastCard
+                      onAskQuestion={(q) => { setInputValue(q); }}
+                      hidden={isDailyForecastHidden}
+                      onToggleHidden={() => setDailyForecastHidden(!isDailyForecastHidden)}
+                    />
                   </div>
                 )}
 
