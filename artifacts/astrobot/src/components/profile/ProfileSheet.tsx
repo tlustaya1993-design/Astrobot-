@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, LogOut, LogIn, BrainCircuit, Sparkles, Trash2 } from 'lucide-react';
-import { type AvatarConfig, loadAvatar, saveAvatar } from '@/components/ui/AstroAvatar';
-import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
-import AvatarEditor from '@/components/ui/AvatarEditor';
+import { X, Pencil, LogOut, LogIn, BrainCircuit, Trash2 } from 'lucide-react';
+import AstroAvatar, {
+  HAIR_COLORS, ROBE_COLORS, EYE_COLORS, HAIR_STYLES,
+  type AvatarConfig, loadAvatar, saveAvatar,
+} from '@/components/ui/AstroAvatar';
 import { getAuthHeaders } from '@/lib/session';
 import { useAuth } from '@/context/AuthContext';
 import AuthModal from '@/components/AuthModal';
@@ -15,11 +16,6 @@ interface UserProfile {
   birthTime?: string | null;
   gender?: string | null;
   requestsUsed?: number | null;
-  requestsBalance?: number | null;
-  freeRemaining?: number | null;
-  freeLimit?: number | null;
-  isUnlimited?: boolean;
-  requestsTotalPurchased?: number | null;
 }
 
 interface Memory {
@@ -134,7 +130,7 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
           >
-            <div className="w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible">
+            <div className="w-full max-w-2xl bg-card border-t border-border rounded-t-3xl overflow-hidden shadow-2xl">
               {/* Handle */}
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 rounded-full bg-border" />
@@ -164,8 +160,14 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                   <div className="flex items-center gap-4">
                     <div className="relative shrink-0">
                       <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_16px_rgba(212,175,55,0.2)]">
-                        <IllustratedAvatar config={avatarConfig} size={80} />
+                        <AstroAvatar config={avatarConfig} size={80} />
                       </div>
+                      <button
+                        onClick={() => setSection('avatar')}
+                        className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/80 transition"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-lg font-semibold font-display truncate">
@@ -179,29 +181,8 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
                           {profile.requestsUsed} {pluralRequests(profile.requestsUsed)} отправлено
                         </p>
                       )}
-                      {profile?.isUnlimited && (
-                        <p className="text-xs text-emerald-400 mt-0.5">Безлимитный доступ активен</p>
-                      )}
-                      {!profile?.isUnlimited && profile?.freeRemaining != null && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Бесплатно: {profile.freeRemaining}/{profile.freeLimit ?? 5}
-                        </p>
-                      )}
-                      {profile?.requestsBalance != null && (
-                        <p className="text-xs text-primary/80 mt-0.5">
-                          Осталось: {profile.requestsBalance} {pluralRequests(profile.requestsBalance)}
-                        </p>
-                      )}
                     </div>
                   </div>
-
-                  <button
-                    onClick={() => setSection('avatar')}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary/35 text-primary text-sm font-medium hover:bg-primary/10 transition"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    Редактировать аватар
-                  </button>
 
                   {/* Info cards */}
                   {profile?.birthDate && (
@@ -312,14 +293,65 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
 
               {/* ── Avatar editor ── */}
               {section === 'avatar' && (
-                <div className="px-5 pb-8 pt-12 space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
-                  <AvatarEditor
-                    avatarConfig={localAvatar}
-                    onChange={setLocalAvatar}
-                    onSave={handleSaveAvatar}
-                    saveLabel="Сохранить аватар"
-                    previewSize={156}
+                <div className="pb-8 space-y-5 max-h-[82vh] overflow-y-auto">
+                  {/* Hero avatar preview */}
+                  <div className="flex justify-center pt-2 pb-4">
+                    <div
+                      className="rounded-full border-[3px] border-primary/60 shadow-[0_0_40px_rgba(212,175,55,0.35),0_0_80px_rgba(212,175,55,0.12)]"
+                      style={{ width: 200, height: 200 }}
+                    >
+                      <AstroAvatar config={localAvatar} size={200} />
+                    </div>
+                  </div>
+
+                  <div className="px-5 space-y-5">
+
+                  {/* Hairstyle */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Причёска</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {HAIR_STYLES.map(s => (
+                        <button
+                          key={s.id}
+                          onClick={() => setLocalAvatar(a => ({ ...a, hairStyle: s.id }))}
+                          className={`py-2 px-1 rounded-xl text-xs font-medium border transition-all ${
+                            localAvatar.hairStyle === s.id
+                              ? 'border-primary bg-primary/15 text-primary shadow-[0_0_8px_rgba(212,175,55,0.25)]'
+                              : 'border-border/40 text-muted-foreground hover:border-primary/30 hover:bg-white/5'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <ColorRow
+                    label="Цвет волос"
+                    colors={HAIR_COLORS}
+                    selected={localAvatar.hairColor}
+                    onSelect={(hex) => setLocalAvatar(a => ({ ...a, hairColor: hex }))}
                   />
+                  <ColorRow
+                    label="Цвет мантии"
+                    colors={ROBE_COLORS}
+                    selected={localAvatar.robeColor}
+                    onSelect={(hex) => setLocalAvatar(a => ({ ...a, robeColor: hex }))}
+                  />
+                  <ColorRow
+                    label="Цвет глаз"
+                    colors={EYE_COLORS}
+                    selected={localAvatar.eyeColor}
+                    onSelect={(hex) => setLocalAvatar(a => ({ ...a, eyeColor: hex }))}
+                  />
+
+                  <button
+                    onClick={handleSaveAvatar}
+                    className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md"
+                  >
+                    Сохранить аватар
+                  </button>
+                  </div>{/* end px-5 */}
                 </div>
               )}
             </div>
@@ -348,3 +380,36 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ColorRow({
+  label, colors, selected, onSelect
+}: {
+  label: string;
+  colors: { id: string; label: string; hex: string }[];
+  selected: string;
+  onSelect: (hex: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
+      <div className="flex gap-2.5 flex-wrap">
+        {colors.map(c => (
+          <button
+            key={c.id}
+            title={c.label}
+            onClick={() => onSelect(c.hex)}
+            className="relative w-8 h-8 rounded-full border-2 transition-all"
+            style={{
+              backgroundColor: c.hex,
+              borderColor: selected === c.hex ? '#D4AF37' : 'transparent',
+              boxShadow: selected === c.hex ? `0 0 8px ${c.hex}80` : 'none',
+            }}
+          >
+            {selected === c.hex && (
+              <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold">✓</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

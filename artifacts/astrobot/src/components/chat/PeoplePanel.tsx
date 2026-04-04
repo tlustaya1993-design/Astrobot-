@@ -1,23 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAuthHeaders } from '@/lib/session';
 import AddContactModal from './AddContactModal';
 import ProfileSheet from '@/components/profile/ProfileSheet';
-import ContactProfileSheet from './ContactProfileSheet';
-import { loadAvatar, type AvatarConfig, DEFAULT_AVATAR } from '@/components/ui/AstroAvatar';
-import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
+import AstroAvatar, { loadAvatar, type AvatarConfig, DEFAULT_AVATAR } from '@/components/ui/AstroAvatar';
 
 export interface Contact {
   id: number;
   name: string;
   relation?: string | null;
   birthDate: string;
-  birthTime?: string | null;
-  birthPlace?: string | null;
-  birthLat?: number | null;
-  birthLng?: number | null;
-  avatarConfig?: AvatarConfig | null;
 }
 
 interface PeoplePanelProps {
@@ -28,9 +21,8 @@ interface PeoplePanelProps {
 export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanelProps) {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [showContactProfile, setShowContactProfile] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [activeContact, setActiveContact] = useState<Contact | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
 
   useEffect(() => {
@@ -46,23 +38,15 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
-  const handleOpenContactProfile = (contact: Contact) => {
-    setActiveContact(contact);
-    setShowContactProfile(true);
-  };
-
-  const handleContactUpdated = (updatedContact: Contact) => {
-    setContacts(prev => prev.map(c => (c.id === updatedContact.id ? updatedContact : c)));
-    setActiveContact(updatedContact);
-  };
-
-  const handleContactDeleted = (deletedContactId: number) => {
-    setContacts(prev => prev.filter(c => c.id !== deletedContactId));
-    if (selectedContactId === deletedContactId) onSelect(null);
-    if (activeContact?.id === deletedContactId) {
-      setActiveContact(null);
-      setShowContactProfile(false);
-    }
+  const handleDelete = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    setDeleting(id);
+    try {
+      await fetch(`/api/contacts/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+      setContacts(prev => prev.filter(c => c.id !== id));
+      if (selectedContactId === id) onSelect(null);
+    } catch {}
+    setDeleting(null);
   };
 
   const getInitials = (name: string) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
@@ -86,7 +70,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
           }`}
         >
           <div className="w-7 h-7 rounded-full overflow-hidden border border-primary/30 shrink-0">
-            <IllustratedAvatar config={avatarConfig} size={28} />
+            <AstroAvatar config={avatarConfig} size={28} portrait />
           </div>
           <span>Я</span>
         </motion.button>
@@ -99,29 +83,32 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
               initial={{ opacity: 0, scale: 0.8, x: -10 }}
               animate={{ opacity: 1, scale: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.8, x: -10 }}
-              className="shrink-0"
+              className="relative group shrink-0"
             >
               <button
-                onClick={() => handleOpenContactProfile(contact)}
+                onClick={() => onSelect(selectedContactId === contact.id ? null : contact.id)}
                 className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
                   selectedContactId === contact.id
                     ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
                     : 'bg-card border-border text-muted-foreground hover:border-primary/40'
                 }`}
               >
-                <div className="w-5 h-5 rounded-full overflow-hidden border border-white/10 shrink-0">
-                  {contact.avatarConfig ? (
-                    <IllustratedAvatar config={contact.avatarConfig} size={20} />
-                  ) : (
-                    <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${getColor(contact.id)} flex items-center justify-center text-[9px] text-white font-bold shrink-0`}>
-                      {getInitials(contact.name)}
-                    </div>
-                  )}
+                <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${getColor(contact.id)} flex items-center justify-center text-[9px] text-white font-bold shrink-0`}>
+                  {getInitials(contact.name)}
                 </div>
                 <span className="max-w-[90px] truncate">{contact.name}</span>
                 {contact.relation && (
                   <span className="text-[10px] text-muted-foreground/60">· {contact.relation}</span>
                 )}
+              </button>
+
+              {/* Delete button on hover */}
+              <button
+                onClick={(e) => handleDelete(e, contact.id)}
+                disabled={deleting === contact.id}
+                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-destructive text-white items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex"
+              >
+                <Trash2 className="w-2.5 h-2.5" />
               </button>
             </motion.div>
           ))}
@@ -153,17 +140,6 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
         open={showModal}
         onClose={() => setShowModal(false)}
         onAdded={fetchContacts}
-      />
-
-      <ContactProfileSheet
-        open={showContactProfile}
-        onClose={() => {
-          setShowContactProfile(false);
-          setActiveContact(null);
-        }}
-        contact={activeContact}
-        onUpdated={handleContactUpdated}
-        onDeleted={handleContactDeleted}
       />
 
       <ProfileSheet
