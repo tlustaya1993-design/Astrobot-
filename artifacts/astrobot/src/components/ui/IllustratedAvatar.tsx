@@ -35,25 +35,23 @@ function resolveMageVariantImage(config?: AvatarConfig | null): string {
 }
 
 /** Должно совпадать с `--canvas` / `--target-r` в scripts/normalize_avatar_circles.py */
-const MAGE_NORMALIZED_SIZE = 1024;
-const MAGE_NORMALIZED_CIRCLE_R = 470;
+const NORMALIZED_PRESET_CANVAS = 1024;
+const NORMALIZED_PRESET_CIRCLE_R = 470;
 
 /**
- * Mage: после нормализации круг контента r=470 в квадрате 1024; вписанная в квадрат окружность r=512.
- * Базовый zoom подгоняет рамку к клипу; overscan добавляем, чтобы не было видно прямых кромок
- * квадратного PNG и «лотка» внутри круга — остаётся только круглое обрезание.
+ * После normalize_avatar_circles.py: круг r=470 в квадрате 1024 (mage PNG, miss-galactica WebP).
+ * Базовый zoom + overscan, чтобы не торчали прямые кромки файла внутри круглого клипа.
  */
-const MAGE_CIRCLE_BASE_SCALE = (MAGE_NORMALIZED_SIZE / 2) / MAGE_NORMALIZED_CIRCLE_R;
-/** Подстройка 1.1–1.25 при необходимости (Railway / разные DPI). */
-const MAGE_CLIP_OVERSCAN = 1.18;
-const MAGE_CIRCLE_FILL_SCALE = MAGE_CIRCLE_BASE_SCALE * MAGE_CLIP_OVERSCAN;
+const NORMALIZED_CIRCLE_BASE_SCALE = (NORMALIZED_PRESET_CANVAS / 2) / NORMALIZED_PRESET_CIRCLE_R;
+/** Подстройка 1.1–1.25 при необходимости. */
+const NORMALIZED_CLIP_OVERSCAN = 1.18;
+const NORMALIZED_PRESET_FILL_SCALE = NORMALIZED_CIRCLE_BASE_SCALE * NORMALIZED_CLIP_OVERSCAN;
 
 export function getAvatarCropStyle(archetype?: string | null): { objectPosition: string; scale: number } {
   switch (archetype) {
     case 'mage':
-      return { objectPosition: '50% 50%', scale: MAGE_CIRCLE_FILL_SCALE };
     case 'galactic':
-      return { objectPosition: '50% 28%', scale: 1.22 };
+      return { objectPosition: '50% 50%', scale: NORMALIZED_PRESET_FILL_SCALE };
     case 'cosmonaut':
       return { objectPosition: '50% 36%', scale: 1.14 };
     default:

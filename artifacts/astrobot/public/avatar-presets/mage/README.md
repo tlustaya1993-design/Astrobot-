@@ -29,3 +29,5 @@ python scripts/normalize_avatar_circles.py --apply
 ```
 
 Из корня монорепозитория также: `pnpm run normalize-avatars` (нужны Python и зависимости выше).
+
+Тот же скрипт по умолчанию обрабатывает **Мисс Галактика** (`miss-galactica/*.webp`). Только она, без повторного прогона mage: `pnpm run normalize-avatars-galactic`.

@@ -4,6 +4,7 @@
   "license": "MIT",
   "scripts": {
     "normalize-avatars": "python scripts/normalize_avatar_circles.py --apply",
+    "normalize-avatars-galactic": "python scripts/normalize_avatar_circles.py --apply --only artifacts/astrobot/public/avatar-presets/miss-galactica/*.webp",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"

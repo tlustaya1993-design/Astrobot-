@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
 Normalize preset avatars: detect the inner gold frame circle, scale so it has a fixed
-radius, center on a square canvas, write PNG.
+radius, center on a square canvas, write PNG or WebP (same extension as source).
 
 Usage (from repo root):
   pip install -r scripts/requirements-avatar-normalize.txt
   python scripts/normalize_avatar_circles.py --apply
 
 Default is dry-run; use --apply to overwrite files. Use --inputs to add more globs.
+Galactic-only (skip mage): --apply --only "artifacts/astrobot/public/avatar-presets/miss-galactica/*.webp"
 """
 
 from __future__ import annotations
@@ -183,8 +184,19 @@ def process_file(path: str, canvas: int, target_r: float, apply: bool) -> dict:
         "target_r": target_r,
     }
     if apply:
-        tmp = p.with_name(f"{p.stem}._norm_write_.png")
-        ok = cv2.imwrite(str(tmp), out, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+        suf = p.suffix.lower()
+        if suf == ".webp":
+            tmp = p.with_name(f"{p.stem}._norm_write_.webp")
+            ok = cv2.imwrite(
+                str(tmp),
+                out,
+                [cv2.IMWRITE_WEBP_QUALITY, 95],
+            )
+        elif suf == ".png":
+            tmp = p.with_name(f"{p.stem}._norm_write_.png")
+            ok = cv2.imwrite(str(tmp), out, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+        else:
+            raise ValueError(f"Unsupported extension {suf!r}: use .png or .webp")
         if not ok:
             raise RuntimeError(f"imwrite failed: {tmp}")
         os.replace(tmp, p)
@@ -193,7 +205,7 @@ def process_file(path: str, canvas: int, target_r: float, apply: bool) -> dict:
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
-    ap = argparse.ArgumentParser(description="Normalize avatar PNGs to a square canvas.")
+    ap = argparse.ArgumentParser(description="Normalize avatar PNG/WebP to a square canvas.")
     ap.add_argument(
         "--apply",
         action="store_true",
@@ -205,7 +217,7 @@ def main() -> int:
         type=float,
         default=470.0,
         help="Target circle radius in output pixels (center = canvas/2). "
-        "If you change --canvas or this value, update MAGE_* constants in IllustratedAvatar.tsx.",
+        "If you change --canvas or this value, update NORMALIZED_PRESET_* in IllustratedAvatar.tsx.",
     )
     ap.add_argument(
         "--inputs",
@@ -213,13 +225,24 @@ def main() -> int:
         default=[],
         help="Extra glob patterns (relative to repo root)",
     )
+    ap.add_argument(
+        "--only",
+        dest="only_patterns",
+        action="append",
+        metavar="GLOB",
+        help="Only these globs (repeatable); replaces default list. Use to skip e.g. mage when already normalized.",
+    )
     args = ap.parse_args()
 
     default_globs = [
         "artifacts/astrobot/public/avatar-presets/mage/*.png",
         "artifacts/astrobot/public/avatar-presets/volshebnitsa.png",
+        "artifacts/astrobot/public/avatar-presets/miss-galactica/*.webp",
     ]
-    patterns = default_globs + args.inputs
+    if args.only_patterns:
+        patterns = args.only_patterns + args.inputs
+    else:
+        patterns = default_globs + args.inputs
     files: list[str] = []
     for pat in patterns:
         g = sorted(glob.glob(str(root / pat)))
@@ -229,12 +252,13 @@ def main() -> int:
     unique: list[str] = []
     for f in files:
         rp = str(Path(f).resolve())
-        if rp not in seen and f.lower().endswith(".png"):
+        low = f.lower()
+        if rp not in seen and (low.endswith(".png") or low.endswith(".webp")):
             seen.add(rp)
             unique.append(rp)
 
     if not unique:
-        print("No PNG files matched.", file=sys.stderr)
+        print("No PNG/WebP files matched.", file=sys.stderr)
         return 1
 
     os.chdir(root)
@@ -252,7 +276,7 @@ def main() -> int:
             return 1
 
     if not args.apply:
-        print("Dry-run only. Re-run with --apply to overwrite PNGs.")
+        print("Dry-run only. Re-run with --apply to overwrite assets.")
     return 0
 
 
