@@ -1,11 +1,13 @@
 import React from 'react';
 import { Loader2, Save } from 'lucide-react';
 import AstroAvatar, {
+  AVATAR_ARCHETYPES,
   DEFAULT_AVATAR,
   EYE_COLORS,
   HAIR_COLORS,
   HAIR_STYLES,
   ROBE_COLORS,
+  type AvatarArchetype,
   type AvatarConfig,
 } from '@/components/ui/AstroAvatar';
 
@@ -66,6 +68,13 @@ export default function AvatarEditor({
   previewSize = 136,
 }: AvatarEditorProps) {
   const current = value ?? avatarConfig ?? DEFAULT_AVATAR;
+  const archetype = current.archetype ?? 'mage';
+
+  const archetypeMeta: Record<AvatarArchetype, { extraLabel: string }> = {
+    mage: { extraLabel: 'Цвет мантии' },
+    cosmonaut: { extraLabel: 'Цвет костюма' },
+    galactic: { extraLabel: 'Цвет ауры' },
+  };
 
   return (
     <div className="space-y-5">
@@ -75,6 +84,36 @@ export default function AvatarEditor({
           style={{ width: previewSize, height: previewSize }}
         >
           <AstroAvatar config={current} size={previewSize} />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Образ</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {AVATAR_ARCHETYPES.map((a) => {
+            const archetypeConfig: AvatarConfig = { ...current, archetype: a.id };
+            const selected = archetype === a.id;
+            return (
+              <button
+                key={a.id}
+                onClick={() => onChange(archetypeConfig)}
+                className={`rounded-2xl border p-2 text-left transition-all ${
+                  selected
+                    ? 'border-primary bg-primary/10 shadow-[0_0_10px_rgba(212,175,55,0.25)]'
+                    : 'border-border/40 hover:border-primary/30 hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
+                    <AstroAvatar config={archetypeConfig} size={40} />
+                  </div>
+                  <span className={`text-xs font-medium ${selected ? 'text-primary' : 'text-foreground'}`}>
+                    {a.label}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -104,7 +143,7 @@ export default function AvatarEditor({
         onSelect={(hex) => onChange({ ...current, hairColor: hex })}
       />
       <ColorRow
-        label="Цвет мантии"
+        label={archetypeMeta[archetype].extraLabel}
         colors={ROBE_COLORS}
         selected={current.robeColor}
         onSelect={(hex) => onChange({ ...current, robeColor: hex })}
