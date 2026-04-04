@@ -36,7 +36,10 @@ export const EYE_COLORS = [
   { id: 'gray',   label: 'Серые',     hex: '#6B7280' },
 ];
 
+export type AvatarArchetype = 'mage' | 'cosmonaut' | 'galactic';
+
 export interface AvatarConfig {
+  archetype?: AvatarArchetype;
   hairStyle: string;
   hairColor: string;
   robeColor: string;
@@ -44,11 +47,55 @@ export interface AvatarConfig {
 }
 
 export const DEFAULT_AVATAR: AvatarConfig = {
+  archetype: 'mage',
   hairStyle: 'medium',
   hairColor: HAIR_COLORS[0].hex,
   robeColor: ROBE_COLORS[0].hex,
   eyeColor: EYE_COLORS[1].hex,
 };
+
+export const AVATAR_PRESETS: Array<{
+  id: string;
+  label: string;
+  config: AvatarConfig;
+}> = [
+  {
+    id: 'galactic_default',
+    label: 'Мисс Галактика',
+    config: {
+      ...DEFAULT_AVATAR,
+      archetype: 'galactic',
+      hairStyle: 'curly',
+      hairColor: HAIR_COLORS[1].hex,
+      robeColor: ROBE_COLORS[1].hex,
+      eyeColor: EYE_COLORS[4].hex,
+    },
+  },
+  {
+    id: 'cosmonaut_default',
+    label: 'Космонавтка',
+    config: {
+      ...DEFAULT_AVATAR,
+      archetype: 'cosmonaut',
+      hairStyle: 'medium',
+      hairColor: HAIR_COLORS[1].hex,
+      robeColor: ROBE_COLORS[2].hex,
+      eyeColor: EYE_COLORS[1].hex,
+    },
+  },
+  {
+    id: 'mage_default',
+    label: 'Волшебница',
+    config: {
+      ...DEFAULT_AVATAR,
+      archetype: 'mage',
+      hairStyle: 'long',
+      hairColor: HAIR_COLORS[1].hex,
+      robeColor: ROBE_COLORS[0].hex,
+      eyeColor: EYE_COLORS[2].hex,
+    },
+  },
+];
 
 const AVATAR_KEY = 'astrobot_avatar';
 
