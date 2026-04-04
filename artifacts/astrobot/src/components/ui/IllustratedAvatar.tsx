@@ -36,7 +36,7 @@ export default function IllustratedAvatar({
         src={src}
         alt="Аватар"
         className={`w-full h-full object-cover ${imageClassName}`}
-        style={{ objectPosition: 'center 28%', transform: 'scale(1.08)' }}
+        style={{ objectPosition: 'center 24%', transform: 'scale(1.16)' }}
         loading="lazy"
       />
     </div>

@@ -57,6 +57,19 @@
 }
 
 @layer base {
+  html, body, #root {
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
+  html, body {
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    touch-action: manipulation;
+  }
+
   body {
     @apply bg-background text-foreground antialiased font-sans min-h-screen selection:bg-primary/30 selection:text-primary;
     background-image: 
