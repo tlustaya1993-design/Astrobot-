@@ -6,7 +6,6 @@ import AstroAvatar, {
   EYE_COLORS,
   HAIR_COLORS,
   HAIR_STYLES,
-  ROBE_COLORS,
   type AvatarConfig,
 } from '@/components/ui/AstroAvatar';
 
@@ -68,6 +67,7 @@ export default function AvatarEditor({
 }: AvatarEditorProps) {
   const current = value ?? avatarConfig ?? DEFAULT_AVATAR;
   const archetype = current.archetype ?? DEFAULT_AVATAR.archetype ?? 'mage';
+  const hairStyles = HAIR_STYLES.filter((s) => ['short', 'medium', 'long', 'curly'].includes(s.id));
 
   const presets = AVATAR_PRESETS.map((preset) => ({
     id: preset.id,
@@ -92,15 +92,15 @@ export default function AvatarEditor({
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-center">
+      <div className="flex justify-center -mt-14 md:-mt-16">
         <div
-          className="relative rounded-full overflow-hidden border-[3px] border-primary/60 shadow-[0_0_38px_rgba(212,175,55,0.28)] bg-[#08081a]"
-          style={{ width: previewSize, height: previewSize }}
+          className="relative rounded-full overflow-hidden border-[4px] border-primary/70 shadow-[0_0_42px_rgba(212,175,55,0.35)] bg-[#08081a]"
+          style={{ width: previewSize + 68, height: previewSize + 68 }}
         >
           <img
             src={activePreset.image}
             alt={activePreset.label}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover scale-[1.18] origin-center"
             loading="lazy"
           />
           <div className="absolute inset-0 ring-1 ring-white/10 rounded-full pointer-events-none" />
@@ -127,7 +127,7 @@ export default function AvatarEditor({
                     <img
                       src={p.image}
                       alt={p.label}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover scale-[1.2] origin-center"
                       loading="lazy"
                     />
                   </div>
@@ -143,8 +143,8 @@ export default function AvatarEditor({
 
       <div className="space-y-2">
         <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Причёска</p>
-        <div className="grid grid-cols-3 gap-2">
-          {HAIR_STYLES.map((s) => (
+        <div className="grid grid-cols-4 gap-2">
+          {hairStyles.map((s) => (
             <button
               key={s.id}
               onClick={() => onChange({ ...current, hairStyle: s.id })}
@@ -165,12 +165,6 @@ export default function AvatarEditor({
         colors={HAIR_COLORS}
         selected={current.hairColor}
         onSelect={(hex) => onChange({ ...current, hairColor: hex })}
-      />
-      <ColorRow
-        label={archetype === 'cosmonaut' ? 'Цвет костюма' : 'Цвет мантии'}
-        colors={ROBE_COLORS}
-        selected={current.robeColor}
-        onSelect={(hex) => onChange({ ...current, robeColor: hex })}
       />
       <ColorRow
         label="Цвет глаз"

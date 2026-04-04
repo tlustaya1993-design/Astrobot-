@@ -133,7 +133,7 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 300 }}
           >
-            <div className="w-full max-w-2xl bg-card border-t border-border rounded-t-3xl overflow-hidden shadow-2xl">
+            <div className="w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible">
               {/* Handle */}
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 rounded-full bg-border" />
