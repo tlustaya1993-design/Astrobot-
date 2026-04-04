@@ -76,6 +76,45 @@ export default function AvatarEditor({
     galactic: { extraLabel: 'Цвет ауры' },
   };
 
+  const presets: { id: string; label: string; cfg: AvatarConfig }[] = [
+    {
+      id: 'galactic-main',
+      label: 'Галактический образ',
+      cfg: {
+        ...current,
+        archetype: 'galactic',
+        hairStyle: 'medium',
+        hairColor: '#7B3F1E',
+        eyeColor: '#3B82F6',
+        robeColor: '#6D28D9',
+      },
+    },
+    {
+      id: 'cosmonaut-main',
+      label: 'Космонавтка',
+      cfg: {
+        ...current,
+        archetype: 'cosmonaut',
+        hairStyle: 'ponytail',
+        hairColor: '#7B3F1E',
+        eyeColor: '#16A34A',
+        robeColor: '#1E3A5F',
+      },
+    },
+    {
+      id: 'mage-main',
+      label: 'Маг / Волшебница',
+      cfg: {
+        ...current,
+        archetype: 'mage',
+        hairStyle: 'medium',
+        hairColor: '#C0392B',
+        eyeColor: '#7C3AED',
+        robeColor: '#3730A3',
+      },
+    },
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex justify-center">
@@ -88,7 +127,36 @@ export default function AvatarEditor({
       </div>
 
       <div className="space-y-2">
-        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Образ</p>
+        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Готовые персонажи</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {presets.map((p) => {
+            const selected = archetype === p.cfg.archetype;
+            return (
+              <button
+                key={p.id}
+                onClick={() => onChange(p.cfg)}
+                className={`rounded-2xl border p-2 text-left transition-all ${
+                  selected
+                    ? 'border-primary bg-primary/10 shadow-[0_0_10px_rgba(212,175,55,0.25)]'
+                    : 'border-border/40 hover:border-primary/30 hover:bg-white/5'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
+                    <AstroAvatar config={p.cfg} size={40} />
+                  </div>
+                  <span className={`text-xs font-medium ${selected ? 'text-primary' : 'text-foreground'}`}>
+                    {p.label}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Текущий образ</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {AVATAR_ARCHETYPES.map((a) => {
             const archetypeConfig: AvatarConfig = { ...current, archetype: a.id };
