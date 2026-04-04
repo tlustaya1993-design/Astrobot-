@@ -8,8 +8,11 @@ import {
   GALACTIC_ALLOWED_HAIR_STYLES,
   HAIR_COLORS,
   HAIR_STYLES,
+  MAGE_ALLOWED_HAIR_COLORS,
+  MAGE_ALLOWED_HAIR_STYLES,
   type AvatarConfig,
 } from '@/components/ui/AstroAvatar';
+import { AvatarPortraitImage } from '@/components/ui/IllustratedAvatar';
 
 interface AvatarEditorProps {
   value?: AvatarConfig;
@@ -33,6 +36,21 @@ const GALACTIC_VARIANT_IMAGES = [
   '/avatar-presets/miss-galactica/galactic-curly-blonde.webp',
   '/avatar-presets/miss-galactica/galactic-curly-brunette.webp',
   '/avatar-presets/miss-galactica/galactic-curly-red.webp',
+];
+
+const MAGE_VARIANT_IMAGES = [
+  '/avatar-presets/mage/mage-short-blonde.png',
+  '/avatar-presets/mage/mage-short-brunette.png',
+  '/avatar-presets/mage/mage-short-red.png',
+  '/avatar-presets/mage/mage-medium-blonde.png',
+  '/avatar-presets/mage/mage-medium-brunette.png',
+  '/avatar-presets/mage/mage-medium-red.png',
+  '/avatar-presets/mage/mage-long-blonde.png',
+  '/avatar-presets/mage/mage-long-brunette.png',
+  '/avatar-presets/mage/mage-long-red.png',
+  '/avatar-presets/mage/mage-curly-blonde.png',
+  '/avatar-presets/mage/mage-curly-brunette.png',
+  '/avatar-presets/mage/mage-curly-red.png',
 ];
 
 function ColorRow({
@@ -82,8 +100,13 @@ export default function AvatarEditor({
 }: AvatarEditorProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // Mobile freeze fix: do not preload all 12 heavy images at once.
+    // Mobile freeze fix: do not preload all variant images at once.
     for (const src of GALACTIC_VARIANT_IMAGES.slice(0, 4)) {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = src;
+    }
+    for (const src of MAGE_VARIANT_IMAGES.slice(0, 4)) {
       const img = new Image();
       img.decoding = 'async';
       img.src = src;
@@ -94,12 +117,19 @@ export default function AvatarEditor({
   const archetype = current.archetype ?? DEFAULT_AVATAR.archetype ?? 'mage';
   const hairStyles = HAIR_STYLES.filter((s) => ['short', 'medium', 'long', 'curly'].includes(s.id));
   const isGalactic = archetype === 'galactic';
-  const visibleHairStyles = isGalactic
-    ? hairStyles.filter((s) => GALACTIC_ALLOWED_HAIR_STYLES.includes(s.id as (typeof GALACTIC_ALLOWED_HAIR_STYLES)[number]))
+  const isMage = archetype === 'mage';
+  const visibleHairStyles = isGalactic || isMage
+    ? hairStyles.filter((s) =>
+        (isGalactic ? GALACTIC_ALLOWED_HAIR_STYLES : MAGE_ALLOWED_HAIR_STYLES).includes(
+          s.id as (typeof MAGE_ALLOWED_HAIR_STYLES)[number],
+        ),
+      )
     : hairStyles;
-  const visibleHairColors = isGalactic
+  const visibleHairColors = isGalactic || isMage
     ? HAIR_COLORS.filter((c) =>
-        GALACTIC_ALLOWED_HAIR_COLORS.includes(c.hex as (typeof GALACTIC_ALLOWED_HAIR_COLORS)[number]),
+        (isGalactic ? GALACTIC_ALLOWED_HAIR_COLORS : MAGE_ALLOWED_HAIR_COLORS).includes(
+          c.hex as (typeof MAGE_ALLOWED_HAIR_COLORS)[number],
+        ),
       )
     : HAIR_COLORS;
 
@@ -110,12 +140,6 @@ export default function AvatarEditor({
       : preset.id === 'cosmonaut_default'
       ? 'Космонавтка'
       : 'Волшебница',
-    image:
-      preset.id === 'galactic_default'
-        ? '/avatar-presets/miss-galactica/galactic-medium-brunette.webp'
-        : preset.id === 'cosmonaut_default'
-        ? '/avatar-presets/cosmonautka.png'
-        : '/avatar-presets/volshebnitsa.png',
     cfg: {
       ...current,
       ...preset.config,
@@ -141,6 +165,13 @@ export default function AvatarEditor({
                       img.src = src;
                     }
                   }
+                  if (p.cfg.archetype === 'mage') {
+                    for (const src of MAGE_VARIANT_IMAGES) {
+                      const img = new Image();
+                      img.decoding = 'async';
+                      img.src = src;
+                    }
+                  }
                 }}
                 className={`rounded-2xl border p-2 text-left transition-all ${
                   selected
@@ -150,12 +181,7 @@ export default function AvatarEditor({
               >
                 <div className="flex items-center gap-2.5">
                   <div className="w-14 h-14 rounded-full overflow-hidden shrink-0 shadow-[0_0_10px_rgba(212,175,55,0.28)]">
-                    <img
-                      src={p.image}
-                      alt={p.label}
-                      className="w-full h-full object-cover scale-[1.35] origin-center object-[50%_34%]"
-                      loading="eager"
-                    />
+                    <AvatarPortraitImage config={p.cfg} className="w-full h-full object-cover" loading="eager" />
                   </div>
                   <span className={`text-xs font-medium ${selected ? 'text-primary' : 'text-foreground'}`}>
                     {p.label}
@@ -187,7 +213,7 @@ export default function AvatarEditor({
       </div>
 
       <ColorRow
-        label={isGalactic ? 'Цвет волос (3 варианта)' : 'Цвет волос'}
+        label="Цвет волос"
         colors={visibleHairColors}
         selected={current.hairColor}
         onSelect={(hex) => onChange({ ...current, hairColor: hex })}

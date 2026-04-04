@@ -154,18 +154,14 @@ export default function Chat() {
             onTouchEnd={handleTouchEnd}
           >
             <div
-              className="absolute inset-0 z-0 pointer-events-none overflow-hidden"
+              className="chat-bg absolute inset-0 z-0 overflow-hidden pointer-events-none"
               aria-hidden="true"
-            >
-              <div className="chat-column-base" />
-              <div
-                className="chat-column-photo"
-                style={{
-                  backgroundImage: `url(${import.meta.env.BASE_URL}images/chat-night-sky.png)`,
-                }}
-              />
-              <div className="chat-column-dim" />
-            </div>
+              style={
+                {
+                  "--chat-bg-image": `url("${import.meta.env.BASE_URL}images/chat-night-sky.png")`,
+                } as React.CSSProperties
+              }
+            />
 
             {/* Header */}
             <header className="relative z-40 sticky top-0 bg-background/85 backdrop-blur-xl border-b border-white/5 p-4 flex items-center justify-between shadow-sm">

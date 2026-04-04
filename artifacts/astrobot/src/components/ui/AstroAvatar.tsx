@@ -104,6 +104,10 @@ export const GALACTIC_ALLOWED_HAIR_COLORS = [
   HAIR_COLORS[3].hex, // red
 ] as const;
 
+/** Волшебница: те же 4 причёски и 3 цвета, что у «Мисс Галактика» (отдельные арты в /avatar-presets/mage/). */
+export const MAGE_ALLOWED_HAIR_STYLES = GALACTIC_ALLOWED_HAIR_STYLES;
+export const MAGE_ALLOWED_HAIR_COLORS = GALACTIC_ALLOWED_HAIR_COLORS;
+
 const AVATAR_KEY = 'astrobot_avatar';
 
 export function loadAvatar(): AvatarConfig {

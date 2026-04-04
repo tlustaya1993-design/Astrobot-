@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Pencil, Save, Trash2, X } from 'lucide-react';
 import { DEFAULT_AVATAR, type AvatarConfig } from '@/components/ui/AstroAvatar';
-import IllustratedAvatar, { resolveAvatarImage } from '@/components/ui/IllustratedAvatar';
+import IllustratedAvatar, { AvatarPortraitImage } from '@/components/ui/IllustratedAvatar';
 import { getAuthHeaders } from '@/lib/session';
 import type { Contact } from './PeoplePanel';
 import AvatarEditor from '@/components/ui/AvatarEditor';
@@ -15,14 +15,22 @@ function normalizeAvatarConfig(input: unknown): AvatarConfig {
     : DEFAULT_AVATAR.archetype;
   const hairStyleRaw = typeof v.hairStyle === 'string' ? v.hairStyle : DEFAULT_AVATAR.hairStyle;
   const hairColorRaw = typeof v.hairColor === 'string' ? v.hairColor : DEFAULT_AVATAR.hairColor;
-  const allowedGalacticStyles = new Set(['short', 'medium', 'long', 'curly']);
-  const allowedGalacticColors = new Set(['#F0C040', '#7B3F1E', '#C0392B']);
-  const hairStyle = archetype === 'galactic' && !allowedGalacticStyles.has(hairStyleRaw)
-    ? 'medium'
-    : hairStyleRaw;
-  const hairColor = archetype === 'galactic' && !allowedGalacticColors.has(hairColorRaw.toUpperCase())
-    ? '#7B3F1E'
-    : hairColorRaw;
+  const allowedVariantStyles = new Set(['short', 'medium', 'long', 'curly']);
+  const allowedVariantColors = new Set(['#F0C040', '#7B3F1E', '#C0392B']);
+  const hairStyle =
+    (archetype === 'galactic' || archetype === 'mage') && !allowedVariantStyles.has(hairStyleRaw)
+      ? archetype === 'mage'
+        ? 'long'
+        : 'medium'
+      : hairStyleRaw;
+  const hairColor =
+    archetype === 'galactic' || archetype === 'mage'
+      ? typeof hairColorRaw === 'string' &&
+        hairColorRaw.startsWith('#') &&
+        allowedVariantColors.has(hairColorRaw.toUpperCase())
+        ? hairColorRaw.toUpperCase()
+        : '#7B3F1E'
+      : hairColorRaw;
   return {
     archetype,
     hairStyle,
@@ -265,10 +273,9 @@ export default function ContactProfileSheet({
               {section === 'avatar' && (
                 <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-12 md:-top-20 z-10">
                   <div className="relative rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[220px] h-[220px] md:w-[274px] md:h-[274px] overflow-hidden">
-                    <img
-                      src={resolveAvatarImage(avatarConfig)}
-                      alt="Аватар контакта"
-                      className="w-full h-full object-cover scale-[1.34] origin-center object-[50%_22%]"
+                    <AvatarPortraitImage
+                      config={avatarConfig}
+                      className="w-full h-full object-cover"
                       loading="lazy"
                     />
                     <div className="absolute inset-0 rounded-full ring-1 ring-white/10 pointer-events-none" />

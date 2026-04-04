@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, LogOut, LogIn, BrainCircuit, Sparkles, Trash2 } from 'lucide-react';
 import { type AvatarConfig, saveAvatar } from '@/components/ui/AstroAvatar';
-import IllustratedAvatar, { resolveAvatarImage } from '@/components/ui/IllustratedAvatar';
+import IllustratedAvatar, { AvatarPortraitImage } from '@/components/ui/IllustratedAvatar';
 import AvatarEditor from '@/components/ui/AvatarEditor';
 import { getAuthHeaders } from '@/lib/session';
 import { useAuth } from '@/context/AuthContext';
@@ -160,10 +160,9 @@ export default function ProfileSheet({ open, onClose, avatarConfig, onAvatarChan
               {section === 'avatar' && (
                 <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-2 md:-top-16 z-10">
                   <div className="relative rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[220px] h-[220px] md:w-[286px] md:h-[286px] overflow-hidden">
-                    <img
-                      src={resolveAvatarImage(localAvatar)}
-                      alt="Аватар персонажа"
-                      className="w-full h-full object-cover scale-[1.34] origin-center object-[50%_22%]"
+                    <AvatarPortraitImage
+                      config={localAvatar}
+                      className="w-full h-full object-cover"
                       loading="lazy"
                     />
                     <div className="absolute inset-0 rounded-full ring-1 ring-white/10" />
