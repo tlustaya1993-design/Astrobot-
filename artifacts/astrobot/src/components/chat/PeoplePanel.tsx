@@ -6,12 +6,17 @@ import AddContactModal from './AddContactModal';
 import ProfileSheet from '@/components/profile/ProfileSheet';
 import { loadAvatar, type AvatarConfig, DEFAULT_AVATAR } from '@/components/ui/AstroAvatar';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
+import ContactProfileSheet from './ContactProfileSheet';
 
 export interface Contact {
   id: number;
   name: string;
   relation?: string | null;
   birthDate: string;
+  birthTime?: string | null;
+  birthPlace?: string | null;
+  birthLat?: number | null;
+  birthLng?: number | null;
   avatarConfig?: AvatarConfig | null;
 }
 
@@ -24,6 +29,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [openedContact, setOpenedContact] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
 
@@ -64,7 +70,14 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
         {/* "Я" chip — shows avatar, opens profile */}
         <motion.button
           whileTap={{ scale: 0.93 }}
-          onClick={() => setShowProfile(true)}
+          onClick={() => {
+            // When in synastry, first return to "self" chat context.
+            if (selectedContactId !== null) {
+              onSelect(null);
+              return;
+            }
+            setShowProfile(true);
+          }}
           className={`flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium shrink-0 transition-all border ${
             selectedContactId === null
               ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
@@ -88,7 +101,13 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
               className="relative group shrink-0"
             >
               <button
-                onClick={() => onSelect(selectedContactId === contact.id ? null : contact.id)}
+                onClick={() => {
+                  if (selectedContactId === contact.id) {
+                    setOpenedContact(contact);
+                    return;
+                  }
+                  onSelect(contact.id);
+                }}
                 className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
                   selectedContactId === contact.id
                     ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
@@ -157,6 +176,21 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
         onClose={() => setShowProfile(false)}
         avatarConfig={avatarConfig}
         onAvatarChange={(cfg) => setAvatarConfig(cfg)}
+      />
+
+      <ContactProfileSheet
+        open={Boolean(openedContact)}
+        contact={openedContact}
+        onClose={() => setOpenedContact(null)}
+        onUpdated={(updated) => {
+          setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+          setOpenedContact(updated);
+        }}
+        onDeleted={(id) => {
+          setContacts((prev) => prev.filter((c) => c.id !== id));
+          if (selectedContactId === id) onSelect(null);
+          setOpenedContact(null);
+        }}
       />
     </>
   );

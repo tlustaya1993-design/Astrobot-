@@ -43,6 +43,17 @@ export default function DailyForecastCard({ onAskQuestion, hidden = false, onTog
   const [data, setData] = useState<ForecastData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (expanded) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [expanded]);
+
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -165,43 +176,63 @@ export default function DailyForecastCard({ onAskQuestion, hidden = false, onTog
           ) : null}
         </div>
 
-        {/* Expanded content */}
+        {/* Expanded content as overlay so chat layout doesn't jump */}
         <AnimatePresence>
           {expanded && sentences.length > 1 && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              <div className="px-4 pb-3 space-y-2 border-t border-white/5 pt-3">
-                {sentences.slice(1).map((s, i) => (
-                  <p key={i} className="text-sm text-foreground/80 leading-relaxed">
-                    {s}
-                  </p>
-                ))}
-
-                {/* Quick follow-up prompts */}
-                {onAskQuestion && (
-                  <div className="flex flex-wrap gap-1.5 pt-2">
-                    {[
-                      "Расскажи подробнее о сегодняшней энергии",
-                      "Что мне стоит сделать сегодня?",
-                      "Какие транзиты активны сейчас?",
-                    ].map((q, i) => (
-                      <button
-                        key={i}
-                        onClick={() => { onAskQuestion(q); setExpanded(false); }}
-                        className="text-xs px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary/80 hover:bg-primary/20 hover:text-primary transition-colors"
-                      >
-                        {q}
-                      </button>
-                    ))}
+            <>
+              <motion.div
+                className="fixed inset-0 z-[115] bg-black/55 backdrop-blur-sm"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setExpanded(false)}
+              />
+              <motion.div
+                className="fixed inset-x-0 bottom-0 z-[120] flex justify-center px-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+                initial={{ y: '100%', opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: '100%', opacity: 0 }}
+                transition={{ type: 'spring', damping: 30, stiffness: 280 }}
+              >
+                <div className="w-full max-w-lg rounded-2xl border border-primary/25 bg-card shadow-2xl max-h-[70vh] overflow-y-auto">
+                  <div className="sticky top-0 z-10 bg-card/95 backdrop-blur border-b border-white/5 px-4 py-3 flex items-center justify-between">
+                    <p className="text-sm font-medium text-foreground">Прогноз на день</p>
+                    <button
+                      onClick={() => setExpanded(false)}
+                      className="text-xs px-2.5 py-1 rounded-full border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/30 transition"
+                    >
+                      Закрыть
+                    </button>
                   </div>
-                )}
-              </div>
-            </motion.div>
+                  <div className="px-4 pb-4 pt-3 space-y-2">
+                    {sentences.slice(1).map((s, i) => (
+                      <p key={i} className="text-sm text-foreground/80 leading-relaxed">
+                        {s}
+                      </p>
+                    ))}
+
+                    {/* Quick follow-up prompts */}
+                    {onAskQuestion && (
+                      <div className="flex flex-wrap gap-1.5 pt-2">
+                        {[
+                          "Расскажи подробнее о сегодняшней энергии",
+                          "Что мне стоит сделать сегодня?",
+                          "Какие транзиты активны сейчас?",
+                        ].map((q, i) => (
+                          <button
+                            key={i}
+                            onClick={() => { onAskQuestion(q); setExpanded(false); }}
+                            className="text-xs px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary/80 hover:bg-primary/20 hover:text-primary transition-colors"
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
       </div>

@@ -105,6 +105,7 @@ export default function Chat() {
   };
 
   const isNew = !conversationId && displayMessages.length === 0;
+  const lockIntroViewport = isNew && !isLoading && !isStreaming;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -200,7 +201,9 @@ export default function Chat() {
             <div
               ref={messagesContainerRef}
               onScroll={handleMessagesScroll}
-              className="flex-1 overflow-y-auto p-4 space-y-6"
+              className={`flex-1 p-4 space-y-6 overflow-x-hidden ${
+                lockIntroViewport ? 'overflow-y-hidden' : 'overflow-y-auto'
+              }`}
             >
             {isLoading && (
               <div className="flex justify-center py-10">
@@ -212,20 +215,23 @@ export default function Chat() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center justify-center py-8 text-center"
+                className="relative flex flex-col items-center justify-center min-h-full py-8 text-center"
               >
                 {/* Daily Forecast Card */}
                 {!selectedContactId && (
-                  <div className="w-full max-w-md mb-6">
+                  <div className="absolute top-0 left-0 right-0 z-20 px-2 md:px-0 pointer-events-none">
+                    <div className="w-full max-w-md mx-auto pointer-events-auto">
                     <DailyForecastCard
                       onAskQuestion={(q) => { setInputValue(q); }}
                       hidden={isDailyForecastHidden}
                       onToggleHidden={() => setDailyForecastHidden(!isDailyForecastHidden)}
+                      overlay
                     />
+                    </div>
                   </div>
                 )}
 
-                <div className="w-16 h-16 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-5 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
+                <div className="w-16 h-16 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-5 shadow-[0_0_30px_rgba(212,175,55,0.15)] mt-28">
                   <Sparkles className="w-8 h-8 text-primary" />
                 </div>
                 <h3 className="text-xl font-display font-semibold mb-2">О чём спросить звёзды?</h3>
@@ -258,28 +264,28 @@ export default function Chat() {
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                  </div>
-                )}
-                <div className={`max-w-[82%] rounded-2xl p-4 shadow-lg ${
+                <div className={`max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 shadow-lg break-words ${
                   msg.role === 'user'
                     ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm'
-                    : 'bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none'
+                    : 'bg-secondary/35 border border-primary/20 text-foreground rounded-tl-sm'
                 }`}>
-                  {msg.role === 'assistant' ? <AstroMarkdown content={msg.content} /> : msg.content}
+                  {msg.role === 'assistant' ? (
+                    <div className="assistant-bubble prose prose-invert prose-p:leading-relaxed prose-sm max-w-none">
+                      <AstroMarkdown content={msg.content} />
+                    </div>
+                  ) : msg.content}
                 </div>
               </motion.div>
             ))}
 
             {isStreaming && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
-                <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden">
-                  <Sparkles className="w-4 h-4 text-primary" />
-                </div>
-                <div className="max-w-[82%] rounded-2xl p-4 shadow-lg bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-sm max-w-none">
-                  {streamingText ? <AstroMarkdown content={streamingText} /> : (
+                <div className="max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 shadow-lg break-words bg-secondary/35 border border-primary/20 text-foreground rounded-tl-sm">
+                  {streamingText ? (
+                    <div className="assistant-bubble prose prose-invert prose-sm max-w-none">
+                      <AstroMarkdown content={streamingText} />
+                    </div>
+                  ) : (
                     <div className="flex space-x-1 py-1">
                       <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
                       <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
@@ -338,7 +344,6 @@ export default function Chat() {
       <PaywallSheet
         open={Boolean(paywallState?.open)}
         onClose={closePaywall}
-        requireAuth={!isLoggedIn}
       />
     </>
   );
