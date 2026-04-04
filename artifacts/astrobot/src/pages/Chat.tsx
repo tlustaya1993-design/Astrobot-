@@ -12,6 +12,7 @@ import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import ChatSidebar from '@/components/chat/ChatSidebar';
 import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
+import PaywallSheet from '@/components/billing/PaywallSheet';
 
 const SUGGESTED_PROMPTS = [
   "Расскажи о моей натальной карте",
@@ -33,7 +34,15 @@ export default function Chat() {
     }
   );
 
-  const { localMessages, isStreaming, streamingText, sendMessage, clearLocalMessages } = useChatStream(conversationId);
+  const {
+    localMessages,
+    isStreaming,
+    streamingText,
+    sendMessage,
+    clearLocalMessages,
+    paywallState,
+    closePaywall,
+  } = useChatStream(conversationId);
   const [inputValue, setInputValue] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -299,6 +308,12 @@ export default function Chat() {
         open={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         initialTab="login"
+      />
+
+      <PaywallSheet
+        open={Boolean(paywallState?.open)}
+        onClose={closePaywall}
+        reason={paywallState?.message}
       />
     </>
   );
