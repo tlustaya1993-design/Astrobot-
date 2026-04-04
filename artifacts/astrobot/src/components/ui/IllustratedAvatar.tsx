@@ -14,7 +14,7 @@ interface IllustratedAvatarProps {
   imageClassName?: string;
 }
 
-function resolveAvatarImage(config?: AvatarConfig | null): string {
+export function resolveAvatarImage(config?: AvatarConfig | null): string {
   const archetype = config?.archetype ?? 'mage';
   return PRESET_IMAGE_BY_ARCHETYPE[archetype] ?? PRESET_IMAGE_BY_ARCHETYPE.mage;
 }
