@@ -204,7 +204,8 @@ def main() -> int:
         "--target-r",
         type=float,
         default=470.0,
-        help="Target circle radius in output pixels (center = canvas/2)",
+        help="Target circle radius in output pixels (center = canvas/2). "
+        "If you change --canvas or this value, update MAGE_* constants in IllustratedAvatar.tsx.",
     )
     ap.add_argument(
         "--inputs",

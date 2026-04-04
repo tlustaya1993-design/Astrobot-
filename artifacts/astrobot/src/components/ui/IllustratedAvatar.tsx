@@ -34,14 +34,20 @@ function resolveMageVariantImage(config?: AvatarConfig | null): string {
   return `/avatar-presets/mage/mage-${style}-${color}.png`;
 }
 
+/** Должно совпадать с `--canvas` / `--target-r` в scripts/normalize_avatar_circles.py */
+const MAGE_NORMALIZED_SIZE = 1024;
+const MAGE_NORMALIZED_CIRCLE_R = 470;
+
 /**
- * Кадрирование для растров, которые ещё не прогнаны через scripts/normalize_avatar_circles.py.
- * Mage после нормализации — квадрат 1024², круг по центру → без доп. scale.
+ * Mage: после нормализации круг контента r=470 в квадрате 1024; вписанная в квадрат окружность r=512.
+ * Лёгкий zoom, чтобы золотая рамка заполняла круг клипа без тёмного зазора.
  */
+const MAGE_CIRCLE_FILL_SCALE = (MAGE_NORMALIZED_SIZE / 2) / MAGE_NORMALIZED_CIRCLE_R;
+
 export function getAvatarCropStyle(archetype?: string | null): { objectPosition: string; scale: number } {
   switch (archetype) {
     case 'mage':
-      return { objectPosition: '50% 50%', scale: 1 };
+      return { objectPosition: '50% 50%', scale: MAGE_CIRCLE_FILL_SCALE };
     case 'galactic':
       return { objectPosition: '50% 28%', scale: 1.22 };
     case 'cosmonaut':
