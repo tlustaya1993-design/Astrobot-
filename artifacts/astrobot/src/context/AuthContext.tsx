@@ -11,6 +11,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (token: string, sessionId: string, email: string) => void;
   logout: () => void;
+  openAuthModal: (tab?: 'login' | 'register') => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -20,6 +21,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoggedIn: false,
     email: null,
     loading: true,
+  });
+  const [authModalState, setAuthModalState] = useState<{ open: boolean; tab: 'login' | 'register' }>({
+    open: false,
+    tab: 'login',
   });
 
   useEffect(() => {
@@ -53,9 +58,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ isLoggedIn: false, email: null, loading: false });
   }, []);
 
+  const openAuthModal = useCallback((tab: 'login' | 'register' = 'login') => {
+    setAuthModalState({ open: true, tab });
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={{ ...state, login, logout, openAuthModal }}>
       {children}
+      <AuthModalHost
+        open={authModalState.open}
+        tab={authModalState.tab}
+        onClose={() => setAuthModalState((prev) => ({ ...prev, open: false }))}
+      />
     </AuthContext.Provider>
   );
 }
@@ -64,4 +78,21 @@ export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
   return ctx;
+}
+
+function AuthModalHost({
+  open,
+  tab,
+  onClose,
+}: {
+  open: boolean;
+  tab: 'login' | 'register';
+  onClose: () => void;
+}) {
+  const AuthModal = require('@/components/AuthModal').default as React.ComponentType<{
+    open: boolean;
+    onClose: () => void;
+    initialTab?: 'login' | 'register';
+  }>;
+  return <AuthModal open={open} onClose={onClose} initialTab={tab} />;
 }

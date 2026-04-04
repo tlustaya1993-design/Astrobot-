@@ -134,6 +134,22 @@ export async function createYooKassaPayment(
   return (await response.json()) as YooKassaCreatePaymentResponse;
 }
 
+export async function getYooKassaPayment(paymentId: string): Promise<YooKassaPaymentObject> {
+  const response = await fetch(`${getBaseUrl()}/payments/${paymentId}`, {
+    method: "GET",
+    headers: {
+      Authorization: getAuthHeader(),
+    },
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`YooKassa get payment failed: ${response.status} ${body}`);
+  }
+
+  return (await response.json()) as YooKassaPaymentObject;
+}
+
 export function parseYooKassaWebhook(body: unknown): YooKassaWebhookEvent {
   if (!body || typeof body !== "object") {
     throw new Error("Invalid webhook payload");
@@ -147,6 +163,7 @@ export function parseYooKassaWebhook(body: unknown): YooKassaWebhookEvent {
 
 // Backward-compatible aliases for variant spellings.
 export const createYookassaPayment = createYooKassaPayment;
+export const getYookassaPayment = getYooKassaPayment;
 export const parseYookassaNotification = parseYooKassaWebhook;
 
 // Signature validation can be added later if/when YooKassa webhook signing is enabled.

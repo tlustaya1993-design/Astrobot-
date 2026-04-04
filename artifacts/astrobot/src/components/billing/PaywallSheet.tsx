@@ -1,6 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, X } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import AuthModal from '@/components/AuthModal';
+import { toast } from '@/hooks/use-toast';
+import { getAuthHeaders } from '@/lib/session';
 
 const PACKAGES = [
   {
@@ -26,12 +30,15 @@ const PACKAGES = [
 interface PaywallSheetProps {
   open: boolean;
   onClose: () => void;
+  reason?: string;
 }
 
-export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
+export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProps) {
+  const { isLoggedIn, email } = useAuth();
   const [selectedCode, setSelectedCode] = useState<(typeof PACKAGES)[number]['code'] | null>('pack10');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const selected = useMemo(
     () => PACKAGES.find((p) => p.code === selectedCode) ?? null,
     [selectedCode],
@@ -39,15 +46,19 @@ export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
 
   const handlePay = async () => {
     if (!selected || loading) return;
+    if (!isLoggedIn) {
+      setShowAuthModal(true);
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
-      const returnUrl = `${window.location.origin}/chat`;
+      const returnUrl = `${window.location.origin}/chat?payment=success`;
       const res = await fetch('/api/billing/payments/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(await import('@/lib/session')).getAuthHeaders(),
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           packageCode: selected.code,
@@ -61,6 +72,17 @@ export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
     } catch {
       setError('Не удалось открыть оплату. Попробуйте ещё раз.');
       setLoading(false);
+    }
+  };
+
+  const handleAuthClose = () => {
+    setShowAuthModal(false);
+    if (isLoggedIn) {
+      toast({
+        title: 'Вы вошли в аккаунт',
+        description:
+          'Отлично! После оплаты история и память AstroBot сохраняются и синхронизируются между устройствами.',
+      });
     }
   };
 
@@ -100,6 +122,19 @@ export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
                   <p className="text-sm text-muted-foreground mt-1">
                     Выберите пакет запросов и оплатите через YooKassa в рублях.
                   </p>
+                  {!isLoggedIn && (
+                    <button
+                      onClick={() => setShowAuthModal(true)}
+                      className="mt-2 text-xs text-primary hover:text-primary/80 underline underline-offset-2"
+                    >
+                      Сначала войдите/зарегистрируйтесь по email, чтобы получить чек и синхронизировать память
+                    </button>
+                  )}
+                  {isLoggedIn && email && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Чек будет отправлен на: <span className="text-foreground">{email}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -130,6 +165,9 @@ export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
                 {error && (
                   <p className="text-xs text-red-400">{error}</p>
                 )}
+                {reason && !error && (
+                  <p className="text-xs text-muted-foreground">{reason}</p>
+                )}
 
                 <button
                   onClick={handlePay}
@@ -146,6 +184,7 @@ export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
               </div>
             </div>
           </motion.div>
+          <AuthModal open={showAuthModal} onClose={handleAuthClose} initialTab="register" />
         </>
       )}
     </AnimatePresence>
