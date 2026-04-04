@@ -84,7 +84,7 @@ export function AvatarPortraitImage({
     <img
       src={src}
       alt="Аватар"
-      className={className}
+      className={['block', className].filter(Boolean).join(' ')}
       loading={loading}
       style={{
         objectPosition: crop.objectPosition,
