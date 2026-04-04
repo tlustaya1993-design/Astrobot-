@@ -1,13 +1,12 @@
 import React from 'react';
 import { Loader2, Save } from 'lucide-react';
 import AstroAvatar, {
-  AVATAR_ARCHETYPES,
+  AVATAR_PRESETS,
   DEFAULT_AVATAR,
   EYE_COLORS,
   HAIR_COLORS,
   HAIR_STYLES,
   ROBE_COLORS,
-  type AvatarArchetype,
   type AvatarConfig,
 } from '@/components/ui/AstroAvatar';
 
@@ -68,61 +67,43 @@ export default function AvatarEditor({
   previewSize = 136,
 }: AvatarEditorProps) {
   const current = value ?? avatarConfig ?? DEFAULT_AVATAR;
-  const archetype = current.archetype ?? 'mage';
+  const archetype = current.archetype ?? DEFAULT_AVATAR.archetype ?? 'mage';
 
-  const archetypeMeta: Record<AvatarArchetype, { extraLabel: string }> = {
-    mage: { extraLabel: 'Цвет мантии' },
-    cosmonaut: { extraLabel: 'Цвет костюма' },
-    galactic: { extraLabel: 'Цвет ауры' },
-  };
+  const presets = AVATAR_PRESETS.map((preset) => ({
+    id: preset.id,
+    label: preset.id === 'galactic_default'
+      ? 'Мисс Галактика'
+      : preset.id === 'cosmonaut_default'
+      ? 'Космонавтка'
+      : 'Волшебница',
+    image:
+      preset.id === 'galactic_default'
+        ? '/avatar-presets/miss-galactica.png'
+        : preset.id === 'cosmonaut_default'
+        ? '/avatar-presets/cosmonautka.png'
+        : '/avatar-presets/volshebnitsa.png',
+    cfg: {
+      ...current,
+      ...preset.config,
+    } satisfies AvatarConfig,
+  }));
 
-  const presets: { id: string; label: string; cfg: AvatarConfig }[] = [
-    {
-      id: 'galactic-main',
-      label: 'Галактический образ',
-      cfg: {
-        ...current,
-        archetype: 'galactic',
-        hairStyle: 'medium',
-        hairColor: '#7B3F1E',
-        eyeColor: '#3B82F6',
-        robeColor: '#6D28D9',
-      },
-    },
-    {
-      id: 'cosmonaut-main',
-      label: 'Космонавтка',
-      cfg: {
-        ...current,
-        archetype: 'cosmonaut',
-        hairStyle: 'ponytail',
-        hairColor: '#7B3F1E',
-        eyeColor: '#16A34A',
-        robeColor: '#1E3A5F',
-      },
-    },
-    {
-      id: 'mage-main',
-      label: 'Маг / Волшебница',
-      cfg: {
-        ...current,
-        archetype: 'mage',
-        hairStyle: 'medium',
-        hairColor: '#C0392B',
-        eyeColor: '#7C3AED',
-        robeColor: '#3730A3',
-      },
-    },
-  ];
+  const activePreset = presets.find((p) => p.cfg.archetype === archetype) ?? presets[0];
 
   return (
     <div className="space-y-5">
       <div className="flex justify-center">
         <div
-          className="rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_24px_rgba(212,175,55,0.25)]"
+          className="relative rounded-full overflow-hidden border-[3px] border-primary/60 shadow-[0_0_38px_rgba(212,175,55,0.28)] bg-[#08081a]"
           style={{ width: previewSize, height: previewSize }}
         >
-          <AstroAvatar config={current} size={previewSize} />
+          <img
+            src={activePreset.image}
+            alt={activePreset.label}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+          <div className="absolute inset-0 ring-1 ring-white/10 rounded-full pointer-events-none" />
         </div>
       </div>
 
@@ -137,46 +118,21 @@ export default function AvatarEditor({
                 onClick={() => onChange(p.cfg)}
                 className={`rounded-2xl border p-2 text-left transition-all ${
                   selected
-                    ? 'border-primary bg-primary/10 shadow-[0_0_10px_rgba(212,175,55,0.25)]'
-                    : 'border-border/40 hover:border-primary/30 hover:bg-white/5'
+                    ? 'border-primary bg-primary/15 shadow-[0_0_18px_rgba(212,175,55,0.24)]'
+                    : 'border-border/40 hover:border-primary/40 hover:bg-white/5'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
-                    <AstroAvatar config={p.cfg} size={40} />
+                  <div className="w-11 h-11 rounded-full overflow-hidden border border-primary/45 shrink-0 shadow-[0_0_10px_rgba(212,175,55,0.28)]">
+                    <img
+                      src={p.image}
+                      alt={p.label}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
                   </div>
                   <span className={`text-xs font-medium ${selected ? 'text-primary' : 'text-foreground'}`}>
                     {p.label}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Текущий образ</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {AVATAR_ARCHETYPES.map((a) => {
-            const archetypeConfig: AvatarConfig = { ...current, archetype: a.id };
-            const selected = archetype === a.id;
-            return (
-              <button
-                key={a.id}
-                onClick={() => onChange(archetypeConfig)}
-                className={`rounded-2xl border p-2 text-left transition-all ${
-                  selected
-                    ? 'border-primary bg-primary/10 shadow-[0_0_10px_rgba(212,175,55,0.25)]'
-                    : 'border-border/40 hover:border-primary/30 hover:bg-white/5'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
-                    <AstroAvatar config={archetypeConfig} size={40} />
-                  </div>
-                  <span className={`text-xs font-medium ${selected ? 'text-primary' : 'text-foreground'}`}>
-                    {a.label}
                   </span>
                 </div>
               </button>
@@ -211,7 +167,7 @@ export default function AvatarEditor({
         onSelect={(hex) => onChange({ ...current, hairColor: hex })}
       />
       <ColorRow
-        label={archetypeMeta[archetype].extraLabel}
+        label={archetype === 'cosmonaut' ? 'Цвет костюма' : 'Цвет мантии'}
         colors={ROBE_COLORS}
         selected={current.robeColor}
         onSelect={(hex) => onChange({ ...current, robeColor: hex })}
