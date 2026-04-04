@@ -13,6 +13,7 @@ import ChatSidebar from '@/components/chat/ChatSidebar';
 import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
 import PaywallSheet from '@/components/billing/PaywallSheet';
+import { useAuth } from '@/context/AuthContext';
 
 const SUGGESTED_PROMPTS = [
   "Расскажи о моей натальной карте",
@@ -51,6 +52,7 @@ export default function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
+  const { isLoggedIn } = useAuth();
 
   // Swipe-from-left-edge detection
   const touchStartX = useRef(0);
@@ -313,6 +315,7 @@ export default function Chat() {
       <PaywallSheet
         open={Boolean(paywallState?.open)}
         onClose={closePaywall}
+        requireAuth={!isLoggedIn}
       />
     </>
   );

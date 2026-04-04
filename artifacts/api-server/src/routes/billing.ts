@@ -11,7 +11,6 @@ import { logger } from "../lib/logger.js";
 import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedEmail,
-  normalizeEmail,
 } from "../lib/billing-policy.js";
 
 const router: IRouter = Router();
@@ -29,6 +28,8 @@ const PACKAGE_CONFIG: Record<
 
 const DEFAULT_RECEIPT_EMAIL = "billing@astrobot.app";
 let paymentsTableReady: Promise<void> | null = null;
+
+const PAYMENT_SUCCESS_RETURN_FLAG = "payment=success";
 
 function isPackageCode(value: unknown): value is PackageCode {
   return typeof value === "string" && value in PACKAGE_CONFIG;
@@ -66,6 +67,17 @@ function normalizeReceiptEmail(value: string | null | undefined): string {
     return DEFAULT_RECEIPT_EMAIL;
   }
   return email;
+}
+
+function appendReturnFlag(returnUrl: string): string {
+  try {
+    const url = new URL(returnUrl);
+    url.searchParams.set("payment", "success");
+    return url.toString();
+  } catch {
+    const separator = returnUrl.includes("?") ? "&" : "?";
+    return `${returnUrl}${separator}${PAYMENT_SUCCESS_RETURN_FLAG}`;
+  }
 }
 
 async function ensurePaymentsTableExists(): Promise<void> {
@@ -158,6 +170,7 @@ router.post("/payments/create", async (req, res) => {
 
   const pkg = PACKAGE_CONFIG[packageCode];
   const appPaymentId = randomUUID();
+  const paymentReturnUrl = appendReturnFlag(returnUrl);
 
   await ensureUserSession(sessionId);
   await ensurePaymentsTableExists();
@@ -178,7 +191,7 @@ router.post("/payments/create", async (req, res) => {
         capture: true,
         confirmation: {
           type: "redirect",
-          return_url: returnUrl,
+          return_url: paymentReturnUrl,
         },
         description: pkg.title,
         metadata: {

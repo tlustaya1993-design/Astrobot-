@@ -9,6 +9,7 @@ type PaywallState = {
   freeRemaining?: number;
   required?: number;
   balance?: number;
+  wantsAuth?: boolean;
 };
 
 export function useChatStream(conversationId?: number) {
