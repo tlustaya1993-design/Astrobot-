@@ -9,6 +9,18 @@ const PACKAGES = [
     subtitle: 'Подходит для быстрого продолжения диалога',
     price: '399 ₽',
   },
+  {
+    code: 'pack50',
+    title: '50 запросов',
+    subtitle: 'Оптимально для регулярного использования',
+    price: '1499 ₽',
+  },
+  {
+    code: 'pack100',
+    title: '100 запросов',
+    subtitle: 'Максимально выгодный пакет',
+    price: '2499 ₽',
+  },
 ] as const;
 
 interface PaywallSheetProps {
@@ -19,6 +31,7 @@ interface PaywallSheetProps {
 export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
   const [selectedCode, setSelectedCode] = useState<(typeof PACKAGES)[number]['code'] | null>('pack10');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const selected = useMemo(
     () => PACKAGES.find((p) => p.code === selectedCode) ?? null,
     [selectedCode],
@@ -26,12 +39,16 @@ export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
 
   const handlePay = async () => {
     if (!selected || loading) return;
+    setError(null);
     setLoading(true);
     try {
       const returnUrl = `${window.location.origin}/chat`;
       const res = await fetch('/api/billing/payments/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await import('@/lib/session')).getAuthHeaders(),
+        },
         body: JSON.stringify({
           packageCode: selected.code,
           returnUrl,
@@ -42,6 +59,7 @@ export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
       if (!data.confirmationUrl) throw new Error('Не пришла ссылка на оплату');
       window.location.href = data.confirmationUrl;
     } catch {
+      setError('Не удалось открыть оплату. Попробуйте ещё раз.');
       setLoading(false);
     }
   };
@@ -108,6 +126,10 @@ export default function PaywallSheet({ open, onClose }: PaywallSheetProps) {
                     );
                   })}
                 </div>
+
+                {error && (
+                  <p className="text-xs text-red-400">{error}</p>
+                )}
 
                 <button
                   onClick={handlePay}

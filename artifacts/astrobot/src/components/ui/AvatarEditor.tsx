@@ -91,8 +91,8 @@ export default function AvatarEditor({
   const activePreset = presets.find((p) => p.cfg.archetype === archetype) ?? presets[0];
 
   return (
-    <div className="space-y-5">
-      <div className="flex justify-center -mt-20 md:-mt-24 relative z-20">
+    <div className="relative pt-28 space-y-5">
+      <div className="absolute left-1/2 -translate-x-1/2 -top-28 md:-top-32 z-30">
         <div
           className="relative rounded-full overflow-hidden border-[4px] border-primary/70 shadow-[0_0_42px_rgba(212,175,55,0.35)] bg-[#08081a]"
           style={{ width: previewSize + 92, height: previewSize + 92 }}
@@ -100,7 +100,7 @@ export default function AvatarEditor({
           <img
             src={activePreset.image}
             alt={activePreset.label}
-            className="w-full h-full object-cover scale-[1.26] origin-center object-[50%_30%]"
+            className="w-full h-full object-cover scale-[1.3] origin-center object-[50%_24%]"
             loading="lazy"
           />
           <div className="absolute inset-0 ring-1 ring-white/10 rounded-full pointer-events-none" />

@@ -313,7 +313,6 @@ export default function Chat() {
       <PaywallSheet
         open={Boolean(paywallState?.open)}
         onClose={closePaywall}
-        reason={paywallState?.message}
       />
     </>
   );
