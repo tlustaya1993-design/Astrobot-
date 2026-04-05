@@ -345,13 +345,27 @@ export default function ContactProfileSheet({
               )}
 
               {section === 'avatar' && (
-                <div className="px-5 pb-8 pt-[10.25rem] md:pt-[12.5rem] space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
-                  <AvatarEditor
-                    value={avatarConfig}
-                    onChange={setAvatarConfig}
-                    onSave={handleSaveAvatar}
-                    saving={loading}
-                  />
+                <div className="flex flex-col max-h-[min(85vh,720px)] min-h-0">
+                  <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-5 pt-[10.25rem] md:pt-[12.5rem] pb-4 space-y-5">
+                    <AvatarEditor
+                      value={avatarConfig}
+                      onChange={setAvatarConfig}
+                      onSave={handleSaveAvatar}
+                      saving={loading}
+                      hideSaveButton
+                    />
+                  </div>
+                  <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border/60 bg-card/95 backdrop-blur-md">
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => void handleSaveAvatar()}
+                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                    >
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Сохранить аватар
+                    </button>
+                  </div>
                 </div>
               )}
 

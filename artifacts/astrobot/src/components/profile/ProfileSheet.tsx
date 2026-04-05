@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, LogOut, LogIn, BrainCircuit, Sparkles, Trash2, Pencil } from "lucide-react";
+import { X, LogOut, LogIn, BrainCircuit, Sparkles, Trash2, Pencil, Loader2, Save } from "lucide-react";
 import { type AvatarConfig, DEFAULT_AVATAR } from "@/components/ui/AstroAvatar";
 import IllustratedAvatar, { AvatarPortraitImage } from "@/components/ui/IllustratedAvatar";
 import AvatarEditor from "@/components/ui/AvatarEditor";
@@ -551,19 +551,37 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
               )}
 
               {section === "avatar" && (
-                <div className="px-5 pb-8 pt-[14rem] md:pt-[13.25rem] space-y-5 max-h-[75vh] overflow-y-auto overflow-x-visible">
-                  {profileError && (
-                    <p className="text-sm text-destructive" role="alert">
-                      {profileError}
-                    </p>
-                  )}
-                  <AvatarEditor
-                    avatarConfig={localAvatar}
-                    onChange={setLocalAvatar}
-                    onSave={() => void handleSaveAvatar()}
-                    saving={avatarSaving}
-                    saveLabel="Сохранить аватар"
-                  />
+                <div className="flex flex-col max-h-[min(85vh,720px)] min-h-0">
+                  <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-5 pt-[14rem] md:pt-[13.25rem] pb-4 space-y-5">
+                    {profileError && (
+                      <p className="text-sm text-destructive" role="alert">
+                        {profileError}
+                      </p>
+                    )}
+                    <AvatarEditor
+                      avatarConfig={localAvatar}
+                      onChange={setLocalAvatar}
+                      onSave={() => void handleSaveAvatar()}
+                      saving={avatarSaving}
+                      saveLabel="Сохранить аватар"
+                      hideSaveButton
+                    />
+                  </div>
+                  <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border/60 bg-card/95 backdrop-blur-md">
+                    <button
+                      type="button"
+                      disabled={avatarSaving}
+                      onClick={() => void handleSaveAvatar()}
+                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                    >
+                      {avatarSaving ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      Сохранить аватар
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

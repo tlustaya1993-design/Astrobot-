@@ -20,6 +20,8 @@ interface AvatarEditorProps {
   onSave?: () => void;
   saving?: boolean;
   saveLabel?: string;
+  /** Не рисовать кнопку сохранения (родитель показывает свою, напр. закреплённую) */
+  hideSaveButton?: boolean;
 }
 
 const GALACTIC_VARIANT_IMAGES = [
@@ -96,6 +98,7 @@ export default function AvatarEditor({
   onSave,
   saving = false,
   saveLabel = 'Сохранить аватар',
+  hideSaveButton = false,
 }: AvatarEditorProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -117,6 +120,9 @@ export default function AvatarEditor({
   const hairStyles = HAIR_STYLES.filter((s) => ['short', 'medium', 'long', 'curly'].includes(s.id));
   const isGalactic = archetype === 'galactic';
   const isMage = archetype === 'mage';
+  const isCosmonaut = archetype === 'cosmonaut';
+  /** У космонавтки один растровый пресет — причёска/цвет не меняют картинку */
+  const showHairControls = !isCosmonaut;
   const visibleHairStyles = isGalactic || isMage
     ? hairStyles.filter((s) =>
         (isGalactic ? GALACTIC_ALLOWED_HAIR_STYLES : MAGE_ALLOWED_HAIR_STYLES).includes(
@@ -192,33 +198,37 @@ export default function AvatarEditor({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Причёска</p>
-        <div className="grid grid-cols-4 gap-2">
-          {visibleHairStyles.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => onChange({ ...current, hairStyle: s.id })}
-              className={`py-2 px-1 rounded-xl text-xs font-medium border transition-all ${
-                current.hairStyle === s.id
-                  ? 'border-primary bg-primary/15 text-primary shadow-[0_0_8px_rgba(212,175,55,0.25)]'
-                  : 'border-border/40 text-muted-foreground hover:border-primary/30 hover:bg-white/5'
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {showHairControls && (
+        <>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Причёска</p>
+            <div className="grid grid-cols-4 gap-2">
+              {visibleHairStyles.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => onChange({ ...current, hairStyle: s.id })}
+                  className={`py-2 px-1 rounded-xl text-xs font-medium border transition-all ${
+                    current.hairStyle === s.id
+                      ? 'border-primary bg-primary/15 text-primary shadow-[0_0_8px_rgba(212,175,55,0.25)]'
+                      : 'border-border/40 text-muted-foreground hover:border-primary/30 hover:bg-white/5'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      <ColorRow
-        label="Цвет волос"
-        colors={visibleHairColors}
-        selected={current.hairColor}
-        onSelect={(hex) => onChange({ ...current, hairColor: hex })}
-      />
+          <ColorRow
+            label="Цвет волос"
+            colors={visibleHairColors}
+            selected={current.hairColor}
+            onSelect={(hex) => onChange({ ...current, hairColor: hex })}
+          />
+        </>
+      )}
 
-      {onSave && (
+      {onSave && !hideSaveButton && (
         <button
           onClick={onSave}
           disabled={saving}
