@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { getAuthHeaders } from '@/lib/session';
@@ -43,14 +44,18 @@ export default function DailyForecastCard({ onAskQuestion, hidden = false, onTog
   const [data, setData] = useState<ForecastData | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+
   useEffect(() => {
-    if (expanded) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = prev;
     };
   }, [expanded]);
 
@@ -179,66 +184,93 @@ export default function DailyForecastCard({ onAskQuestion, hidden = false, onTog
           ) : null}
         </div>
 
-        {/* Expanded content as overlay so chat layout doesn't jump */}
-        <AnimatePresence>
-          {expanded && sentences.length > 1 && (
-            <>
-              <motion.div
-                className="fixed inset-0 z-[135] bg-black/55 backdrop-blur-sm"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setExpanded(false)}
-              />
-              <motion.div
-                className="fixed inset-x-0 bottom-0 z-[140] flex justify-center px-3 pb-[max(12px,env(safe-area-inset-bottom))]"
-                initial={{ y: '100%', opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: '100%', opacity: 0 }}
-                transition={{ type: 'spring', damping: 30, stiffness: 280 }}
-              >
-                <div className="w-full max-w-lg rounded-2xl border border-primary/25 bg-card shadow-2xl max-h-[70vh] overflow-y-auto">
-                  <div className="sticky top-0 z-10 bg-card/95 backdrop-blur border-b border-white/5 px-4 py-3 flex items-center justify-between">
-                    <p className="text-sm font-medium text-foreground">Прогноз на день</p>
-                    <button
-                      onClick={() => setExpanded(false)}
-                      className="text-xs px-2.5 py-1 rounded-full border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/30 transition"
-                    >
-                      Закрыть
-                    </button>
-                  </div>
-                  <div className="px-4 pb-4 pt-3 space-y-2">
-                    {sentences.slice(1).map((s, i) => (
-                      <p key={i} className="text-sm text-foreground/80 leading-relaxed">
-                        {s}
-                      </p>
-                    ))}
-
-                    {/* Quick follow-up prompts */}
-                    {onAskQuestion && (
-                      <div className="flex flex-wrap gap-1.5 pt-2">
-                        {[
-                          "Расскажи подробнее о сегодняшней энергии",
-                          "Что мне стоит сделать сегодня?",
-                          "Какие транзиты активны сейчас?",
-                        ].map((q, i) => (
-                          <button
-                            key={i}
-                            onClick={() => { onAskQuestion(q); setExpanded(false); }}
-                            className="text-xs px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary/80 hover:bg-primary/20 hover:text-primary transition-colors"
-                          >
-                            {q}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
       </div>
+
+      {/* Оверлей в document.body: fixed не ломается из‑за transform предков; «Скрыть» внутри шторки */}
+      {portalReady &&
+        createPortal(
+          <AnimatePresence>
+            {expanded && sentences.length > 1 && (
+              <>
+                <motion.div
+                  key="forecast-backdrop"
+                  className="fixed inset-0 z-[135] bg-black/55 backdrop-blur-sm touch-none"
+                  style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setExpanded(false)}
+                  aria-hidden
+                />
+                <motion.div
+                  key="forecast-sheet"
+                  className="fixed inset-x-0 bottom-0 z-[140] flex justify-center px-3 pt-4 pb-[max(16px,env(safe-area-inset-bottom))] pointer-events-none"
+                  initial={{ y: '100%', opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: '100%', opacity: 0 }}
+                  transition={{ type: 'spring', damping: 32, stiffness: 320 }}
+                >
+                  <div className="w-full max-w-lg pointer-events-auto max-h-[min(88dvh,640px)] flex flex-col rounded-2xl border border-primary/25 bg-card shadow-2xl overflow-hidden">
+                    <div className="shrink-0 bg-card/98 backdrop-blur-md border-b border-white/5 px-3 py-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2 min-h-[44px]">
+                        <p className="text-sm font-medium text-foreground truncate pr-2">Прогноз на день</p>
+                        <button
+                          type="button"
+                          onClick={() => setExpanded(false)}
+                          className="shrink-0 text-xs min-h-[44px] px-3 py-2 rounded-full border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/30 transition touch-manipulation"
+                        >
+                          Закрыть
+                        </button>
+                      </div>
+                      {onToggleHidden && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExpanded(false);
+                            onToggleHidden();
+                          }}
+                          className="w-full text-xs min-h-[44px] py-2.5 rounded-xl border border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/35 hover:bg-primary/5 transition touch-manipulation"
+                        >
+                          Скрыть прогноз на сегодня
+                        </button>
+                      )}
+                    </div>
+                    <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-4 pt-3 space-y-2">
+                      {sentences.slice(1).map((s, i) => (
+                        <p key={i} className="text-sm text-foreground/80 leading-relaxed">
+                          {s}
+                        </p>
+                      ))}
+
+                      {onAskQuestion && (
+                        <div className="flex flex-wrap gap-1.5 pt-2">
+                          {[
+                            "Расскажи подробнее о сегодняшней энергии",
+                            "Что мне стоит сделать сегодня?",
+                            "Какие транзиты активны сейчас?",
+                          ].map((q, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                onAskQuestion(q);
+                                setExpanded(false);
+                              }}
+                              className="text-xs px-3 py-2 min-h-[40px] rounded-full bg-primary/10 border border-primary/20 text-primary/80 hover:bg-primary/20 hover:text-primary transition-colors touch-manipulation text-left"
+                            >
+                              {q}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
     </motion.div>
   );
 }
