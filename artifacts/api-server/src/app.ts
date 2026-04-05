@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { sessionMiddleware } from "./middleware/auth.js";
+import { injectOpenGraphMeta, resolvePublicOrigin } from "./lib/spaHtml";
 
 const app: Express = express();
 
@@ -41,11 +42,26 @@ app.use("/api", router);
 const frontendDist = process.env.FRONTEND_DIST ||
   path.resolve(process.cwd(), "artifacts/astrobot/dist/public");
 if (process.env.NODE_ENV === "production" && fs.existsSync(frontendDist)) {
-  app.use(express.static(frontendDist));
+  const indexPath = path.join(frontendDist, "index.html");
+  let cachedIndexHtml: string | null = null;
+  function readIndexHtml(): string {
+    if (!cachedIndexHtml) {
+      cachedIndexHtml = fs.readFileSync(indexPath, "utf8");
+    }
+    return cachedIndexHtml;
+  }
+  function sendSpaIndex(req: express.Request, res: express.Response) {
+    const origin = resolvePublicOrigin(req);
+    const html = injectOpenGraphMeta(readIndexHtml(), origin);
+    res.type("html").send(html);
+  }
+
+  // index: false — иначе отдаётся сырой index.html без подстановки абсолютного og:image
+  app.use(express.static(frontendDist, { index: false }));
+  app.get("/", sendSpaIndex);
+  app.get("/index.html", sendSpaIndex);
   // SPA fallback — Express 5 requires named wildcard (path-to-regexp v8)
-  app.get("/{*path}", (_req, res) => {
-    res.sendFile(path.join(frontendDist, "index.html"));
-  });
+  app.get("/{*path}", sendSpaIndex);
 }
 
 export default app;

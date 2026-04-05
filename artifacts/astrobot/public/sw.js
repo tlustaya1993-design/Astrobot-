@@ -1,4 +1,4 @@
-const CACHE_NAME = "astrobot-v6";
+const CACHE_NAME = "astrobot-v7";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME));
