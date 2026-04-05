@@ -222,6 +222,21 @@ function ChatPageInner() {
               />
             </div>
 
+            {/* Прогноз на день — в потоке под чипами, не под шапкой и не перекрывается панелью людей */}
+            {isNew && !isLoading && !selectedContactId && (
+              <div className="relative z-20 shrink-0 px-3 pt-1 pb-2 md:px-4 border-b border-border/35 bg-background/85 backdrop-blur-md">
+                <div className="max-w-md mx-auto w-full">
+                  <DailyForecastCard
+                    onAskQuestion={(q) => {
+                      setInputValue(q);
+                    }}
+                    hidden={isDailyForecastHidden}
+                    onToggleHidden={() => setDailyForecastHidden(!isDailyForecastHidden)}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Messages */}
             <div
               ref={messagesContainerRef}
@@ -240,23 +255,9 @@ function ChatPageInner() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="relative flex flex-col items-center justify-center min-h-full py-8 text-center"
+                className="relative flex flex-col items-center justify-center min-h-full py-6 md:py-8 text-center"
               >
-                {/* Daily Forecast Card */}
-                {!selectedContactId && (
-                  <div className="absolute top-0 left-0 right-0 z-20 px-2 md:px-0 pointer-events-none">
-                    <div className="w-full max-w-md mx-auto pointer-events-auto">
-                    <DailyForecastCard
-                      onAskQuestion={(q) => { setInputValue(q); }}
-                      hidden={isDailyForecastHidden}
-                      onToggleHidden={() => setDailyForecastHidden(!isDailyForecastHidden)}
-                      overlay
-                    />
-                    </div>
-                  </div>
-                )}
-
-                <div className="w-16 h-16 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-5 shadow-[0_0_30px_rgba(212,175,55,0.15)] mt-28">
+                <div className="w-16 h-16 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-5 shadow-[0_0_30px_rgba(212,175,55,0.15)] mt-2 md:mt-4">
                   <Sparkles className="w-8 h-8 text-primary" />
                 </div>
                 <h3 className="text-xl font-display font-semibold mb-2">О чём спросить звёзды?</h3>

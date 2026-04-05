@@ -94,15 +94,16 @@ export default function DailyForecastCard({ onAskQuestion, hidden = false, onTog
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="mx-auto w-full max-w-md mb-4"
+        className="mx-auto w-full max-w-md"
       >
-        <div className="rounded-2xl border border-border/40 bg-card/80 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">Прогноз на день скрыт</p>
+        <div className="rounded-2xl border border-border/40 bg-card/80 px-3 sm:px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground min-w-0 flex-1">Прогноз на день скрыт</p>
             {onToggleHidden && (
               <button
+                type="button"
                 onClick={onToggleHidden}
-                className="text-xs px-3 py-1.5 rounded-full border border-primary/30 text-primary hover:bg-primary/10 transition"
+                className="text-xs min-h-[44px] px-4 py-2 rounded-full border border-primary/40 text-primary hover:bg-primary/10 transition touch-manipulation"
               >
                 Показать
               </button>
@@ -124,14 +125,15 @@ export default function DailyForecastCard({ onAskQuestion, hidden = false, onTog
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
-      className="mx-auto w-full max-w-md mb-4"
+      className="mx-auto w-full max-w-md"
     >
       <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-card via-card/95 to-secondary/30 shadow-[0_0_20px_rgba(212,175,55,0.07)] overflow-hidden">
         {/* Header */}
-        <div className="w-full flex items-center justify-between px-4 py-3">
+        <div className="w-full flex flex-wrap items-center gap-2 justify-between px-3 sm:px-4 py-2.5 sm:py-3">
           <button
+            type="button"
             onClick={() => setExpanded(!expanded)}
-            className="flex-1 min-w-0 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors rounded-lg -my-1 py-1 px-1 -ml-1"
+            className="flex-1 min-w-[min(100%,12rem)] flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors rounded-lg py-2 pl-1 pr-2 -my-0.5"
           >
             <div className="flex items-center gap-2">
               <span className="text-lg leading-none">
@@ -154,8 +156,9 @@ export default function DailyForecastCard({ onAskQuestion, hidden = false, onTog
           </button>
           {onToggleHidden && (
             <button
+              type="button"
               onClick={onToggleHidden}
-              className="ml-2 text-[11px] px-2.5 py-1 rounded-full border border-border/40 text-muted-foreground hover:text-foreground hover:border-primary/30 transition"
+              className="shrink-0 text-xs min-h-[44px] min-w-[44px] sm:min-w-0 px-3 py-2 rounded-full border border-border/50 text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition touch-manipulation"
             >
               Скрыть
             </button>
@@ -163,7 +166,7 @@ export default function DailyForecastCard({ onAskQuestion, hidden = false, onTog
         </div>
 
         {/* Preview (first sentence always visible) */}
-        <div className="px-4 pb-3">
+        <div className="px-3 sm:px-4 pb-3 pt-0.5">
           {loading ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
               <Sparkles className="w-3.5 h-3.5 text-primary/50" />
@@ -181,14 +184,14 @@ export default function DailyForecastCard({ onAskQuestion, hidden = false, onTog
           {expanded && sentences.length > 1 && (
             <>
               <motion.div
-                className="fixed inset-0 z-[115] bg-black/55 backdrop-blur-sm"
+                className="fixed inset-0 z-[135] bg-black/55 backdrop-blur-sm"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setExpanded(false)}
               />
               <motion.div
-                className="fixed inset-x-0 bottom-0 z-[120] flex justify-center px-3 pb-[max(12px,env(safe-area-inset-bottom))]"
+                className="fixed inset-x-0 bottom-0 z-[140] flex justify-center px-3 pb-[max(12px,env(safe-area-inset-bottom))]"
                 initial={{ y: '100%', opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: '100%', opacity: 0 }}
