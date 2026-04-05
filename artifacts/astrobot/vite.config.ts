@@ -21,21 +21,50 @@ if (!isBuild && (Number.isNaN(port) || port <= 0)) {
 
 const basePath = process.env.BASE_PATH || "/";
 
-/** Публичный origin без слэша, напр. https://astrobot.example.com — для абсолютных og:image / og:url в превью мессенджеров */
+/**
+ * Абсолютный https-origin для og:image / og:url.
+ * Telegram и часть других краулеров плохо берут относительный путь в og:image.
+ */
+function detectPublicOrigin(): string {
+  const explicit = (process.env.VITE_PUBLIC_ORIGIN || "").trim().replace(/\/+$/, "");
+  if (explicit) return explicit;
+
+  const vercel = process.env.VERCEL_URL?.trim();
+  if (vercel) return `https://${vercel.replace(/^https?:\/\//i, "")}`;
+
+  const cf = process.env.CF_PAGES_URL?.trim().replace(/\/+$/, "");
+  if (cf && /^https?:\/\//i.test(cf)) return cf;
+
+  const railway = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
+  if (railway) return `https://${railway.replace(/^https?:\/\//i, "")}`;
+
+  const netlify = process.env.URL?.trim().replace(/\/+$/, "");
+  if (netlify && /^https:\/\//i.test(netlify)) return netlify;
+
+  const render = process.env.RENDER_EXTERNAL_URL?.trim().replace(/\/+$/, "");
+  if (render && /^https:\/\//i.test(render)) return render;
+
+  return "";
+}
+
+function ogImagePath(): string {
+  const base = basePath === "/" ? "" : basePath.replace(/\/+$/, "");
+  const p = `${base}/og-image.png`.replace(/^\/\//, "/");
+  return p.startsWith("/") ? p : `/${p}`;
+}
+
+/** Полный URL картинки превью или относительный путь (если origin неизвестен при сборке) */
 function publicOgImageUrl(): string {
-  const origin = (process.env.VITE_PUBLIC_ORIGIN || "").trim().replace(/\/+$/, "");
-  const base =
-    basePath === "/" ? "" : basePath.replace(/\/+$/, "");
-  const path = `${base}/og-image.png`.replace(/^\/\//, "/");
-  if (origin) return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
-  return path.startsWith("/") ? path : `/${path}`;
+  const origin = detectPublicOrigin();
+  const path = ogImagePath();
+  if (origin) return `${origin}${path}`;
+  return path;
 }
 
 function publicOgSiteUrl(): string {
-  const origin = (process.env.VITE_PUBLIC_ORIGIN || "").trim().replace(/\/+$/, "");
+  const origin = detectPublicOrigin();
   if (!origin) return "";
-  const base =
-    basePath === "/" ? "" : basePath.replace(/\/+$/, "");
+  const base = basePath === "/" ? "" : basePath.replace(/\/+$/, "");
   return `${origin}${base || ""}/`;
 }
 
@@ -46,12 +75,23 @@ export default defineConfig({
       name: "html-og-meta",
       transformIndexHtml(html) {
         const image = publicOgImageUrl();
+        if (process.env.NODE_ENV === "production" && !/^https?:\/\//i.test(image)) {
+          console.warn(
+            "[html-og-meta] og:image не абсолютный URL — задайте VITE_PUBLIC_ORIGIN=https://ваш-домен при сборке, иначе Telegram/VK могут не показать картинку.",
+          );
+        }
         let out = html.replaceAll("__OG_IMAGE__", image);
         const siteUrl = publicOgSiteUrl();
         if (siteUrl) {
           out = out.replace(
             "</head>",
             `    <meta property="og:url" content="${siteUrl}" />\n  </head>`,
+          );
+        }
+        if (image.startsWith("https://")) {
+          out = out.replace(
+            '<meta property="og:image" ',
+            `<meta property="og:image:secure_url" content="${image}" />\n    <meta property="og:image" `,
           );
         }
         return out;
