@@ -1,3 +1,30 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="180" height="180" rx="36" fill="#FF3C00"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="AstroBot">
+  <defs>
+    <linearGradient id="abg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1c1528"/>
+      <stop offset="100%" stop-color="#0f0a18"/>
+    </linearGradient>
+  </defs>
+  <!-- круг + тонкое золотое кольцо -->
+  <circle cx="256" cy="256" r="240" fill="url(#abg)"/>
+  <circle cx="256" cy="256" r="236" fill="none" stroke="#d4af37" stroke-width="2.5" opacity="0.95"/>
+  <!-- четырёхлучевая звезда контуром, скруглённые стыки -->
+  <path
+    fill="none"
+    stroke="#f2d56a"
+    stroke-width="13"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+    d="M256 118 L378 256 L256 394 L134 256 Z"
+  />
+  <!-- плюс справа сверху от центра -->
+  <path
+    fill="none"
+    stroke="#f2d56a"
+    stroke-width="5"
+    stroke-linecap="round"
+    d="M328 168h14 M335 161v14"
+  />
+  <!-- кружок слева снизу -->
+  <circle cx="188" cy="324" r="10" fill="none" stroke="#f2d56a" stroke-width="4"/>
 </svg>
