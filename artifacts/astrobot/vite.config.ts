@@ -21,9 +21,42 @@ if (!isBuild && (Number.isNaN(port) || port <= 0)) {
 
 const basePath = process.env.BASE_PATH || "/";
 
+/** Публичный origin без слэша, напр. https://astrobot.example.com — для абсолютных og:image / og:url в превью мессенджеров */
+function publicOgImageUrl(): string {
+  const origin = (process.env.VITE_PUBLIC_ORIGIN || "").trim().replace(/\/+$/, "");
+  const base =
+    basePath === "/" ? "" : basePath.replace(/\/+$/, "");
+  const path = `${base}/og-image.png`.replace(/^\/\//, "/");
+  if (origin) return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function publicOgSiteUrl(): string {
+  const origin = (process.env.VITE_PUBLIC_ORIGIN || "").trim().replace(/\/+$/, "");
+  if (!origin) return "";
+  const base =
+    basePath === "/" ? "" : basePath.replace(/\/+$/, "");
+  return `${origin}${base || ""}/`;
+}
+
 export default defineConfig({
   base: basePath,
   plugins: [
+    {
+      name: "html-og-meta",
+      transformIndexHtml(html) {
+        const image = publicOgImageUrl();
+        let out = html.replaceAll("__OG_IMAGE__", image);
+        const siteUrl = publicOgSiteUrl();
+        if (siteUrl) {
+          out = out.replace(
+            "</head>",
+            `    <meta property="og:url" content="${siteUrl}" />\n  </head>`,
+          );
+        }
+        return out;
+      },
+    },
     react(),
     tailwindcss(),
     ...(process.env.REPL_ID !== undefined
