@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { CalendarDays, Check, LogIn, MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -12,18 +12,15 @@ import {
 import { getAuthHeaders } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import {
-  DEFAULT_AVATAR,
-  loadAvatar,
-  type AvatarConfig,
-} from '@/components/ui/AstroAvatar';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import ProfileSheet from '@/components/profile/ProfileSheet';
+import { useAvatarSync } from '@/context/AvatarSyncContext';
 
 interface ChatSidebarProps {
   currentConversationId?: number;
   onLoginClick: () => void;
   onNavigate?: () => void;
+  onChartMetaChanged?: () => void;
   className?: string;
   headerRight?: React.ReactNode;
 }
@@ -32,21 +29,18 @@ export default function ChatSidebar({
   currentConversationId,
   onLoginClick,
   onNavigate,
+  onChartMetaChanged,
   className,
   headerRight,
 }: ChatSidebarProps) {
+  const { avatarConfig } = useAvatarSync();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { isLoggedIn, email } = useAuth();
   const [search, setSearch] = useState('');
   const [showProfile, setShowProfile] = useState(false);
-  const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
   const [editingConversationId, setEditingConversationId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
-
-  useEffect(() => {
-    setAvatarConfig(loadAvatar());
-  }, []);
 
   const { data: conversations, isLoading } = useListOpenaiConversations({
     request: { headers: getAuthHeaders() },
@@ -281,8 +275,7 @@ export default function ChatSidebar({
       <ProfileSheet
         open={showProfile}
         onClose={() => setShowProfile(false)}
-        avatarConfig={avatarConfig}
-        onAvatarChange={(cfg) => setAvatarConfig(cfg)}
+        onChartMetaChanged={onChartMetaChanged}
       />
     </>
   );

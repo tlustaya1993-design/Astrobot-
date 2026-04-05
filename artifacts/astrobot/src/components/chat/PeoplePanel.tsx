@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getAuthHeaders } from '@/lib/session';
 import AddContactModal from './AddContactModal';
 import ProfileSheet from '@/components/profile/ProfileSheet';
-import { loadAvatar, type AvatarConfig, DEFAULT_AVATAR } from '@/components/ui/AstroAvatar';
+import type { AvatarConfig } from '@/components/ui/AstroAvatar';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
+import { useAvatarSync } from '@/context/AvatarSyncContext';
 import ContactProfileSheet from './ContactProfileSheet';
 
 export interface Contact {
@@ -23,19 +24,16 @@ export interface Contact {
 interface PeoplePanelProps {
   selectedContactId: number | null;
   onSelect: (id: number | null) => void;
+  onChartMetaChanged?: () => void;
 }
 
-export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanelProps) {
+export default function PeoplePanel({ selectedContactId, onSelect, onChartMetaChanged }: PeoplePanelProps) {
+  const { avatarConfig } = useAvatarSync();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [openedContact, setOpenedContact] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
-  const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(DEFAULT_AVATAR);
-
-  useEffect(() => {
-    setAvatarConfig(loadAvatar());
-  }, []);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -174,8 +172,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
       <ProfileSheet
         open={showProfile}
         onClose={() => setShowProfile(false)}
-        avatarConfig={avatarConfig}
-        onAvatarChange={(cfg) => setAvatarConfig(cfg)}
+        onChartMetaChanged={onChartMetaChanged}
       />
 
       <ContactProfileSheet

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { Send, Sparkles, ChevronLeft, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -14,6 +14,7 @@ import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
 import PaywallSheet from '@/components/billing/PaywallSheet';
 import { useAuth } from '@/context/AuthContext';
+import { AvatarSyncProvider } from '@/context/AvatarSyncContext';
 
 const SUGGESTED_PROMPTS = [
   "Расскажи о моей натальной карте",
@@ -22,7 +23,7 @@ const SUGGESTED_PROMPTS = [
   "Разбери мою Часть Удачи"
 ];
 
-export default function Chat() {
+function ChatPageInner() {
   const [match, params] = useRoute('/chat/:id');
   const [, setLocation] = useLocation();
   const conversationId = match && params?.id ? parseInt(params.id, 10) : undefined;
@@ -41,6 +42,7 @@ export default function Chat() {
     streamingText,
     sendMessage,
     clearLocalMessages,
+    addLocalSystemMessage,
     paywallState,
     closePaywall,
   } = useChatStream(conversationId);
@@ -54,6 +56,12 @@ export default function Chat() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
   const { isLoggedIn } = useAuth();
+
+  const onChartMetaChanged = useCallback(() => {
+    addLocalSystemMessage(
+      'Данные карты были изменены.',
+    );
+  }, [addLocalSystemMessage]);
 
   // Swipe-from-left-edge detection
   const touchStartX = useRef(0);
@@ -145,6 +153,7 @@ export default function Chat() {
             <ChatSidebar
               currentConversationId={conversationId}
               onLoginClick={() => setShowAuthModal(true)}
+              onChartMetaChanged={onChartMetaChanged}
             />
           </div>
 
@@ -206,7 +215,11 @@ export default function Chat() {
 
             {/* People Panel */}
             <div className="relative z-30 shrink-0">
-              <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
+              <PeoplePanel
+                selectedContactId={selectedContactId}
+                onSelect={setSelectedContactId}
+                onChartMetaChanged={onChartMetaChanged}
+              />
             </div>
 
             {/* Messages */}
@@ -269,26 +282,43 @@ export default function Chat() {
               </motion.div>
             )}
 
-            {displayMessages.map((msg, idx) => (
-              <motion.div
-                key={msg.id || idx}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 break-words backdrop-blur-sm shadow-lg shadow-black/35 ${
-                  msg.role === 'user'
-                    ? 'bg-gradient-to-br from-primary/30 to-accent/28 border border-primary/45 text-foreground rounded-tr-sm'
-                    : 'bg-secondary/60 border border-primary/35 text-foreground rounded-tl-sm'
-                }`}>
-                  {msg.role === 'assistant' ? (
-                    <div className="assistant-bubble prose prose-invert prose-p:leading-relaxed prose-sm max-w-none">
-                      <AstroMarkdown content={msg.content} />
-                    </div>
-                  ) : msg.content}
-                </div>
-              </motion.div>
-            ))}
+            {displayMessages.map((msg, idx) =>
+              msg.role === 'system' ? (
+                <motion.div
+                  key={msg.id || idx}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-center px-2"
+                >
+                  <p className="text-xs text-center text-muted-foreground/90 max-w-md leading-relaxed border border-border/50 rounded-full px-4 py-2 bg-background/50 backdrop-blur-sm">
+                    {msg.content}
+                  </p>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key={msg.id || idx}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 break-words backdrop-blur-sm shadow-lg shadow-black/35 ${
+                      msg.role === 'user'
+                        ? 'bg-gradient-to-br from-primary/30 to-accent/28 border border-primary/45 text-foreground rounded-tr-sm'
+                        : 'bg-secondary/60 border border-primary/35 text-foreground rounded-tl-sm'
+                    }`}
+                  >
+                    {msg.role === 'assistant' ? (
+                      <div className="assistant-bubble prose prose-invert prose-p:leading-relaxed prose-sm max-w-none">
+                        <AstroMarkdown content={msg.content} />
+                      </div>
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
+                </motion.div>
+              ),
+            )}
 
             {isStreaming && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
@@ -358,5 +388,13 @@ export default function Chat() {
         onClose={closePaywall}
       />
     </>
+  );
+}
+
+export default function Chat() {
+  return (
+    <AvatarSyncProvider>
+      <ChatPageInner />
+    </AvatarSyncProvider>
   );
 }

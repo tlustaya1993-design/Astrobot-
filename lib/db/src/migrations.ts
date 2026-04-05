@@ -25,6 +25,10 @@ export async function runDbMigrations(pool: Pool): Promise<void> {
         ALTER TABLE contacts
         ADD COLUMN IF NOT EXISTS avatar_eye_color text DEFAULT '#3B82F6'
       `);
+      await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS avatar_json text
+      `);
     })().catch((error) => {
       migrationsReady = null;
       throw error;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSessionId, getAuthHeaders } from '@/lib/session';
 import { createOpenaiConversation, getListOpenaiConversationsQueryKey, getGetOpenaiConversationQueryKey, OpenaiMessage } from '@workspace/api-client-react';
@@ -170,5 +170,30 @@ export function useChatStream(conversationId?: number) {
   const clearLocalMessages = () => setLocalMessages([]);
   const closePaywall = () => setPaywallState(null);
 
-  return { localMessages, isStreaming, streamingText, paywallState, closePaywall, sendMessage, clearLocalMessages };
+  const addLocalSystemMessage = useCallback(
+    (content: string) => {
+      setLocalMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          conversationId: conversationId ?? 0,
+          role: "system",
+          content,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    },
+    [conversationId],
+  );
+
+  return {
+    localMessages,
+    isStreaming,
+    streamingText,
+    paywallState,
+    closePaywall,
+    sendMessage,
+    clearLocalMessages,
+    addLocalSystemMessage,
+  };
 }

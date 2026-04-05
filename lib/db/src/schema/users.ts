@@ -15,6 +15,8 @@ export const usersTable = pgTable("users", {
   birthPlace: text("birth_place"),
   birthLat: doublePrecision("birth_lat"),
   birthLng: doublePrecision("birth_lng"),
+  /** JSON аватара (как у contacts.avatarJson) */
+  avatarJson: text("avatar_json"),
   gender: text("gender"),
   language: text("language").default("ru"),
   onboardingDone: boolean("onboarding_done").notNull().default(false),

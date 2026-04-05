@@ -3,7 +3,6 @@ import { Loader2, Save } from 'lucide-react';
 import {
   AVATAR_PRESETS,
   DEFAULT_AVATAR,
-  EYE_COLORS,
   GALACTIC_ALLOWED_HAIR_COLORS,
   GALACTIC_ALLOWED_HAIR_STYLES,
   HAIR_COLORS,
@@ -217,12 +216,6 @@ export default function AvatarEditor({
         colors={visibleHairColors}
         selected={current.hairColor}
         onSelect={(hex) => onChange({ ...current, hairColor: hex })}
-      />
-      <ColorRow
-        label="Цвет глаз"
-        colors={EYE_COLORS}
-        selected={current.eyeColor}
-        onSelect={(hex) => onChange({ ...current, eyeColor: hex })}
       />
 
       {onSave && (
