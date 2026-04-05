@@ -25,6 +25,9 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
     <title>AstroBot — Твой личный астролог</title>
+    <!-- Маленькие размеры первыми — вкладка берёт 32/48, иначе 512 сжимается до «точки» -->
+    <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/favicon-48.png" sizes="48x48" />
     <link rel="icon" type="image/png" href="/favicon.png" sizes="512x512" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,7 +39,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', async () => {
-          const SW_VERSION = 'v9';
+          const SW_VERSION = 'v10';
           const stored = localStorage.getItem('sw_version');
           if (stored !== SW_VERSION) {
             // New version: unregister old SWs and purge all caches
