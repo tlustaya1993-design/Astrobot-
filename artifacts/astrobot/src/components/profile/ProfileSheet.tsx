@@ -1,6 +1,17 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, LogOut, LogIn, BrainCircuit, Sparkles, Trash2, Pencil, Loader2, Save } from "lucide-react";
+import {
+  X,
+  LogOut,
+  LogIn,
+  BrainCircuit,
+  Sparkles,
+  Trash2,
+  Pencil,
+  Loader2,
+  Save,
+  Users,
+} from "lucide-react";
 import { type AvatarConfig, DEFAULT_AVATAR } from "@/components/ui/AstroAvatar";
 import IllustratedAvatar, { AvatarPortraitImage } from "@/components/ui/IllustratedAvatar";
 import AvatarEditor from "@/components/ui/AvatarEditor";
@@ -8,6 +19,8 @@ import { getAuthHeaders } from "@/lib/session";
 import { useAuth } from "@/context/AuthContext";
 import { useAvatarSync } from "@/context/AvatarSyncContext";
 import AuthModal from "@/components/AuthModal";
+import AddContactModal from "@/components/chat/AddContactModal";
+import type { Contact } from "@/components/chat/PeoplePanel";
 
 interface UserProfile {
   name?: string | null;
@@ -111,6 +124,10 @@ export default function ProfileSheet({
   const [avatarSaving, setAvatarSaving] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
 
   const [editName, setEditName] = useState("");
   const [editBirthDate, setEditBirthDate] = useState("");
@@ -167,6 +184,23 @@ export default function ProfileSheet({
   useEffect(() => {
     if (section === "memories") void fetchMemories();
   }, [section, fetchMemories]);
+
+  const fetchProfileContacts = useCallback(async () => {
+    if (!isLoggedIn) return;
+    setContactsLoading(true);
+    try {
+      const res = await fetch("/api/contacts", { headers: getAuthHeaders() });
+      if (res.ok) setContacts((await res.json()) as Contact[]);
+    } catch {
+      /* ignore */
+    } finally {
+      setContactsLoading(false);
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (open && isLoggedIn && section === "view") void fetchProfileContacts();
+  }, [open, isLoggedIn, section, fetchProfileContacts]);
 
   useEffect(() => {
     if (section !== "edit" || !profile) return;
@@ -387,6 +421,57 @@ export default function ProfileSheet({
                     <Pencil className="w-4 h-4" />
                     Редактировать данные профиля
                   </button>
+
+                  {isLoggedIn && (
+                    <div className="rounded-2xl border border-border/50 bg-white/[0.02] p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium flex items-center gap-2 min-w-0">
+                          <Users className="w-4 h-4 text-primary shrink-0" />
+                          <span className="truncate">Карты близких</span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setContactToEdit(null);
+                            setShowAddContact(true);
+                          }}
+                          className="text-xs font-semibold text-primary shrink-0 touch-manipulation py-1.5 px-2 rounded-lg hover:bg-primary/10"
+                        >
+                          + Добавить
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        Для синастрии: сын, партнёр и др. — те же карты, что в чате в ряду рядом с «Я».
+                      </p>
+                      {contactsLoading ? (
+                        <p className="text-xs text-muted-foreground py-2">Загрузка…</p>
+                      ) : contacts.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Пока никого не добавлено. Нажми «+ Добавить» и введи дату, время и город рождения.
+                        </p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {contacts.map((c) => (
+                            <li key={c.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setContactToEdit(c);
+                                  setShowAddContact(false);
+                                }}
+                                className="w-full text-left py-2.5 px-3 rounded-xl border border-border/40 text-sm hover:bg-white/5 touch-manipulation"
+                              >
+                                <span className="font-medium">{c.name}</span>
+                                {c.relation ? (
+                                  <span className="text-muted-foreground"> · {c.relation}</span>
+                                ) : null}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
 
                   {profile?.birthDate && (
                     <InfoRow label="Дата рождения" value={formatBirthDate(profile.birthDate)} />
@@ -644,35 +729,64 @@ export default function ProfileSheet({
             </div>
   );
 
+  const contactModal = (
+    <AddContactModal
+      open={showAddContact || contactToEdit != null}
+      mode={contactToEdit ? "edit" : "create"}
+      initialContact={contactToEdit}
+      onClose={() => {
+        setShowAddContact(false);
+        setContactToEdit(null);
+      }}
+      onAdded={() => {
+        void fetchProfileContacts();
+        setShowAddContact(false);
+        setContactToEdit(null);
+      }}
+      onDeleted={() => {
+        void fetchProfileContacts();
+        setContactToEdit(null);
+      }}
+    />
+  );
+
   if (isPage) {
     if (!open) return null;
-    return profileCard;
+    return (
+      <>
+        {profileCard}
+        {contactModal}
+      </>
+    );
   }
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
+    <>
+      <AnimatePresence>
+        {open && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={onClose}
+            />
 
-          <motion.div
-            className="fixed bottom-0 inset-x-0 z-50 flex justify-center"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 300 }}
-          >
-            {profileCard}
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+            <motion.div
+              className="fixed bottom-0 inset-x-0 z-50 flex justify-center"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            >
+              {profileCard}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+      {contactModal}
+    </>
   );
 }
 

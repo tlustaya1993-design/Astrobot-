@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Pencil, Save, Trash2, X } from 'lucide-react';
 import { DEFAULT_AVATAR, type AvatarConfig } from '@/components/ui/AstroAvatar';
@@ -95,6 +96,11 @@ export default function ContactProfileSheet({
   const [birthPlace, setBirthPlace] = useState('');
   const [birthLat, setBirthLat] = useState<string>('');
   const [birthLng, setBirthLng] = useState<string>('');
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   const hairColorByName = useMemo(
     () =>
@@ -234,25 +240,30 @@ export default function ContactProfileSheet({
     }
   };
 
-  return (
+  if (!portalReady || typeof document === 'undefined') return null;
+
+  return createPortal(
     <AnimatePresence>
       {open && contact && (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-[260] bg-black/60 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
           />
           <motion.div
-            className="fixed bottom-0 inset-x-0 z-50 flex justify-center"
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="fixed bottom-0 inset-x-0 z-[270] flex justify-center pointer-events-none"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
           >
-            <div className="relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible">
+            <div
+              className="relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl max-h-[min(92dvh,880px)] flex flex-col min-h-0 overflow-hidden pointer-events-auto"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
               <div className="flex justify-center pt-3 pb-1">
                 <div className="w-10 h-1 rounded-full bg-border" />
               </div>
@@ -373,13 +384,13 @@ export default function ContactProfileSheet({
               )}
 
               {section === 'edit' && (
-                <div className="px-5 pb-8 space-y-4 max-h-[75vh] overflow-y-auto">
+                <div className="px-5 pb-8 space-y-4 max-h-[min(70dvh,560px)] overflow-y-auto overscroll-contain touch-pan-y">
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Имя *</label>
                     <input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50"
+                      className="w-full min-h-[48px] text-base bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
                     />
                   </div>
 
@@ -388,7 +399,7 @@ export default function ContactProfileSheet({
                     <input
                       value={relation}
                       onChange={(e) => setRelation(e.target.value)}
-                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50"
+                      className="w-full min-h-[48px] text-base bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
                     />
                   </div>
 
@@ -399,7 +410,7 @@ export default function ContactProfileSheet({
                         type="date"
                         value={birthDate}
                         onChange={(e) => setBirthDate(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50"
+                        className="w-full min-h-[48px] text-base bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 [color-scheme:dark]"
                       />
                     </div>
                     <div className="space-y-1">
@@ -408,7 +419,7 @@ export default function ContactProfileSheet({
                         type="time"
                         value={birthTime}
                         onChange={(e) => setBirthTime(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50"
+                        className="w-full min-h-[48px] text-base bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 [color-scheme:dark]"
                       />
                     </div>
                   </div>
@@ -418,7 +429,8 @@ export default function ContactProfileSheet({
                     <input
                       value={birthPlace}
                       onChange={(e) => setBirthPlace(e.target.value)}
-                      className="w-full bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50"
+                      autoComplete="off"
+                      className="w-full min-h-[48px] text-base bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
                     />
                   </div>
 
@@ -459,6 +471,7 @@ export default function ContactProfileSheet({
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
