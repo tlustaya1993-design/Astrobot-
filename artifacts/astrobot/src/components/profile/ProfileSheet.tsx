@@ -75,6 +75,17 @@ function toInputTime(raw?: string | null): string {
 
 type Section = "view" | "avatar" | "memories" | "edit";
 
+/** Полный объект для API (все поля, иначе нормализация на сервере может «съесть» образ) */
+function toAvatarApiPayload(cfg: AvatarConfig): AvatarConfig {
+  return {
+    archetype: cfg.archetype ?? DEFAULT_AVATAR.archetype,
+    hairStyle: cfg.hairStyle || DEFAULT_AVATAR.hairStyle,
+    hairColor: cfg.hairColor || DEFAULT_AVATAR.hairColor,
+    robeColor: cfg.robeColor || DEFAULT_AVATAR.robeColor,
+    eyeColor: cfg.eyeColor || DEFAULT_AVATAR.eyeColor,
+  };
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -178,12 +189,13 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
   const handleSaveAvatar = async () => {
     setProfileError(null);
     setAvatarSaving(true);
-    setAvatarConfigLocal(localAvatar);
+    const payload = toAvatarApiPayload(localAvatar);
+    setAvatarConfigLocal(payload);
     try {
       const res = await fetch("/api/users/me", {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ avatarConfig: localAvatar }),
+        body: JSON.stringify({ avatarConfig: payload }),
       });
       if (!res.ok) throw new Error("save_failed");
       const raw = (await res.json()) as Record<string, unknown>;
@@ -267,24 +279,47 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
           >
-            <div className="relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible">
-              <div className="flex justify-center pt-3 pb-1">
+            <div
+              className={
+                section === "avatar"
+                  ? "relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl flex flex-col max-h-[min(92dvh,920px)] min-h-0 overflow-hidden"
+                  : "relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible"
+              }
+            >
+              <div className="flex justify-center pt-3 pb-1 shrink-0">
                 <div className="w-10 h-1 rounded-full bg-border" />
               </div>
 
-              <div className="flex items-center justify-between px-5 py-3">
-                {backLabel ? (
+              <div className="flex items-center gap-2 px-4 sm:px-5 py-2.5 shrink-0 border-b border-border/30">
+                <div className="min-w-0 flex-1">
+                  {backLabel ? (
+                    <button
+                      type="button"
+                      onClick={() => setSection("view")}
+                      className="text-sm text-muted-foreground hover:text-foreground transition py-2 -my-1 touch-manipulation"
+                    >
+                      {backLabel}
+                    </button>
+                  ) : (
+                    <span className="text-base font-semibold font-display">Мой профиль</span>
+                  )}
+                </div>
+                {section === "avatar" && (
                   <button
                     type="button"
-                    onClick={() => setSection("view")}
-                    className="text-sm text-muted-foreground hover:text-foreground transition"
+                    disabled={avatarSaving}
+                    onClick={() => void handleSaveAvatar()}
+                    className="shrink-0 text-sm font-semibold px-4 py-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition touch-manipulation min-h-[44px]"
                   >
-                    {backLabel}
+                    {avatarSaving ? "…" : "Сохранить"}
                   </button>
-                ) : (
-                  <span className="text-base font-semibold font-display">Мой профиль</span>
                 )}
-                <button type="button" onClick={onClose} className="p-1.5 rounded-full hover:bg-white/5 transition">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="p-2.5 rounded-full hover:bg-white/5 transition shrink-0 touch-manipulation min-h-[44px] min-w-[44px] inline-flex items-center justify-center"
+                  aria-label="Закрыть"
+                >
                   <X className="w-4 h-4 text-muted-foreground" />
                 </button>
               </div>
@@ -551,8 +586,8 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
               )}
 
               {section === "avatar" && (
-                <div className="flex flex-col max-h-[min(85vh,720px)] min-h-0">
-                  <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-5 pt-[14rem] md:pt-[13.25rem] pb-4 space-y-5">
+                <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                  <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-4 sm:px-5 pt-[11rem] sm:pt-[12rem] md:pt-[13rem] pb-4 space-y-5">
                     {profileError && (
                       <p className="text-sm text-destructive" role="alert">
                         {profileError}
@@ -563,23 +598,23 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
                       onChange={setLocalAvatar}
                       onSave={() => void handleSaveAvatar()}
                       saving={avatarSaving}
-                      saveLabel="Сохранить аватар"
+                      saveLabel="Сохранить образ"
                       hideSaveButton
                     />
                   </div>
-                  <div className="shrink-0 px-5 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))] border-t border-border/60 bg-card/95 backdrop-blur-md">
+                  <div className="shrink-0 px-4 sm:px-5 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-border/60 bg-card/98 backdrop-blur-md z-10">
                     <button
                       type="button"
                       disabled={avatarSaving}
                       onClick={() => void handleSaveAvatar()}
-                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2 disabled:opacity-60"
+                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2 disabled:opacity-60 touch-manipulation min-h-[48px]"
                     >
                       {avatarSaving ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
                         <Save className="w-4 h-4" />
                       )}
-                      Сохранить аватар
+                      Сохранить образ
                     </button>
                   </div>
                 </div>
