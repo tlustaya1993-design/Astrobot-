@@ -90,9 +90,16 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onChartMetaChanged?: () => void;
+  /** Полноэкранная страница вместо нижнего шита */
+  variant?: "sheet" | "page";
 }
 
-export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Props) {
+export default function ProfileSheet({
+  open,
+  onClose,
+  onChartMetaChanged,
+  variant = "sheet",
+}: Props) {
   const { isLoggedIn, email, logout } = useAuth();
   const { avatarConfig, setAvatarConfigLocal } = useAvatarSync();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -260,47 +267,34 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
   const backLabel =
     section === "avatar" || section === "memories" || section === "edit" ? "← Назад" : null;
 
-  return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
+  const isPage = variant === "page";
 
-          <motion.div
-            className="fixed bottom-0 inset-x-0 z-50 flex justify-center"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 300 }}
-          >
-            <div
-              className={
-                section === "avatar"
-                  ? "relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl flex flex-col max-h-[min(92dvh,920px)] min-h-0 overflow-hidden"
-                  : "relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl overflow-visible"
-              }
-            >
+  const cardClassName =
+    isPage
+      ? "relative w-full max-w-2xl mx-auto bg-background flex flex-col flex-1 min-h-0 overflow-hidden"
+      : section === "avatar"
+        ? "relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl flex flex-col max-h-[min(92dvh,920px)] min-h-0 overflow-hidden"
+        : "relative w-full max-w-2xl bg-card border-t border-border rounded-t-3xl shadow-2xl flex flex-col max-h-[min(92dvh,920px)] min-h-0 overflow-hidden";
+
+  const profileCard = (
+            <div className={cardClassName}>
+              {!isPage && (
               <div
                 className={
                   section === "avatar"
                     ? "relative z-30 flex justify-center pt-3 pb-1 shrink-0 bg-card"
-                    : "flex justify-center pt-3 pb-1 shrink-0"
+                    : "flex justify-center pt-3 pb-1 shrink-0 bg-card"
                 }
               >
                 <div className="w-10 h-1 rounded-full bg-border" />
               </div>
+              )}
 
               <div
                 className={
                   section === "avatar"
                     ? "relative z-30 flex items-center gap-2 px-4 sm:px-5 py-2.5 shrink-0 border-b border-border/30 bg-card"
-                    : "flex items-center gap-2 px-4 sm:px-5 py-2.5 shrink-0 border-b border-border/30"
+                    : "flex items-center gap-2 px-4 sm:px-5 py-2.5 shrink-0 border-b border-border/30 bg-card"
                 }
               >
                 <div className="min-w-0 flex-1">
@@ -336,25 +330,18 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
                 </button>
               </div>
 
-              {section === "avatar" && (
-                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 z-[5] top-[6.25rem] md:top-2 md:-top-16">
-                  <div className="relative mx-auto rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] md:w-[286px] md:h-[286px] overflow-hidden">
-                    <AvatarPortraitImage
-                      config={localAvatar}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 rounded-full ring-1 ring-white/10" />
-                  </div>
-                </div>
-              )}
-
               {section === "view" && (
-                <div className="px-5 pb-8 space-y-5 max-h-[80vh] overflow-y-auto">
+                <div
+                  className={
+                    isPage
+                      ? "px-5 py-4 space-y-5 flex-1 min-h-0 overflow-y-auto pb-[max(2rem,env(safe-area-inset-bottom))]"
+                      : "px-5 pb-8 space-y-5 max-h-[80vh] overflow-y-auto"
+                  }
+                >
                   <div className="flex items-center gap-4">
                     <div className="relative shrink-0">
                       <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-primary/40 shadow-[0_0_16px_rgba(212,175,55,0.2)]">
-                        <IllustratedAvatar config={avatarConfig} size={80} />
+                        <IllustratedAvatar config={avatarConfig} size={80} relaxedCrop />
                       </div>
                     </div>
                     <div className="flex-1 min-w-0">
@@ -468,7 +455,13 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
               <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} initialTab="login" />
 
               {section === "memories" && (
-                <div className="px-5 pb-8 space-y-4 max-h-[75vh] overflow-y-auto">
+                <div
+                  className={
+                    isPage
+                      ? "px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto pb-[max(2rem,env(safe-area-inset-bottom))]"
+                      : "px-5 pb-8 space-y-4 max-h-[min(78dvh,640px)] min-h-0 overflow-y-auto"
+                  }
+                >
                   <p className="text-xs text-muted-foreground leading-relaxed">
                     AstroBot запоминает важные факты из ваших разговоров, чтобы лучше понимать контекст. Ты
                     можешь удалить любой факт.
@@ -500,7 +493,7 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
                         <button
                           type="button"
                           onClick={() => void handleDeleteMemory(m.id)}
-                          className="shrink-0 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-destructive transition-all"
+                          className="shrink-0 p-1.5 rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:bg-destructive/10 text-destructive transition-all"
                           title="Удалить"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -511,7 +504,13 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
               )}
 
               {section === "edit" && (
-                <div className="px-5 pb-8 space-y-4 max-h-[75vh] overflow-y-auto">
+                <div
+                  className={
+                    isPage
+                      ? "px-5 py-4 space-y-4 flex-1 min-h-0 overflow-y-auto pb-[max(2rem,env(safe-area-inset-bottom))]"
+                      : "px-5 pb-8 space-y-4 max-h-[min(78dvh,640px)] min-h-0 overflow-y-auto"
+                  }
+                >
                   {profileError && (
                     <p className="text-sm text-destructive" role="alert">
                       {profileError}
@@ -599,7 +598,18 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
 
               {section === "avatar" && (
                 <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-                  <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-4 sm:px-5 pt-[14.5rem] sm:pt-[15rem] md:pt-[13.25rem] pb-4 space-y-5">
+                  <div className="min-h-0 flex-1 overflow-y-auto overflow-x-visible px-4 sm:px-5 pt-3 pb-4 space-y-5">
+                    <div className="flex justify-center">
+                      <div className="relative mx-auto rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] md:w-[260px] md:h-[260px] overflow-hidden shrink-0">
+                        <AvatarPortraitImage
+                          config={localAvatar}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          cropOverride={{ objectPosition: "50% 42%", scale: 1 }}
+                        />
+                        <div className="absolute inset-0 rounded-full ring-1 ring-white/10 pointer-events-none" />
+                      </div>
+                    </div>
                     {profileError && (
                       <p className="text-sm text-destructive" role="alert">
                         {profileError}
@@ -632,6 +642,33 @@ export default function ProfileSheet({ open, onClose, onChartMetaChanged }: Prop
                 </div>
               )}
             </div>
+  );
+
+  if (isPage) {
+    if (!open) return null;
+    return profileCard;
+  }
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+          />
+
+          <motion.div
+            className="fixed bottom-0 inset-x-0 z-50 flex justify-center"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+          >
+            {profileCard}
           </motion.div>
         </>
       )}

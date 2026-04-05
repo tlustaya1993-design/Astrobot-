@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CalendarDays, Check, LogIn, MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { useLocation } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import {
   getListOpenaiConversationsQueryKey,
   useDeleteOpenaiConversation,
@@ -13,14 +13,12 @@ import { getAuthHeaders } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
-import ProfileSheet from '@/components/profile/ProfileSheet';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
 
 interface ChatSidebarProps {
   currentConversationId?: number;
   onLoginClick: () => void;
   onNavigate?: () => void;
-  onChartMetaChanged?: () => void;
   className?: string;
   headerRight?: React.ReactNode;
 }
@@ -29,7 +27,6 @@ export default function ChatSidebar({
   currentConversationId,
   onLoginClick,
   onNavigate,
-  onChartMetaChanged,
   className,
   headerRight,
 }: ChatSidebarProps) {
@@ -38,7 +35,6 @@ export default function ChatSidebar({
   const queryClient = useQueryClient();
   const { isLoggedIn, email } = useAuth();
   const [search, setSearch] = useState('');
-  const [showProfile, setShowProfile] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
@@ -120,20 +116,20 @@ export default function ChatSidebar({
               {headerRight}
             </div>
           )}
-          <button
-            onClick={() => setShowProfile(true)}
+          <Link
+            href="/profile"
             className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition"
           >
             <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
-              <IllustratedAvatar config={avatarConfig} size={40} />
+              <IllustratedAvatar config={avatarConfig} size={40} relaxedCrop />
             </div>
             <div className="text-left min-w-0 flex-1">
-              <p className="text-sm font-semibold leading-tight truncate">
-                {isLoggedIn ? email : 'Анонимный сеанс'}
+              <p className="text-sm font-semibold leading-tight truncate">Профиль</p>
+              <p className="text-[11px] text-muted-foreground truncate">
+                {isLoggedIn ? email : 'Настройки и данные'}
               </p>
-              <p className="text-[11px] text-muted-foreground">AstroBot</p>
             </div>
-          </button>
+          </Link>
           {!isLoggedIn && (
             <button
               onClick={onLoginClick}
@@ -271,12 +267,6 @@ export default function ChatSidebar({
           )}
         </div>
       </aside>
-
-      <ProfileSheet
-        open={showProfile}
-        onClose={() => setShowProfile(false)}
-        onChartMetaChanged={onChartMetaChanged}
-      />
     </>
   );
 }

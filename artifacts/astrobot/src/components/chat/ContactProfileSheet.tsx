@@ -6,6 +6,7 @@ import IllustratedAvatar, { AvatarPortraitImage } from '@/components/ui/Illustra
 import { getAuthHeaders } from '@/lib/session';
 import type { Contact } from './PeoplePanel';
 import AvatarEditor from '@/components/ui/AvatarEditor';
+import { useRegisterChatChromeOverlay } from '@/context/ChatChromeBlockContext';
 
 function normalizeAvatarConfig(input: unknown): AvatarConfig {
   if (!input || typeof input !== 'object') return DEFAULT_AVATAR;
@@ -75,6 +76,8 @@ export default function ContactProfileSheet({
   onUpdated,
   onDeleted,
 }: ContactProfileSheetProps) {
+  useRegisterChatChromeOverlay(open && Boolean(contact));
+
   const asHexColor = (value: unknown, fallback: string): string => {
     if (typeof value !== 'string') return fallback;
     return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;

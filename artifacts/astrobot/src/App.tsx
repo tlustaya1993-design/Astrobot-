@@ -8,9 +8,11 @@ import Home from "@/pages/Home";
 import Onboarding from "@/pages/Onboarding";
 import Chat from "@/pages/Chat";
 import History from "@/pages/History";
+import ProfilePage from "@/pages/ProfilePage";
 import AuthCallback from "@/pages/AuthCallback";
 import { getSessionId } from "@/lib/session";
 import { AuthProvider } from "@/context/AuthContext";
+import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +30,7 @@ function Router() {
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/chat" component={Chat} />
       <Route path="/chat/:id" component={Chat} />
+      <Route path="/profile" component={ProfilePage} />
       <Route path="/history" component={History} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route component={NotFound} />
@@ -46,7 +49,9 @@ function App() {
       <AuthProvider>
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
+            <AvatarSyncProvider>
+              <Router />
+            </AvatarSyncProvider>
           </WouterRouter>
           <Toaster />
         </TooltipProvider>

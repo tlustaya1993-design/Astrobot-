@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation } from 'wouter';
 import { getAuthHeaders } from '@/lib/session';
 import AddContactModal from './AddContactModal';
-import ProfileSheet from '@/components/profile/ProfileSheet';
 import type { AvatarConfig } from '@/components/ui/AstroAvatar';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
@@ -24,14 +24,13 @@ export interface Contact {
 interface PeoplePanelProps {
   selectedContactId: number | null;
   onSelect: (id: number | null) => void;
-  onChartMetaChanged?: () => void;
 }
 
-export default function PeoplePanel({ selectedContactId, onSelect, onChartMetaChanged }: PeoplePanelProps) {
+export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanelProps) {
   const { avatarConfig } = useAvatarSync();
+  const [, setLocation] = useLocation();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const [openedContact, setOpenedContact] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
 
@@ -74,7 +73,7 @@ export default function PeoplePanel({ selectedContactId, onSelect, onChartMetaCh
               onSelect(null);
               return;
             }
-            setShowProfile(true);
+            setLocation('/profile');
           }}
           className={`flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium shrink-0 transition-all border ${
             selectedContactId === null
@@ -83,7 +82,7 @@ export default function PeoplePanel({ selectedContactId, onSelect, onChartMetaCh
           }`}
         >
           <div className="w-9 h-9 rounded-full overflow-hidden border border-primary/30 shrink-0">
-            <IllustratedAvatar config={avatarConfig} size={36} />
+            <IllustratedAvatar config={avatarConfig} size={36} relaxedCrop />
           </div>
           <span>Я</span>
         </motion.button>
@@ -167,12 +166,6 @@ export default function PeoplePanel({ selectedContactId, onSelect, onChartMetaCh
         open={showModal}
         onClose={() => setShowModal(false)}
         onAdded={fetchContacts}
-      />
-
-      <ProfileSheet
-        open={showProfile}
-        onClose={() => setShowProfile(false)}
-        onChartMetaChanged={onChartMetaChanged}
       />
 
       <ContactProfileSheet

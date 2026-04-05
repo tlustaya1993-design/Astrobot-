@@ -14,7 +14,7 @@ import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
 import PaywallSheet from '@/components/billing/PaywallSheet';
 import { useAuth } from '@/context/AuthContext';
-import { AvatarSyncProvider } from '@/context/AvatarSyncContext';
+import { ChatChromeBlockProvider, useChatChromeBlocked } from '@/context/ChatChromeBlockContext';
 
 const SUGGESTED_PROMPTS = [
   "Расскажи о моей натальной карте",
@@ -56,6 +56,7 @@ function ChatPageInner() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
   const { isLoggedIn } = useAuth();
+  const hideChatInput = useChatChromeBlocked();
 
   const onChartMetaChanged = useCallback(() => {
     addLocalSystemMessage(
@@ -153,7 +154,6 @@ function ChatPageInner() {
             <ChatSidebar
               currentConversationId={conversationId}
               onLoginClick={() => setShowAuthModal(true)}
-              onChartMetaChanged={onChartMetaChanged}
             />
           </div>
 
@@ -218,7 +218,6 @@ function ChatPageInner() {
               <PeoplePanel
                 selectedContactId={selectedContactId}
                 onSelect={setSelectedContactId}
-                onChartMetaChanged={onChartMetaChanged}
               />
             </div>
 
@@ -342,7 +341,8 @@ function ChatPageInner() {
               <div ref={messagesEndRef} className="h-4" />
             </div>
 
-            {/* Input */}
+            {/* Input — скрываем, пока открыт лист контакта (оверлей) */}
+            {!hideChatInput && (
             <div className="relative z-40 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background/88 backdrop-blur-xl border-t border-border shrink-0">
               {selectedContactId !== null && (
                 <div className="flex items-center gap-1.5 text-xs text-primary/60 mb-2 px-1">
@@ -368,6 +368,7 @@ function ChatPageInner() {
                 </button>
               </form>
             </div>
+            )}
           </div>
         </div>
       </AppLayout>
@@ -394,8 +395,8 @@ function ChatPageInner() {
 
 export default function Chat() {
   return (
-    <AvatarSyncProvider>
+    <ChatChromeBlockProvider>
       <ChatPageInner />
-    </AvatarSyncProvider>
+    </ChatChromeBlockProvider>
   );
 }

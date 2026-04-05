@@ -78,16 +78,18 @@ export function AvatarPortraitImage({
   className = '',
   imageClassName = '',
   loading = 'lazy',
+  cropOverride,
 }: {
   config?: AvatarConfig | null;
   className?: string;
   imageClassName?: string;
   loading?: 'lazy' | 'eager';
+  cropOverride?: { objectPosition: string; scale: number };
 }) {
   const archetype = config?.archetype ?? 'mage';
   const primary = resolveAvatarImage(config);
   const [src, setSrc] = useState(primary);
-  const crop = getAvatarCropStyle(archetype);
+  const crop = cropOverride ?? getAvatarCropStyle(archetype);
   const fallback = fallbackAvatarSrc(archetype);
 
   useEffect(() => {
@@ -119,6 +121,8 @@ interface IllustratedAvatarProps {
   size?: number;
   className?: string;
   imageClassName?: string;
+  /** Меньше zoom — для крупного круга в профиле, чтобы голова не обрезалась */
+  relaxedCrop?: boolean;
 }
 
 export default function IllustratedAvatar({
@@ -126,7 +130,12 @@ export default function IllustratedAvatar({
   size = 40,
   className = '',
   imageClassName = '',
+  relaxedCrop = false,
 }: IllustratedAvatarProps) {
+  const crop = relaxedCrop
+    ? { objectPosition: '50% 42%' as const, scale: 1 }
+    : getAvatarCropStyle(config?.archetype ?? 'mage');
+
   return (
     <div
       className={`relative rounded-full overflow-hidden ${className}`}
@@ -137,6 +146,7 @@ export default function IllustratedAvatar({
         className="h-full w-full object-cover"
         imageClassName={imageClassName}
         loading="lazy"
+        cropOverride={crop}
       />
     </div>
   );
