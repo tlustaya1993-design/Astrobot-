@@ -366,23 +366,57 @@ router.delete("/memories/:id", async (req, res) => {
 
 // ── Memory extraction ────────────────────────────────────────────────────────
 
+const MEMORY_EXTRACTION_SYSTEM = `Ты — система извлечения фактов о пользователе для долгой памяти астролога.
+
+Извлекай краткие факты, если пользователь САМ это сообщил или явно подтвердил в реплике (не выдумывай из текста астролога).
+
+Включай:
+— имена/роли близких, профессию, город/страна, важные события (свадьба, переезд, смена работы, дети);
+— явные переживания, цели, ограничения («боюсь увольнения», «хочу сменить сферу», «в разводе»);
+— то, что пользователь просит учитывать в будущем («не люблю когда…», «важно про детей»).
+
+НЕ сохраняй: общие астрологические термины без личного контекста, вежливости, одноразовые приветствия.
+
+Ответ СТРОГО одним JSON-массивом строк UTF-8, без markdown, без пояснений до или после.
+Если нечего сохранять — [].
+Максимум 4 факта, каждый до 18 слов.
+Пример: ["Зовут Аня, живёт в Оренбурге","Переживает за отношения с партнёром"]`;
+
+/** Модели часто оборачивают ответ в \`\`\`json — иначе JSON.parse ломается и память всегда пустая. */
+function parseMemoryFactsJson(raw: string): string[] {
+  let s = raw.trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (fence) s = fence[1].trim();
+  const tryParse = (t: string): string[] | null => {
+    try {
+      const v = JSON.parse(t) as unknown;
+      if (!Array.isArray(v)) return null;
+      return v.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+    } catch {
+      return null;
+    }
+  };
+  const direct = tryParse(s);
+  if (direct) return direct;
+  const bracket = s.match(/\[[\s\S]*\]/);
+  if (bracket) {
+    const inner = tryParse(bracket[0]);
+    if (inner) return inner;
+  }
+  return [];
+}
+
 async function extractAndSaveMemories(sessionId: string, userMsg: string, assistantMsg: string) {
   try {
     let text = "[]";
     if (hasAnthropicProvider()) {
       const response = await anthropic.messages.create({
         model: "claude-haiku-4-5",
-        max_tokens: 300,
-        system: `Ты — система извлечения фактов. Твоя задача — найти в диалоге конкретные факты о жизни пользователя, которые стоит запомнить для будущих разговоров.
-
-Ищи ТОЛЬКО: имена близких людей и их роль (муж, мама, дочь и т.д.), профессию пользователя или близких, важные жизненные обстоятельства (переезд, беременность, развод, новая работа), важные даты или события.
-
-Отвечай ТОЛЬКО в формате JSON массива строк. Если нет ничего важного — верни [].
-Максимум 3 факта. Каждый факт — одно краткое предложение (до 15 слов).
-Пример: ["Муж пользователя зовут Андрей, работает программистом", "Рассматривают переезд в Берлин"]`,
+        max_tokens: 500,
+        system: MEMORY_EXTRACTION_SYSTEM,
         messages: [
-          { role: "user", content: `Пользователь: ${userMsg}\n\nАстролог: ${assistantMsg}` }
-        ]
+          { role: "user", content: `Пользователь: ${userMsg}\n\nАстролог: ${assistantMsg}` },
+        ],
       });
       text =
         response.content[0]?.type === "text"
@@ -396,11 +430,7 @@ async function extractAndSaveMemories(sessionId: string, userMsg: string, assist
         messages: [
           {
             role: "system",
-            content:
-              `Ты — система извлечения фактов. Твоя задача — найти в диалоге конкретные факты о жизни пользователя, которые стоит запомнить для будущих разговоров.\n\n` +
-              `Ищи ТОЛЬКО: имена близких людей и их роль (муж, мама, дочь и т.д.), профессию пользователя или близких, важные жизненные обстоятельства (переезд, беременность, развод, новая работа), важные даты или события.\n\n` +
-              `Отвечай ТОЛЬКО в формате JSON массива строк. Если нет ничего важного — верни [].\n` +
-              `Максимум 3 факта. Каждый факт — одно краткое предложение (до 15 слов).`,
+            content: MEMORY_EXTRACTION_SYSTEM,
           },
           {
             role: "user",
@@ -411,21 +441,33 @@ async function extractAndSaveMemories(sessionId: string, userMsg: string, assist
       text = (response.choices?.[0]?.message?.content || "[]").trim();
     }
 
-    const facts: string[] = JSON.parse(text);
-    if (!Array.isArray(facts) || facts.length === 0) return;
+    const facts = parseMemoryFactsJson(text);
+    if (facts.length === 0) {
+      if (text.length > 2 && !text.includes("[]")) {
+        logger.warn(
+          { preview: text.slice(0, 240) },
+          "memory extraction returned no parseable facts",
+        );
+      }
+      return;
+    }
 
     // Load existing memories to avoid duplicates
     const existing = await db.select().from(memoriesTable)
       .where(eq(memoriesTable.sessionId, sessionId));
+    const addedThisTurn: string[] = [];
 
     for (const fact of facts) {
-      if (!fact || typeof fact !== "string") continue;
-      // Simple dedup: skip if very similar memory already exists
-      const isDuplicate = existing.some(m =>
-        m.content.toLowerCase().includes(fact.toLowerCase().slice(0, 15))
-      );
+      if (typeof fact !== "string") continue;
+      const trimmed = fact.trim();
+      if (!trimmed) continue;
+      const prefixLen = Math.min(14, trimmed.length);
+      const prefix = trimmed.toLowerCase().slice(0, Math.max(prefixLen, 1));
+      const pool = [...existing.map((m) => m.content), ...addedThisTurn];
+      const isDuplicate = pool.some((c) => c.toLowerCase().includes(prefix));
       if (!isDuplicate) {
-        await db.insert(memoriesTable).values({ sessionId, content: fact });
+        await db.insert(memoriesTable).values({ sessionId, content: trimmed });
+        addedThisTurn.push(trimmed);
       }
     }
   } catch { /* Memory extraction is non-critical, fail silently */ }
