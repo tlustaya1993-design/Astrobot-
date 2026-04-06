@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useGetOpenaiConversation } from '@workspace/api-client-react';
@@ -9,12 +9,8 @@ import { useChatStream } from '@/hooks/use-chat-stream';
 import AstroMarkdown from '@/components/chat/AstroMarkdown';
 import PeoplePanel from '@/components/chat/PeoplePanel';
 import HistoryDrawer from '@/components/chat/HistoryDrawer';
-import ChatSidebar from '@/components/chat/ChatSidebar';
 import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
-import PaywallSheet from '@/components/billing/PaywallSheet';
-import { useAuth } from '@/context/AuthContext';
-import { ChatChromeBlockProvider, useChatChromeBlocked } from '@/context/ChatChromeBlockContext';
 
 const SUGGESTED_PROMPTS = [
   "Расскажи о моей натальной карте",
@@ -23,7 +19,7 @@ const SUGGESTED_PROMPTS = [
   "Разбери мою Часть Удачи"
 ];
 
-function ChatPageInner() {
+export default function Chat() {
   const [match, params] = useRoute('/chat/:id');
   const [, setLocation] = useLocation();
   const conversationId = match && params?.id ? parseInt(params.id, 10) : undefined;
@@ -36,33 +32,12 @@ function ChatPageInner() {
     }
   );
 
-  const {
-    localMessages,
-    isStreaming,
-    streamingText,
-    sendMessage,
-    clearLocalMessages,
-    addLocalSystemMessage,
-    paywallState,
-    closePaywall,
-  } = useChatStream(conversationId);
+  const { localMessages, isStreaming, streamingText, sendMessage, clearLocalMessages } = useChatStream(conversationId);
   const [inputValue, setInputValue] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [isDailyForecastHidden, setIsDailyForecastHidden] = useState(false);
-  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
-  const { isLoggedIn } = useAuth();
-  const hideChatInput = useChatChromeBlocked();
-
-  const onChartMetaChanged = useCallback(() => {
-    addLocalSystemMessage(
-      'Данные карты были изменены.',
-    );
-  }, [addLocalSystemMessage]);
 
   // Swipe-from-left-edge detection
   const touchStartX = useRef(0);
@@ -86,17 +61,8 @@ function ChatPageInner() {
     : (conversation?.messages || []);
 
   useEffect(() => {
-    if (!autoScrollEnabled) return;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [displayMessages, streamingText, autoScrollEnabled]);
-
-  const handleMessagesScroll = () => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
-    const distanceToBottom = el.scrollHeight - (el.scrollTop + el.clientHeight);
-    const shouldStickToBottom = distanceToBottom < 80;
-    setAutoScrollEnabled(shouldStickToBottom);
-  };
+  }, [displayMessages, streamingText]);
 
   useEffect(() => {
     clearLocalMessages();
@@ -114,136 +80,49 @@ function ChatPageInner() {
   };
 
   const isNew = !conversationId && displayMessages.length === 0;
-  const lockIntroViewport = isNew && !isLoading && !isStreaming;
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const key = `daily-forecast-hidden-${new Date().toISOString().slice(0, 10)}`;
-    setIsDailyForecastHidden(localStorage.getItem(key) === '1');
-  }, []);
-
-  const setDailyForecastHidden = (hidden: boolean) => {
-    if (typeof window !== 'undefined') {
-      const key = `daily-forecast-hidden-${new Date().toISOString().slice(0, 10)}`;
-      if (hidden) {
-        localStorage.setItem(key, '1');
-      } else {
-        localStorage.removeItem(key);
-      }
-    }
-    setIsDailyForecastHidden(hidden);
-  };
-
-  const BotBadge = () => (
-    <div className="w-full h-full rounded-full bg-background flex items-center justify-center">
-      <Sparkles className="w-4 h-4 text-primary" />
-    </div>
-  );
 
   return (
     <>
       <AppLayout>
-        <div className="flex-1 min-h-0 flex">
-          <div
-            className={`hidden md:block border-r border-border/50 bg-background/60 backdrop-blur-xl transition-all duration-200 ${
-              isDesktopSidebarCollapsed
-                ? 'w-0 min-w-0 overflow-hidden border-r-0'
-                : 'w-[320px] lg:w-[360px] shrink-0'
-            }`}
-          >
-            <ChatSidebar
-              currentConversationId={conversationId}
-              onLoginClick={() => setShowAuthModal(true)}
-            />
-          </div>
-
-          <div
-            className="flex-1 flex flex-col min-h-0 relative"
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-          >
-            <div
-              className="chat-bg absolute inset-0 z-0 overflow-hidden pointer-events-none"
-              aria-hidden="true"
-              style={
-                {
-                  "--chat-bg-image": `url("${import.meta.env.BASE_URL}images/chat-night-sky.png")`,
-                } as React.CSSProperties
-              }
-            />
-
-            {/* Header */}
-            <header className="relative z-40 sticky top-0 bg-background/85 backdrop-blur-xl border-b border-white/5 p-4 flex items-center justify-between shadow-sm">
-              {conversationId ? (
-                <button
-                  onClick={() => setLocation('/chat')}
-                  className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition md:hidden"
-                >
-                  <ChevronLeft className="w-6 h-6" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowHistory(true)}
-                  className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition md:hidden"
-                  aria-label="Открыть историю"
-                >
-                  <Menu className="w-6 h-6" />
-                </button>
-              )}
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsDesktopSidebarCollapsed((prev) => !prev)}
-                  className="hidden md:inline-flex p-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
-                  aria-label={isDesktopSidebarCollapsed ? "Показать список чатов" : "Скрыть список чатов"}
-                  title={isDesktopSidebarCollapsed ? "Показать список чатов" : "Скрыть список чатов"}
-                >
-                  {isDesktopSidebarCollapsed ? (
-                    <PanelLeftOpen className="w-5 h-5" />
-                  ) : (
-                    <PanelLeftClose className="w-5 h-5" />
-                  )}
-                </button>
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent p-[1px]">
-                  <BotBadge />
-                </div>
-                <h2 className="font-display font-semibold text-lg">AstroBot</h2>
-              </div>
-
-              <div className="w-10 md:hidden" />
-            </header>
-
-            {/* People Panel */}
-            <div className="relative z-30 shrink-0">
-              <PeoplePanel
-                selectedContactId={selectedContactId}
-                onSelect={setSelectedContactId}
-              />
-            </div>
-
-            {/* Прогноз на день — в потоке под чипами, не под шапкой и не перекрывается панелью людей */}
-            {isNew && !isLoading && !selectedContactId && (
-              <div className="relative z-20 shrink-0 px-3 pt-1 pb-2 md:px-4 border-b border-border/35 bg-background/85 backdrop-blur-md">
-                <div className="max-w-md mx-auto w-full">
-                  <DailyForecastCard
-                    onAskQuestion={(q) => {
-                      setInputValue(q);
-                    }}
-                    hidden={isDailyForecastHidden}
-                    onToggleHidden={() => setDailyForecastHidden(!isDailyForecastHidden)}
-                  />
-                </div>
-              </div>
+        <div
+          className="flex-1 flex flex-col min-h-0"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Header */}
+          <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 flex items-center justify-between shadow-sm">
+            {conversationId ? (
+              <button
+                onClick={() => setLocation('/chat')}
+                className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowHistory(true)}
+                className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
+                aria-label="Открыть историю"
+              >
+                <Menu className="w-6 h-6" />
+              </button>
             )}
 
-            {/* Messages */}
-            <div
-              ref={messagesContainerRef}
-              onScroll={handleMessagesScroll}
-              className={`relative z-10 flex-1 p-4 space-y-6 overflow-x-hidden ${
-                lockIntroViewport ? 'overflow-y-hidden' : 'overflow-y-auto'
-              }`}
-            >
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent p-[1px]">
+                <img src={`${import.meta.env.BASE_URL}images/avatar-bot.png`} alt="AstroBot" className="w-full h-full rounded-full bg-background" />
+              </div>
+              <h2 className="font-display font-semibold text-lg">AstroBot</h2>
+            </div>
+
+            <div className="w-10" />
+          </header>
+
+          {/* People Panel */}
+          <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-6">
             {isLoading && (
               <div className="flex justify-center py-10">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -254,9 +133,16 @@ function ChatPageInner() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="relative flex flex-col items-center justify-center min-h-full py-6 md:py-8 text-center"
+                className="flex flex-col items-center justify-center py-8 text-center"
               >
-                <div className="w-16 h-16 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-5 shadow-[0_0_30px_rgba(212,175,55,0.15)] mt-2 md:mt-4">
+                {/* Daily Forecast Card */}
+                {!selectedContactId && (
+                  <div className="w-full max-w-md mb-6">
+                    <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
+                  </div>
+                )}
+
+                <div className="w-16 h-16 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-5 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
                   <Sparkles className="w-8 h-8 text-primary" />
                 </div>
                 <h3 className="text-xl font-display font-semibold mb-2">О чём спросить звёзды?</h3>
@@ -265,7 +151,7 @@ function ChatPageInner() {
                     ? "Режим синастрии активен. Спросите о совместимости."
                     : "Спрашивайте о вашей карте, текущих транзитах или жизненных вопросах."}
                 </p>
-                <div className="flex flex-wrap justify-center gap-2 max-w-md">
+                <div className="flex flex-col items-center gap-2 w-full max-w-xs">
                   {(selectedContactId
                     ? ["Расскажи о нашей синастрии", "Какие у нас сильные аспекты?", "Есть ли напряжение в нашей карте?", "Что звёзды говорят о нас?"]
                     : SUGGESTED_PROMPTS
@@ -273,7 +159,7 @@ function ChatPageInner() {
                     <button
                       key={i}
                       onClick={() => setInputValue(prompt)}
-                      className="px-4 py-2 rounded-full text-sm bg-card border border-border hover:border-primary/50 hover:bg-white/5 transition-all text-left"
+                      className="w-full px-4 py-2.5 rounded-full text-sm bg-card border border-border hover:border-primary/50 hover:bg-white/5 transition-all text-center leading-snug"
                     >
                       {prompt}
                     </button>
@@ -282,52 +168,35 @@ function ChatPageInner() {
               </motion.div>
             )}
 
-            {displayMessages.map((msg, idx) =>
-              msg.role === 'system' ? (
-                <motion.div
-                  key={msg.id || idx}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-center px-2"
-                >
-                  <p className="text-xs text-center text-muted-foreground/90 max-w-md leading-relaxed border border-border/50 rounded-full px-4 py-2 bg-background/50 backdrop-blur-sm">
-                    {msg.content}
-                  </p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key={msg.id || idx}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 break-words backdrop-blur-sm shadow-lg shadow-black/35 ${
-                      msg.role === 'user'
-                        ? 'bg-gradient-to-br from-primary/30 to-accent/28 border border-primary/45 text-foreground rounded-tr-sm'
-                        : 'bg-secondary/60 border border-primary/35 text-foreground rounded-tl-sm'
-                    }`}
-                  >
-                    {msg.role === 'assistant' ? (
-                      <div className="assistant-bubble prose prose-invert prose-p:leading-relaxed prose-sm max-w-none">
-                        <AstroMarkdown content={msg.content} />
-                      </div>
-                    ) : (
-                      msg.content
-                    )}
+            {displayMessages.map((msg, idx) => (
+              <motion.div
+                key={msg.id || idx}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                {msg.role === 'assistant' && (
+                  <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden">
+                    <img src={`${import.meta.env.BASE_URL}images/avatar-bot.png`} alt="Bot" className="w-full h-full object-cover" />
                   </div>
-                </motion.div>
-              ),
-            )}
+                )}
+                <div className={`max-w-[82%] rounded-2xl p-4 shadow-lg ${
+                  msg.role === 'user'
+                    ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm'
+                    : 'bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none'
+                }`}>
+                  {msg.role === 'assistant' ? <AstroMarkdown content={msg.content} /> : msg.content}
+                </div>
+              </motion.div>
+            ))}
 
             {isStreaming && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
-                <div className="max-w-[88%] md:max-w-[82%] rounded-2xl px-4 py-3.5 break-words backdrop-blur-sm shadow-lg shadow-black/35 bg-secondary/60 border border-primary/35 text-foreground rounded-tl-sm">
-                  {streamingText ? (
-                    <div className="assistant-bubble prose prose-invert prose-sm max-w-none">
-                      <AstroMarkdown content={streamingText} />
-                    </div>
-                  ) : (
+                <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden">
+                  <img src={`${import.meta.env.BASE_URL}images/avatar-bot.png`} alt="Bot" className="w-full h-full object-cover" />
+                </div>
+                <div className="max-w-[82%] rounded-2xl p-4 shadow-lg bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-sm max-w-none">
+                  {streamingText ? <AstroMarkdown content={streamingText} /> : (
                     <div className="flex space-x-1 py-1">
                       <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
                       <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
@@ -338,37 +207,34 @@ function ChatPageInner() {
               </motion.div>
             )}
 
-              <div ref={messagesEndRef} className="h-4" />
-            </div>
+            <div ref={messagesEndRef} className="h-4" />
+          </div>
 
-            {/* Input — скрываем, пока открыт лист контакта (оверлей) */}
-            {!hideChatInput && (
-            <div className="relative z-40 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background/88 backdrop-blur-xl border-t border-border shrink-0">
-              {selectedContactId !== null && (
-                <div className="flex items-center gap-1.5 text-xs text-primary/60 mb-2 px-1">
-                  <span className="text-base leading-none">⚯</span>
-                  <span>Синастрия активна — вопросы будут разобраны с учётом карты выбранного человека</span>
-                </div>
-              )}
-              <form onSubmit={handleSend} className="relative flex items-center">
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  placeholder={selectedContactId ? "Спросите о совместимости..." : "Спросите звёзды..."}
-                  className="w-full bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-full py-3.5 pl-5 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50"
-                  disabled={isStreaming}
-                />
-                <button
-                  type="submit"
-                  disabled={!inputValue.trim() || isStreaming}
-                  className="absolute right-2 p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Send className="w-4 h-4 ml-0.5" />
-                </button>
-              </form>
-            </div>
+          {/* Input */}
+          <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
+            {selectedContactId !== null && (
+              <div className="flex items-center gap-1.5 text-xs text-primary/60 mb-2 px-1">
+                <span className="text-base leading-none">⚯</span>
+                <span>Синастрия активна — вопросы будут разобраны с учётом карты выбранного человека</span>
+              </div>
             )}
+            <form onSubmit={handleSend} className="relative flex items-center">
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder={selectedContactId ? "Спросите о совместимости..." : "Спросите звёзды..."}
+                className="w-full bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-full py-3.5 pl-5 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50"
+                disabled={isStreaming}
+              />
+              <button
+                type="submit"
+                disabled={!inputValue.trim() || isStreaming}
+                className="absolute right-2 p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Send className="w-4 h-4 ml-0.5" />
+              </button>
+            </form>
           </div>
         </div>
       </AppLayout>
@@ -384,19 +250,6 @@ function ChatPageInner() {
         onClose={() => setShowAuthModal(false)}
         initialTab="login"
       />
-
-      <PaywallSheet
-        open={Boolean(paywallState?.open)}
-        onClose={closePaywall}
-      />
     </>
-  );
-}
-
-export default function Chat() {
-  return (
-    <ChatChromeBlockProvider>
-      <ChatPageInner />
-    </ChatChromeBlockProvider>
   );
 }
