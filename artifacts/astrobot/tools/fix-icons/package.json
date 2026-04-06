@@ -1,0 +1,8 @@
+{
+  "name": "astrobot-fix-icons",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "sharp": "^0.34.5"
+  }
+}
