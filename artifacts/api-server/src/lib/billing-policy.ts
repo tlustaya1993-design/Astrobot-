@@ -3,7 +3,8 @@ const DEFAULT_UNLIMITED_EMAILS: string[] = [];
 
 function parseFreeQuota(): number {
   const raw = Number.parseInt(process.env.FREE_REQUESTS_QUOTA ?? "", 10);
-  if (!Number.isFinite(raw) || raw < 0) {
+  // Пустое/NaN/0: дефолт 5. Ноль в панелях часто означает «не задано», а не «запретить бесплатные».
+  if (!Number.isFinite(raw) || raw < 1) {
     return DEFAULT_FREE_REQUESTS_LIMIT;
   }
   return raw;
