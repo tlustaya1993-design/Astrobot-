@@ -58,10 +58,16 @@ export function useChatStream(conversationId?: number) {
       });
 
       if (!res.ok) {
-        let message = 'Failed to send message';
+        let message = `Ошибка сервера (${res.status})`;
         let payloadMeta: { freeRemaining?: number; required?: number; balance?: number } = {};
+        const raw = await res.clone().text();
         try {
-          const payload = await res.json() as { error?: string; freeRemaining?: number; required?: number; balance?: number };
+          const payload = JSON.parse(raw) as {
+            error?: string;
+            freeRemaining?: number;
+            required?: number;
+            balance?: number;
+          };
           if (payload?.error) {
             message = payload.error;
             if (typeof payload.freeRemaining === 'number') {
@@ -81,7 +87,12 @@ export function useChatStream(conversationId?: number) {
             });
           }
         } catch {
-          // keep generic fallback
+          if (raw.trimStart().startsWith('<!')) {
+            message =
+              res.status >= 500
+                ? 'Сервер временно недоступен (внутренняя ошибка). Попробуйте позже или обновите страницу.'
+                : `Запрос отклонён (${res.status}). Обновите страницу и войдите снова.`;
+          }
         }
         throw Object.assign(new Error(message), { code: res.status, payloadMeta });
       }

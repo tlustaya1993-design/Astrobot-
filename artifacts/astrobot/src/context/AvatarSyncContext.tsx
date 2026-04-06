@@ -6,6 +6,7 @@ import {
   type AvatarConfig,
 } from "@/components/ui/AstroAvatar";
 import { getAuthHeaders } from "@/lib/session";
+import { useAuth } from "@/context/AuthContext";
 
 type AvatarSyncContextValue = {
   avatarConfig: AvatarConfig;
@@ -40,7 +41,7 @@ export function AvatarSyncProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => {
     void refreshUserAvatar();
-  }, [refreshUserAvatar]);
+  }, [isLoggedIn, refreshUserAvatar]);
 
   const value: AvatarSyncContextValue = {
     avatarConfig,

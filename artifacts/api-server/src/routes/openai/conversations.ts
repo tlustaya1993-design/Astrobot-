@@ -10,8 +10,23 @@ import {
   formatSolarReturnForPrompt, formatProgressionsForPrompt, formatSynastryForPrompt,
   formatLunarReturnForPrompt, formatSolarArcForPrompt, formatTransitPerfectionsForPrompt,
 } from "../../lib/astrology.js";
+import {
+  FREE_REQUESTS_LIMIT,
+  isUnlimitedUser,
+  getRemainingFreeRequests,
+  canAffordRequest,
+  getBalanceAfterCharge,
+} from "../../lib/billing-policy.js";
 
 const router: IRouter = Router();
+const CHAT_RESPONSE_TEMPERATURE = 0.2;
+
+function hasAnthropicProvider(): boolean {
+  return Boolean(
+    process.env.ANTHROPIC_API_KEY ||
+      process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+  );
+}
 
 router.get("/conversations", async (req, res) => {
   const sessionId = req.sessionId;
@@ -102,8 +117,17 @@ router.get("/conversations/:id/messages", async (req, res) => {
 
 router.post("/conversations/:id/messages", async (req, res) => {
   const id = Number(req.params.id);
-  const { content, sessionId: bodySessionId, contactId } = req.body;
-  const sessionId = req.sessionId || bodySessionId;
+  const { content, sessionId: bodySessionId, contactId } = req.body as {
+    content?: string;
+    sessionId?: string;
+    contactId?: number;
+  };
+  const sessionId = (req.sessionId || bodySessionId) as string | undefined;
+
+  if (!sessionId || typeof sessionId !== "string") {
+    res.status(401).json({ error: "Требуется авторизация" });
+    return;
+  }
 
   if (!content) {
     res.status(400).json({ error: "content required" });
@@ -119,33 +143,124 @@ router.post("/conversations/:id/messages", async (req, res) => {
     res.status(404).json({ error: "Conversation not found" });
     return;
   }
-
-  // Save contactId to conversation if it's a synastry chat and not saved yet
-  if (contactId && !conv.contactId) {
-    await db.update(conversations).set({ contactId: Number(contactId) }).where(eq(conversations.id, id));
+  if (conv.sessionId !== sessionId) {
+    res.status(403).json({
+      error: "Этот диалог относится к другому аккаунту. Откройте список чатов и создайте новый диалог.",
+    });
+    return;
   }
 
-  await db.insert(messages).values({ conversationId: id, role: "user", content });
+  if (contactId && !conv.contactId) {
+    await db
+      .update(conversations)
+      .set({ contactId: Number(contactId) })
+      .where(eq(conversations.id, id));
+  }
 
-  // Load all data in parallel
+  let [owner] = await db
+    .select({
+      sessionId: usersTable.sessionId,
+      email: usersTable.email,
+      requestsUsed: usersTable.requestsUsed,
+      requestsBalance: usersTable.requestsBalance,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.sessionId, sessionId))
+    .limit(1);
+
+  if (!owner) {
+    await db.insert(usersTable).values({ sessionId }).onConflictDoNothing();
+    [owner] = await db
+      .select({
+        sessionId: usersTable.sessionId,
+        email: usersTable.email,
+        requestsUsed: usersTable.requestsUsed,
+        requestsBalance: usersTable.requestsBalance,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.sessionId, sessionId))
+      .limit(1);
+  }
+
+  const requestCost = content.length >= 1200 ? 2 : 1;
+  const remainingFree = getRemainingFreeRequests(owner?.requestsUsed ?? 0);
+  const isUnlimited = isUnlimitedUser(owner?.email);
+
+  if (!owner || !canAffordRequest(owner.requestsUsed, owner.requestsBalance, requestCost, owner.email)) {
+    res.status(402).json({
+      error: `Лимит бесплатных запросов (${FREE_REQUESTS_LIMIT}) исчерпан. Пополните пакет, чтобы продолжить.`,
+      required: requestCost,
+      balance: owner?.requestsBalance ?? 0,
+      freeRemaining: remainingFree,
+      isUnlimited,
+    });
+    return;
+  }
+
+  const nextBalance = getBalanceAfterCharge(
+    owner.requestsUsed,
+    owner.requestsBalance,
+    requestCost,
+    owner.email,
+  );
+
+  const balanceBeforeCharge = owner.requestsBalance;
+
+  const [insertedUser] = await db
+    .insert(messages)
+    .values({ conversationId: id, role: "user", content })
+    .returning({ id: messages.id });
+
+  await db
+    .update(usersTable)
+    .set({
+      requestsBalance: nextBalance,
+      updatedAt: new Date(),
+    })
+    .where(eq(usersTable.sessionId, sessionId));
+
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
     db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
-    sessionId
-      ? db.select().from(usersTable).where(eq(usersTable.sessionId, sessionId)).limit(1).then(r => r[0] || null)
+    db.select().from(usersTable).where(eq(usersTable.sessionId, sessionId)).limit(1).then((r) => r[0] || null),
+    contactId
+      ? db
+          .select()
+          .from(contactsTable)
+          .where(
+            and(eq(contactsTable.id, Number(contactId)), eq(contactsTable.sessionId, sessionId)),
+          )
+          .limit(1)
+          .then((r) => r[0] || null)
       : Promise.resolve(null),
-    (contactId && sessionId)
-      ? db.select().from(contactsTable)
-          .where(and(eq(contactsTable.id, Number(contactId)), eq(contactsTable.sessionId, sessionId)))
-          .limit(1).then(r => r[0] || null)
-      : Promise.resolve(null),
-    sessionId
-      ? db.select().from(memoriesTable).where(eq(memoriesTable.sessionId, sessionId)).orderBy(desc(memoriesTable.updatedAt)).limit(20)
-      : Promise.resolve([]),
+    db
+      .select()
+      .from(memoriesTable)
+      .where(eq(memoriesTable.sessionId, sessionId))
+      .orderBy(desc(memoriesTable.updatedAt))
+      .limit(20),
   ]);
 
-  const systemPrompt = buildSystemPrompt(userProfile, contactProfile, userMemories);
+  let systemPrompt: string;
+  try {
+    systemPrompt = buildSystemPrompt(userProfile, contactProfile, userMemories);
+  } catch (promptErr) {
+    logger.error({ err: promptErr }, "buildSystemPrompt failed");
+    await db.delete(messages).where(eq(messages.id, insertedUser.id));
+    await db
+      .update(usersTable)
+      .set({
+        requestsBalance: balanceBeforeCharge,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.sessionId, sessionId));
+    res.status(500).json({
+      error:
+        "Не удалось подготовить ответ (ошибка при расчёте карты или данных профиля). Попробуйте позже или начните новый короткий диалог.",
+    });
+    return;
+  }
 
-  const chatMessages = history.map(m => ({
+  const chatMessages = history.map((m) => ({
     role: m.role as "user" | "assistant",
     content: m.content,
   }));
@@ -157,40 +272,69 @@ router.post("/conversations/:id/messages", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.flushHeaders();
 
-  // Heartbeat every 20s so Railway doesn't close idle SSE connections
   const heartbeat = setInterval(() => {
-    try { res.write(": ping\n\n"); } catch { /* ignore */ }
+    try {
+      res.write(": ping\n\n");
+    } catch {
+      /* ignore */
+    }
   }, 20_000);
 
   let fullResponse = "";
+  const unknownTimePreface = userProfile?.birthTimeUnknown
+    ? "Важно: время рождения указано неточно (используем 12:00), поэтому вывод по домам и точным таймингам менее конкретный.\n\n"
+    : "";
+
+  if (unknownTimePreface) {
+    fullResponse += unknownTimePreface;
+    res.write(`data: ${JSON.stringify({ content: unknownTimePreface })}\n\n`);
+  }
 
   try {
-    const stream = anthropic.messages.stream({
-      model: "claude-sonnet-4-6",
-      max_tokens: 8192,
-      temperature: 0.5,
-      system: systemPrompt,
-      messages: chatMessages,
-    });
+    if (hasAnthropicProvider()) {
+      const stream = anthropic.messages.stream({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8192,
+        temperature: CHAT_RESPONSE_TEMPERATURE,
+        system: systemPrompt,
+        messages: chatMessages,
+      });
 
-    for await (const event of stream) {
-      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-        fullResponse += event.delta.text;
-        res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+      for await (const event of stream) {
+        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+          fullResponse += event.delta.text;
+          res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+        }
+      }
+    } else {
+      const { openai } = await import("@workspace/integrations-openai-ai-server");
+      const stream = await openai.chat.completions.create({
+        model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+        temperature: CHAT_RESPONSE_TEMPERATURE,
+        stream: true,
+        messages: [{ role: "system", content: systemPrompt }, ...chatMessages],
+      });
+
+      for await (const chunk of stream) {
+        const delta = chunk.choices?.[0]?.delta?.content;
+        if (typeof delta === "string" && delta.length > 0) {
+          fullResponse += delta;
+          res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+        }
       }
     }
 
-    // Save assistant response + increment request counter
     await Promise.all([
       db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse }),
-      sessionId
-        ? db.update(usersTable)
-            .set({ requestsUsed: sql`${usersTable.requestsUsed} + 1`, updatedAt: new Date() })
-            .where(eq(usersTable.sessionId, sessionId))
-        : Promise.resolve(),
+      db
+        .update(usersTable)
+        .set({
+          requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(usersTable.sessionId, sessionId)),
     ]);
 
-    // Async memory extraction — don't block the response
     if (sessionId && fullResponse) {
       extractAndSaveMemories(sessionId, content, fullResponse).catch(() => {});
     }
@@ -198,8 +342,10 @@ router.post("/conversations/:id/messages", async (req, res) => {
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err) {
-    logger.error({ err }, "Anthropic streaming error");
-    res.write(`data: ${JSON.stringify({ error: "Generation failed" })}\n\n`);
+    const errorMessage =
+      err instanceof Error && err.message ? err.message : "Generation failed";
+    logger.error({ err }, "Chat streaming error");
+    res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
     res.end();
   } finally {
     clearInterval(heartbeat);
@@ -271,6 +417,7 @@ async function extractAndSaveMemories(sessionId: string, userMsg: string, assist
 type UserRow = {
   name?: string | null; birthDate?: string | null; birthTime?: string | null;
   birthPlace?: string | null; birthLat?: number | null; birthLng?: number | null;
+  birthTimeUnknown?: boolean | null;
   gender?: string | null; language?: string | null; tonePreferredDepth?: string | null;
   tonePreferredStyle?: string | null; toneEmotionalSensitivity?: string | null;
   toneFamiliarityLevel?: string | null;

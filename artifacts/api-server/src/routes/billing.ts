@@ -15,15 +15,16 @@ import {
 
 const router: IRouter = Router();
 
-type PackageCode = "pack10" | "pack50" | "pack100";
+type PackageCode = "pack10" | "pack30" | "pack50" | "pack100";
 
 const PACKAGE_CONFIG: Record<
   PackageCode,
   { amountRub: string; credits: number; title: string }
 > = {
-  pack10: { amountRub: "399.00", credits: 10, title: "AstroBot — 10 запросов" },
-  pack50: { amountRub: "1499.00", credits: 50, title: "AstroBot — 50 запросов" },
-  pack100: { amountRub: "2499.00", credits: 100, title: "AstroBot — 100 запросов" },
+  pack10: { amountRub: "349.00", credits: 10, title: "AstroBot — Старт, 10 запросов" },
+  pack30: { amountRub: "799.00", credits: 30, title: "AstroBot — Стандарт, 30 запросов" },
+  pack50: { amountRub: "1149.00", credits: 50, title: "AstroBot — Про, 50 запросов" },
+  pack100: { amountRub: "1799.00", credits: 100, title: "AstroBot — Макс, 100 запросов" },
 };
 
 const DEFAULT_RECEIPT_EMAIL = "billing@astrobot.app";

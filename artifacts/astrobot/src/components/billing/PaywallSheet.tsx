@@ -9,21 +9,27 @@ import { getAuthHeaders } from '@/lib/session';
 const PACKAGES = [
   {
     code: 'pack10',
-    title: '10 запросов',
-    subtitle: 'Подходит для быстрого продолжения диалога',
-    price: '399 ₽',
+    title: 'Старт',
+    subtitle: '10 запросов',
+    price: '349 ₽',
+  },
+  {
+    code: 'pack30',
+    title: 'Стандарт',
+    subtitle: '30 запросов',
+    price: '799 ₽',
   },
   {
     code: 'pack50',
-    title: '50 запросов',
-    subtitle: 'Оптимально для регулярного использования',
-    price: '1499 ₽',
+    title: 'Про',
+    subtitle: '50 запросов',
+    price: '1 149 ₽',
   },
   {
     code: 'pack100',
-    title: '100 запросов',
-    subtitle: 'Максимально выгодный пакет',
-    price: '2499 ₽',
+    title: 'Макс',
+    subtitle: '100 запросов',
+    price: '1 799 ₽',
   },
 ] as const;
 
@@ -179,7 +185,9 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
                   } disabled:opacity-60`}
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  Оплатить
+                  {selected
+                    ? `Оплатить — ${selected.title} · ${selected.price}`
+                    : 'Оплатить'}
                 </button>
               </div>
             </div>
