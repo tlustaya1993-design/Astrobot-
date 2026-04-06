@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, MessageSquare, Trash2, CalendarDays, LogIn } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { useLocation } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import {
   useListOpenaiConversations,
   useDeleteOpenaiConversation,
@@ -83,23 +83,27 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
             onTouchEnd={handleTouchEnd}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-4 border-b border-border/50">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between px-4 py-4 border-b border-border/50 gap-2">
+              <Link
+                href="/profile"
+                onClick={() => onClose()}
+                className="flex items-center gap-3 min-w-0 flex-1 rounded-xl p-1 -m-1 hover:bg-white/5 transition"
+              >
                 <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
                   <IllustratedAvatar config={avatarConfig} size={40} relaxedCrop />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-tight truncate">
-                    {isLoggedIn ? email : 'Анонимный сеанс'}
+                <div className="min-w-0 text-left">
+                  <p className="text-sm font-semibold leading-tight truncate">Профиль</p>
+                  <p className="text-[11px] text-muted-foreground truncate">
+                    {isLoggedIn ? email : 'Настройки и данные'}
                   </p>
                   {!isLoggedIn && (
                     <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                      Зарегистрируйтесь, чтобы сохранить историю и контекст
+                      После регистрации память и история сохраняются
                     </p>
                   )}
-                  <p className="text-[11px] text-muted-foreground">AstroBot</p>
                 </div>
-              </div>
+              </Link>
               <button
                 onClick={onClose}
                 className="p-1.5 rounded-full hover:bg-white/5 text-muted-foreground transition"

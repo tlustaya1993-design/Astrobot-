@@ -61,6 +61,13 @@ export function useChatStream(conversationId?: number) {
         let message = `Ошибка сервера (${res.status})`;
         let payloadMeta: { freeRemaining?: number; required?: number; balance?: number } = {};
         const raw = await res.clone().text();
+        const openPaywall = (msg: string, meta: typeof payloadMeta) => {
+          setPaywallState({
+            open: true,
+            message: msg,
+            ...meta,
+          });
+        };
         try {
           const payload = JSON.parse(raw) as {
             error?: string;
@@ -80,11 +87,7 @@ export function useChatStream(conversationId?: number) {
             balance: payload?.balance,
           };
           if (res.status === 402) {
-            setPaywallState({
-              open: true,
-              message: payload?.error || 'Лимит запросов исчерпан. Пополните пакет.',
-              ...payloadMeta,
-            });
+            openPaywall(payload?.error || 'Лимит запросов исчерпан. Пополните пакет.', payloadMeta);
           }
         } catch {
           if (raw.trimStart().startsWith('<!')) {
@@ -92,6 +95,12 @@ export function useChatStream(conversationId?: number) {
               res.status >= 500
                 ? 'Сервер временно недоступен (внутренняя ошибка). Попробуйте позже или обновите страницу.'
                 : `Запрос отклонён (${res.status}). Обновите страницу и войдите снова.`;
+          }
+          if (res.status === 402) {
+            openPaywall(
+              'Лимит бесплатных запросов исчерпан. Пополните пакет, чтобы продолжить.',
+              payloadMeta,
+            );
           }
         }
         throw Object.assign(new Error(message), { code: res.status, payloadMeta });
