@@ -12,7 +12,7 @@ import {
 import { getAuthHeaders } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import AstroAvatar from '@/components/ui/AstroAvatar';
+import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
 
@@ -32,6 +32,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     request: { headers: getAuthHeaders() },
     query: { enabled: open },
   });
+  const hasConversations = (conversations?.length ?? 0) > 0;
 
   const deleteMutation = useDeleteOpenaiConversation({
     request: { headers: getAuthHeaders() },
@@ -85,12 +86,17 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
             <div className="flex items-center justify-between px-4 py-4 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
-                  <AstroAvatar config={avatarConfig} size={40} />
+                  <IllustratedAvatar config={avatarConfig} size={40} relaxedCrop />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold leading-tight truncate">
                     {isLoggedIn ? email : 'Анонимный сеанс'}
                   </p>
+                  {!isLoggedIn && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
+                      Зарегистрируйтесь, чтобы сохранить историю и контекст.
+                    </p>
+                  )}
                   <p className="text-[11px] text-muted-foreground">AstroBot</p>
                 </div>
               </div>
@@ -115,7 +121,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
 
             {/* Conversations list */}
             <div className="flex-1 overflow-y-auto py-1">
-              {isLoading ? (
+              {isLoading && hasConversations ? (
                 <div className="space-y-1 px-2 pt-2">
                   {[1, 2, 3, 4].map(i => (
                     <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />

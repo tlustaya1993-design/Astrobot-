@@ -42,6 +42,7 @@ export default function ChatSidebar({
   const { data: conversations, isLoading } = useListOpenaiConversations({
     request: { headers: getAuthHeaders() },
   });
+  const hasConversations = (conversations?.length ?? 0) > 0;
 
   const deleteMutation = useDeleteOpenaiConversation({
     request: { headers: getAuthHeaders() },
@@ -129,6 +130,11 @@ export default function ChatSidebar({
               <p className="text-[11px] text-muted-foreground truncate">
                 {isLoggedIn ? email : 'Настройки и данные'}
               </p>
+              {!isLoggedIn && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  После регистрации память и история сохраняются.
+                </p>
+              )}
             </div>
           </Link>
           {!isLoggedIn && (
@@ -162,7 +168,7 @@ export default function ChatSidebar({
         </div>
 
         <div className="flex-1 overflow-y-auto p-2">
-          {isLoading ? (
+          {isLoading && hasConversations ? (
             <div className="space-y-1 pt-1">
               {[1, 2, 3, 4].map((i) => (
                 <div key={i} className="h-14 rounded-xl bg-white/5 animate-pulse" />

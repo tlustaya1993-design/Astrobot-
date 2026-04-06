@@ -297,6 +297,10 @@ export default function ProfileSheet({
         new Date(profile.birthDate).getDate(),
       )
     : null;
+  const remainingRequests =
+    profile && !profile.isUnlimited
+      ? Math.max(0, profile.freeRemaining ?? 0) + Math.max(0, profile.requestsBalance ?? 0)
+      : null;
 
   const backLabel =
     section === "avatar" || section === "memories" || section === "edit" ? "← Назад" : null;
@@ -396,9 +400,9 @@ export default function ProfileSheet({
                           Бесплатно: {profile.freeRemaining}/{profile.freeLimit ?? 5}
                         </p>
                       )}
-                      {profile?.requestsBalance != null && (
+                      {remainingRequests != null && (
                         <p className="text-xs text-primary/80 mt-0.5">
-                          Осталось: {profile.requestsBalance} {pluralRequests(profile.requestsBalance)}
+                          Осталось: {remainingRequests} {pluralRequests(remainingRequests)}
                         </p>
                       )}
                     </div>

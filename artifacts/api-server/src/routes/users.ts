@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { normalizeAvatarConfig, parseAvatarJson } from "../lib/avatar-config.js";
+import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
 
 const router: IRouter = Router();
 
@@ -43,9 +44,17 @@ function chartSignature(slice: ReturnType<typeof pickChartSlice>) {
 
 function toApiUser(row: UserRow) {
   const { passwordHash: _, avatarJson, ...rest } = row;
+  const requestsUsed = Math.max(0, rest.requestsUsed ?? 0);
+  const requestsBalance = Math.max(0, rest.requestsBalance ?? 0);
+  const freeRemaining = Math.max(0, FREE_REQUESTS_LIMIT - requestsUsed);
+  const isUnlimited = isUnlimitedEmail(rest.email);
   return {
     ...rest,
     avatarConfig: parseAvatarJson(avatarJson),
+    freeRemaining,
+    freeLimit: FREE_REQUESTS_LIMIT,
+    isUnlimited,
+    remaining: isUnlimited ? Number.MAX_SAFE_INTEGER : freeRemaining + requestsBalance,
   };
 }
 

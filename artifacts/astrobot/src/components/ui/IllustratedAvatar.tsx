@@ -61,7 +61,7 @@ export function getAvatarCropStyle(archetype?: string | null): { objectPosition:
 
 export function fallbackAvatarSrc(archetype?: string | null): string {
   if (archetype === 'galactic') return '/avatar-presets/miss-galactica/galactic-medium-brunette.webp';
-  if (archetype === 'mage') return '/avatar-presets/volshebnitsa.png';
+  if (archetype === 'mage') return '/avatar-presets/mage/mage-medium-brunette.png';
   return '/avatar-presets/cosmonautka.png';
 }
 
@@ -132,9 +132,14 @@ export default function IllustratedAvatar({
   imageClassName = '',
   relaxedCrop = false,
 }: IllustratedAvatarProps) {
+  const archetype = config?.archetype ?? 'mage';
+  const baseCrop = getAvatarCropStyle(archetype);
   const crop = relaxedCrop
-    ? { objectPosition: '50% 42%' as const, scale: 1 }
-    : getAvatarCropStyle(config?.archetype ?? 'mage');
+    ? {
+        objectPosition: archetype === 'cosmonaut' ? '50% 40%' : baseCrop.objectPosition,
+        scale: Math.max(baseCrop.scale, archetype === 'cosmonaut' ? 1.08 : 1.16),
+      }
+    : baseCrop;
 
   return (
     <div
