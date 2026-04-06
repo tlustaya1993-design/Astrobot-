@@ -9,6 +9,9 @@ import {
 
 const router: IRouter = Router();
 
+const ANTHROPIC_MEMORY_MODEL =
+  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-3-5-haiku-20241022";
+
 // Simple in-memory cache: sessionId → { date, text, moonPhase }
 const cache = new Map<string, { date: string; text: string; moonPhase: { name: string; emoji: string } }>();
 
@@ -84,7 +87,7 @@ ${lunarReturnLine}
 Только 3 предложения, ничего лишнего.`;
 
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
+      model: ANTHROPIC_MEMORY_MODEL,
       max_tokens: 300,
       temperature: 0.7,
       messages: [{ role: "user", content: prompt }],

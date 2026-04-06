@@ -22,6 +22,12 @@ import { parseAvatarJson } from "../../lib/avatar-config.js";
 const router: IRouter = Router();
 const CHAT_RESPONSE_TEMPERATURE = 0.2;
 
+/** Переопредели в Railway, если аккаунт Anthropic ещё не видит новый id. */
+const ANTHROPIC_CHAT_MODEL =
+  process.env.ANTHROPIC_CHAT_MODEL?.trim() || "claude-sonnet-4-6";
+const ANTHROPIC_MEMORY_MODEL =
+  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-3-5-haiku-20241022";
+
 function hasAnthropicProvider(): boolean {
   return Boolean(
     process.env.ANTHROPIC_API_KEY ||
@@ -147,6 +153,10 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
+  let balanceBeforeCharge = 0;
+  let insertedUserId: number | undefined;
+
+  try {
   const [conv] = await db
     .select()
     .from(conversations)
@@ -217,12 +227,13 @@ router.post("/conversations/:id/messages", async (req, res) => {
     owner.email,
   );
 
-  const balanceBeforeCharge = owner.requestsBalance;
+  balanceBeforeCharge = owner.requestsBalance;
 
   const [insertedUser] = await db
     .insert(messages)
     .values({ conversationId: id, role: "user", content })
     .returning({ id: messages.id });
+  insertedUserId = insertedUser?.id;
 
   await db
     .update(usersTable)
@@ -253,115 +264,172 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .limit(20),
   ]);
 
-  let systemPrompt: string;
-  try {
-    systemPrompt = buildSystemPrompt(userProfile, contactProfile, userMemories);
-  } catch (promptErr) {
-    logger.error({ err: promptErr }, "buildSystemPrompt failed");
-    await db.delete(messages).where(eq(messages.id, insertedUser.id));
-    await db
-      .update(usersTable)
-      .set({
-        requestsBalance: balanceBeforeCharge,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.sessionId, sessionId));
-    res.status(500).json({
-      error:
-        "Не удалось подготовить ответ (ошибка при расчёте карты или данных профиля). Попробуйте позже или начните новый короткий диалог.",
-    });
-    return;
-  }
+  const systemPrompt = safeBuildSystemPrompt(userProfile, contactProfile, userMemories);
 
   const chatMessages = history.map((m) => ({
     role: m.role as "user" | "assistant",
     content: m.content,
   }));
 
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.flushHeaders();
-
-  const heartbeat = setInterval(() => {
-    try {
-      res.write(": ping\n\n");
-    } catch {
-      /* ignore */
-    }
-  }, 20_000);
-
-  let fullResponse = "";
-  const unknownTimePreface = userProfile?.birthTimeUnknown
-    ? "Важно: время рождения указано неточно (используем 12:00), поэтому вывод по домам и точным таймингам менее конкретный.\n\n"
-    : "";
-
-  if (unknownTimePreface) {
-    fullResponse += unknownTimePreface;
-    res.write(`data: ${JSON.stringify({ content: unknownTimePreface })}\n\n`);
-  }
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
 
   try {
-    if (hasAnthropicProvider()) {
-      const stream = anthropic.messages.stream({
-        model: "claude-sonnet-4-6",
-        max_tokens: 8192,
-        temperature: CHAT_RESPONSE_TEMPERATURE,
-        system: systemPrompt,
-        messages: chatMessages,
-      });
-
-      for await (const event of stream) {
-        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-          fullResponse += event.delta.text;
-          res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
-        }
-      }
-    } else {
-      const { openai } = await import("@workspace/integrations-openai-ai-server");
-      const stream = await openai.chat.completions.create({
-        model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-        temperature: CHAT_RESPONSE_TEMPERATURE,
-        stream: true,
-        messages: [{ role: "system", content: systemPrompt }, ...chatMessages],
-      });
-
-      for await (const chunk of stream) {
-        const delta = chunk.choices?.[0]?.delta?.content;
-        if (typeof delta === "string" && delta.length > 0) {
-          fullResponse += delta;
-          res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
-        }
-      }
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    if (typeof (res as { flushHeaders?: () => void }).flushHeaders === "function") {
+      res.flushHeaders();
     }
 
-    await Promise.all([
-      db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse }),
-      db
+    heartbeat = setInterval(() => {
+      try {
+        res.write(": ping\n\n");
+      } catch {
+        /* ignore */
+      }
+    }, 20_000);
+
+    let fullResponse = "";
+    const unknownTimePreface = userProfile?.birthTimeUnknown
+      ? "Важно: время рождения указано неточно (используем 12:00), поэтому вывод по домам и точным таймингам менее конкретный.\n\n"
+      : "";
+
+    if (unknownTimePreface) {
+      fullResponse += unknownTimePreface;
+      res.write(`data: ${JSON.stringify({ content: unknownTimePreface })}\n\n`);
+    }
+
+    try {
+      if (hasAnthropicProvider()) {
+        const stream = anthropic.messages.stream({
+          model: ANTHROPIC_CHAT_MODEL,
+          max_tokens: 8192,
+          temperature: CHAT_RESPONSE_TEMPERATURE,
+          system: systemPrompt,
+          messages: chatMessages,
+        });
+
+        for await (const event of stream) {
+          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+            fullResponse += event.delta.text;
+            res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+          }
+        }
+      } else {
+        const { openai } = await import("@workspace/integrations-openai-ai-server");
+        const stream = await openai.chat.completions.create({
+          model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+          temperature: CHAT_RESPONSE_TEMPERATURE,
+          stream: true,
+          messages: [{ role: "system", content: systemPrompt }, ...chatMessages],
+        });
+
+        for await (const chunk of stream) {
+          const delta = chunk.choices?.[0]?.delta?.content;
+          if (typeof delta === "string" && delta.length > 0) {
+            fullResponse += delta;
+            res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+          }
+        }
+      }
+
+      await Promise.all([
+        db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse }),
+        db
+          .update(usersTable)
+          .set({
+            requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(usersTable.sessionId, sessionId)),
+      ]);
+
+      if (sessionId && fullResponse) {
+        extractAndSaveMemories(sessionId, content, fullResponse).catch(() => {});
+      }
+
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error && err.message ? err.message : "Generation failed";
+      logger.error({ err }, "Chat streaming error");
+      try {
+        await db
+          .update(usersTable)
+          .set({
+            requestsBalance: balanceBeforeCharge,
+            updatedAt: new Date(),
+          })
+          .where(eq(usersTable.sessionId, sessionId));
+      } catch (rollbackErr) {
+        logger.error({ err: rollbackErr }, "Failed to rollback requestsBalance after stream error");
+      }
+      try {
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
+          res.end();
+        }
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      if (heartbeat) clearInterval(heartbeat);
+    }
+  } catch (sseErr) {
+    logger.error({ err: sseErr }, "Chat SSE setup or write failed");
+    try {
+      await db
         .update(usersTable)
         .set({
-          requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
+          requestsBalance: balanceBeforeCharge,
           updatedAt: new Date(),
         })
-        .where(eq(usersTable.sessionId, sessionId)),
-    ]);
-
-    if (sessionId && fullResponse) {
-      extractAndSaveMemories(sessionId, content, fullResponse).catch(() => {});
+        .where(eq(usersTable.sessionId, sessionId));
+    } catch (rollbackErr) {
+      logger.error({ err: rollbackErr }, "Failed to rollback requestsBalance after SSE failure");
     }
+    if (heartbeat) clearInterval(heartbeat);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error:
+          "Не удалось открыть поток ответа. Проверьте соединение или попробуйте позже.",
+      });
+    } else if (!res.writableEnded) {
+      try {
+        res.end();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-    res.end();
-  } catch (err) {
-    const errorMessage =
-      err instanceof Error && err.message ? err.message : "Generation failed";
-    logger.error({ err }, "Chat streaming error");
-    res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
-    res.end();
-  } finally {
-    clearInterval(heartbeat);
+  } catch (handlerErr) {
+    logger.error({ err: handlerErr }, "POST /conversations/:id/messages failed before or during setup");
+    if (insertedUserId != null) {
+      try {
+        await db.delete(messages).where(eq(messages.id, insertedUserId));
+      } catch { /* ignore */ }
+    }
+    if (sessionId) {
+      try {
+        await db
+          .update(usersTable)
+          .set({
+            requestsBalance: balanceBeforeCharge,
+            updatedAt: new Date(),
+          })
+          .where(eq(usersTable.sessionId, sessionId));
+      } catch { /* ignore */ }
+    }
+    if (!res.headersSent) {
+      res.status(500).json({
+        error:
+          "Внутренняя ошибка сервера при отправке сообщения. Попробуйте ещё раз или обновите страницу.",
+      });
+    }
   }
 });
 
@@ -390,7 +458,7 @@ router.delete("/memories/:id", async (req, res) => {
 async function extractAndSaveMemories(sessionId: string, userMsg: string, assistantMsg: string) {
   try {
     const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
+      model: ANTHROPIC_MEMORY_MODEL,
       max_tokens: 300,
       system: `Ты — система извлечения фактов. Твоя задача — найти в диалоге конкретные факты о жизни пользователя, которые стоит запомнить для будущих разговоров.
 
@@ -443,6 +511,32 @@ type ContactRow = {
 } | null;
 
 type MemoryRow = { content: string } & Record<string, unknown>;
+
+/** Никогда не бросает — иначе клиент ловит HTTP 500 до открытия SSE. */
+function safeBuildSystemPrompt(
+  user: UserRow,
+  contact: ContactRow = null,
+  memories: MemoryRow[] = [],
+): string {
+  try {
+    return buildSystemPrompt(user, contact, memories);
+  } catch (err) {
+    logger.error({ err }, "buildSystemPrompt failed; using fallback system prompt");
+    const name = user?.name || "гость";
+    const mem =
+      memories.length > 0
+        ? `\nПамять из прошлых разговоров:\n${memories
+            .map((m) => `— ${String(m.content ?? "").slice(0, 200)}`)
+            .join("\n")}\n`
+        : "";
+    return `Ты — AstroBot, профессиональный AI-астролог. Отвечай тепло и по делу на русском.
+
+Пользователь: ${name}. Полный расчёт карты сейчас недоступен (ошибка данных или расчёта) — честно скажи об этом и отвечай общими астрологическими принципами, без выдуманных позиций планет.
+${mem}
+
+Сегодня: ${new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}`;
+  }
+}
 
 function calcUserData(user: UserRow) {
   let natalSection = "", ephemerisSection = "", solarRetSection = "";
