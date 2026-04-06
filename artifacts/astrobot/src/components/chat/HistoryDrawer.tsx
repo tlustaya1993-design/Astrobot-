@@ -12,7 +12,7 @@ import {
 import { getAuthHeaders } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import AstroAvatar, { loadAvatar } from '@/components/ui/AstroAvatar';
+import AstroAvatar from '@/components/ui/AstroAvatar';
 import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
 
@@ -26,7 +26,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { isLoggedIn, email } = useAuth();
-  const avatar = React.useMemo(() => loadAvatar(), [open]);
+  const { avatarConfig } = useAvatarSync();
 
   const { data: conversations, isLoading } = useListOpenaiConversations({
     request: { headers: getAuthHeaders() },
@@ -85,7 +85,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
             <div className="flex items-center justify-between px-4 py-4 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
-                  <AstroAvatar config={headerAvatar} size={40} />
+                  <AstroAvatar config={avatarConfig} size={40} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold leading-tight truncate">
