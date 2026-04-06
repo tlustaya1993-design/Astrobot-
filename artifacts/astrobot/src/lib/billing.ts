@@ -34,7 +34,10 @@ export const BILLING_PACKAGES: Array<{
   },
 ];
 
-export async function createPayment(packageCode: BillingPackageCode): Promise<{ confirmationUrl: string }> {
+export async function createPayment(
+  packageCode: BillingPackageCode,
+  options?: { receiptEmail?: string },
+): Promise<{ confirmationUrl: string }> {
   const returnUrl = `${window.location.origin}/chat?payment=success`;
   const res = await fetch('/api/billing/payments/create', {
     method: 'POST',
@@ -45,6 +48,7 @@ export async function createPayment(packageCode: BillingPackageCode): Promise<{ 
     body: JSON.stringify({
       packageCode,
       returnUrl,
+      ...(options?.receiptEmail?.trim() ? { receiptEmail: options.receiptEmail.trim() } : {}),
     }),
   });
 

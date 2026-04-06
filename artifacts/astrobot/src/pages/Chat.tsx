@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Menu } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Menu, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useGetOpenaiConversation } from '@workspace/api-client-react';
@@ -12,6 +12,11 @@ import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
 import PaywallSheet from '@/components/billing/PaywallSheet';
+import { useAuth } from '@/context/AuthContext';
+import { toast } from '@/hooks/use-toast';
+import { getToken } from '@/lib/session';
+
+const POST_PAYMENT_REGISTER_NUDGE_KEY = 'astrobot_post_payment_register_nudge';
 
 const SUGGESTED_PROMPTS = [
   "Расскажи о моей натальной карте",
@@ -23,6 +28,8 @@ const SUGGESTED_PROMPTS = [
 export default function Chat() {
   const [match, params] = useRoute('/chat/:id');
   const [, setLocation] = useLocation();
+  const { isLoggedIn, openAuthModal } = useAuth();
+  const [showPostPaymentRegisterNudge, setShowPostPaymentRegisterNudge] = useState(false);
   const conversationId = match && params?.id ? parseInt(params.id, 10) : undefined;
 
   const { data: conversation, isLoading } = useGetOpenaiConversation(
@@ -76,6 +83,61 @@ export default function Chat() {
   useEffect(() => {
     clearLocalMessages();
   }, [conversationId]);
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(POST_PAYMENT_REGISTER_NUDGE_KEY) === '1' && !isLoggedIn) {
+        setShowPostPaymentRegisterNudge(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      try {
+        sessionStorage.removeItem(POST_PAYMENT_REGISTER_NUDGE_KEY);
+      } catch {
+        /* ignore */
+      }
+      setShowPostPaymentRegisterNudge(false);
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('payment') !== 'success') return;
+    params.delete('payment');
+    const qs = params.toString();
+    const path = window.location.pathname;
+    window.history.replaceState({}, '', qs ? `${path}?${qs}` : path);
+
+    const loggedIn = Boolean(getToken());
+    toast({
+      title: 'Оплата прошла',
+      description: loggedIn
+        ? 'Пакет запросов зачислен.'
+        : 'Пакет зачислен на это устройство. Зарегистрируйтесь с него же — чтобы не потерять баланс в другом браузере или на другом телефоне.',
+    });
+    if (!loggedIn) {
+      try {
+        sessionStorage.setItem(POST_PAYMENT_REGISTER_NUDGE_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+      setShowPostPaymentRegisterNudge(true);
+    }
+  }, []);
+
+  const dismissPostPaymentNudge = () => {
+    try {
+      sessionStorage.removeItem(POST_PAYMENT_REGISTER_NUDGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    setShowPostPaymentRegisterNudge(false);
+  };
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -134,6 +196,32 @@ export default function Chat() {
 
             <div className="w-10" />
           </header>
+
+          {showPostPaymentRegisterNudge && !isLoggedIn && (
+            <div className="shrink-0 mx-3 mt-2 mb-1 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2.5 flex items-start gap-2">
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-medium text-foreground">Закрепить оплату за аккаунтом</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-snug">
+                  Регистрация с этого устройства сохранит уже купленные запросы и переписку под вашим email.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openAuthModal('register')}
+                  className="mt-2 text-xs font-semibold text-primary hover:text-primary/90"
+                >
+                  Зарегистрироваться
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={dismissPostPaymentNudge}
+                className="p-1 rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground shrink-0"
+                aria-label="Закрыть подсказку"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* People Panel */}
           <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />

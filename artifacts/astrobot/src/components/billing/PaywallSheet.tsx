@@ -1,10 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, Mail, X } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import AuthModal from '@/components/AuthModal';
 import { toast } from '@/hooks/use-toast';
 import { getAuthHeaders } from '@/lib/session';
+import { Input } from '@/components/ui/input';
+import { isPlausibleReceiptEmail } from '@/lib/receipt-email';
+
+const RECEIPT_EMAIL_STORAGE_KEY = 'astrobot_paywall_receipt_email';
 
 const PACKAGES = [
   {
@@ -45,6 +49,17 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [guestReceiptEmail, setGuestReceiptEmail] = useState('');
+
+  useEffect(() => {
+    if (!open || isLoggedIn) return;
+    try {
+      const saved = localStorage.getItem(RECEIPT_EMAIL_STORAGE_KEY);
+      if (saved) setGuestReceiptEmail(saved);
+    } catch {
+      /* ignore */
+    }
+  }, [open, isLoggedIn]);
   const selected = useMemo(
     () => PACKAGES.find((p) => p.code === selectedCode) ?? null,
     [selectedCode],
@@ -52,14 +67,23 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
 
   const handlePay = async () => {
     if (!selected || loading) return;
-    if (!isLoggedIn) {
-      setShowAuthModal(true);
-      return;
-    }
     setError(null);
+    if (!isLoggedIn) {
+      if (!isPlausibleReceiptEmail(guestReceiptEmail)) {
+        setError('Введите email для чека (как в ЮKassa). Регистрация не нужна.');
+        return;
+      }
+    }
     setLoading(true);
     try {
       const returnUrl = `${window.location.origin}/chat?payment=success`;
+      try {
+        if (!isLoggedIn && guestReceiptEmail.trim()) {
+          localStorage.setItem(RECEIPT_EMAIL_STORAGE_KEY, guestReceiptEmail.trim().toLowerCase());
+        }
+      } catch {
+        /* ignore */
+      }
       const res = await fetch('/api/billing/payments/create', {
         method: 'POST',
         headers: {
@@ -69,6 +93,7 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
         body: JSON.stringify({
           packageCode: selected.code,
           returnUrl,
+          ...(!isLoggedIn ? { receiptEmail: guestReceiptEmail.trim() } : {}),
         }),
       });
       if (!res.ok) throw new Error('Не удалось создать платёж');
@@ -87,7 +112,7 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
       toast({
         title: 'Вы вошли в аккаунт',
         description:
-          'Отлично! После оплаты история и память AstroBot сохраняются и синхронизируются между устройствами.',
+          'История и память сохраняются и синхронизируются между устройствами. Можно оплатить пакет.',
       });
     }
   };
@@ -126,15 +151,34 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
                 <div>
                   <h3 className="text-lg font-semibold font-display">Продолжим после пополнения</h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Выберите пакет запросов и оплатите через YooKassa в рублях.
+                    Выберите пакет и оплатите через YooKassa. Вход не обязателен — запросы привязываются к этому устройству.
                   </p>
                   {!isLoggedIn && (
-                    <button
-                      onClick={() => setShowAuthModal(true)}
-                      className="mt-2 text-xs text-primary hover:text-primary/80 underline underline-offset-2"
-                    >
-                      Сначала войдите/зарегистрируйтесь по email, чтобы получить чек и синхронизировать память
-                    </button>
+                    <div className="mt-3 space-y-1.5">
+                      <label className="text-xs text-muted-foreground" htmlFor="paywall-receipt-email">
+                        Email для чека в ЮKassa
+                      </label>
+                      <Input
+                        id="paywall-receipt-email"
+                        type="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        value={guestReceiptEmail}
+                        onChange={(e) => setGuestReceiptEmail(e.target.value)}
+                        icon={<Mail className="size-5" />}
+                      />
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        После оплаты зарегистрируйтесь с этого же устройства — баланс и история останутся у вас.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthModal(true)}
+                        className="text-xs text-primary hover:text-primary/80 underline underline-offset-2"
+                      >
+                        Уже есть аккаунт — войти или создать пароль
+                      </button>
+                    </div>
                   )}
                   {isLoggedIn && email && (
                     <p className="text-xs text-muted-foreground mt-2">

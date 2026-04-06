@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Link } from 'wouter';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Mail } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { BILLING_PACKAGES, createPayment, type BillingPackageCode } from '@/lib/billing';
 import { toast } from '@/hooks/use-toast';
+import { Input } from '@/components/ui/input';
+import { isPlausibleReceiptEmail } from '@/lib/receipt-email';
 
 /**
  * Страница для ручной проверки оплаты YooKassa.
@@ -14,19 +16,22 @@ import { toast } from '@/hooks/use-toast';
 export default function BillingTestPage() {
   const { isLoggedIn, email } = useAuth();
   const [loading, setLoading] = useState<BillingPackageCode | null>(null);
+  const [guestReceiptEmail, setGuestReceiptEmail] = useState('');
 
   const handlePay = async (code: BillingPackageCode) => {
-    if (!isLoggedIn) {
+    if (!isLoggedIn && !isPlausibleReceiptEmail(guestReceiptEmail)) {
       toast({
-        title: 'Нужен вход',
-        description: 'Войдите по email — иначе нельзя создать платёж и привязать чек.',
+        title: 'Нужен email для чека',
+        description: 'Введите email или войдите в аккаунт.',
         variant: 'destructive',
       });
       return;
     }
     setLoading(code);
     try {
-      const { confirmationUrl } = await createPayment(code);
+      const { confirmationUrl } = await createPayment(code, {
+        receiptEmail: !isLoggedIn ? guestReceiptEmail.trim() : undefined,
+      });
       window.location.href = confirmationUrl;
     } catch (e) {
       toast({
@@ -47,12 +52,24 @@ export default function BillingTestPage() {
       </p>
 
       {!isLoggedIn ? (
-        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm mb-6">
-          Сначала{' '}
-          <Link href="/chat" className="text-primary underline underline-offset-2">
-            войдите
-          </Link>
-          — без авторизации платёж не создаётся.
+        <div className="rounded-xl border border-border/80 bg-card/50 p-4 text-sm mb-6 space-y-2">
+          <p className="text-muted-foreground text-xs">
+            Без входа: укажите email для чека ЮKassa. Пакет привяжется к текущей сессии браузера.
+          </p>
+          <Input
+            type="email"
+            placeholder="email для чека"
+            value={guestReceiptEmail}
+            onChange={(e) => setGuestReceiptEmail(e.target.value)}
+            icon={<Mail className="size-5" />}
+          />
+          <p className="text-xs text-muted-foreground">
+            Или{' '}
+            <Link href="/chat" className="text-primary underline underline-offset-2">
+              войдите
+            </Link>
+            .
+          </p>
         </div>
       ) : (
         <p className="text-xs text-muted-foreground mb-4">
@@ -65,7 +82,7 @@ export default function BillingTestPage() {
           <button
             key={pkg.code}
             type="button"
-            disabled={!isLoggedIn || loading !== null}
+            disabled={loading !== null || (!isLoggedIn && !isPlausibleReceiptEmail(guestReceiptEmail))}
             onClick={() => void handlePay(pkg.code)}
             className="w-full flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 text-left hover:bg-secondary/30 disabled:opacity-50 transition"
           >

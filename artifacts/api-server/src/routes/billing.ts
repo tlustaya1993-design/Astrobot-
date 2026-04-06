@@ -70,6 +70,15 @@ function normalizeReceiptEmail(value: string | null | undefined): string {
   return email;
 }
 
+/** Для гостевой оплаты: обязателен реальный email в чек ЮKassa (не fallback). */
+function isValidReceiptEmailForGuest(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const email = value.trim().toLowerCase();
+  if (email.length < 5 || !email.includes("@")) return false;
+  if (email.startsWith("@") || email.endsWith("@")) return false;
+  return normalizeReceiptEmail(email) !== DEFAULT_RECEIPT_EMAIL;
+}
+
 function appendReturnFlag(returnUrl: string): string {
   try {
     const url = new URL(returnUrl);
@@ -154,9 +163,11 @@ router.post("/payments/create", async (req, res) => {
     return;
   }
 
-  const { packageCode, returnUrl } = req.body as {
+  const { packageCode, returnUrl, receiptEmail } = req.body as {
     packageCode?: string;
     returnUrl?: string;
+    /** Для анонимов — email для чека ЮKassa (обязателен, если нет email в профиле). */
+    receiptEmail?: string;
   };
 
   if (!isPackageCode(packageCode)) {
@@ -180,7 +191,18 @@ router.post("/payments/create", async (req, res) => {
     .from(usersTable)
     .where(eq(usersTable.sessionId, sessionId))
     .limit(1);
-  const receiptEmail = normalizeReceiptEmail(user?.email);
+
+  let receiptForYoo: string;
+  if (user?.email && user.email.trim()) {
+    receiptForYoo = normalizeReceiptEmail(user.email);
+  } else if (isValidReceiptEmailForGuest(receiptEmail)) {
+    receiptForYoo = normalizeReceiptEmail(receiptEmail);
+  } else {
+    res.status(400).json({
+      error: "Укажите email для чека — он нужен для ЮKassa. Регистрация не обязательна.",
+    });
+    return;
+  }
 
   try {
     const ykPayment = await createYookassaPayment(
@@ -203,7 +225,7 @@ router.post("/payments/create", async (req, res) => {
         },
         receipt: {
           customer: {
-            email: receiptEmail,
+            email: receiptForYoo,
           },
           items: [
             {
