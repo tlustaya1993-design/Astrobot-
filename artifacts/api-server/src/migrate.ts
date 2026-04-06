@@ -26,7 +26,7 @@ if (!dbUrl) {
 await waitForDb(dbUrl);
 
 try {
-  execSync("pnpm --filter @workspace/db run push", { stdio: "inherit" });
+  execSync("pnpm --filter @workspace/db run push:ci", { stdio: "inherit" });
   console.log("Migrations complete!");
 } catch (err) {
   console.error("Migration failed:", err);

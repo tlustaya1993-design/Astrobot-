@@ -9,4 +9,4 @@ dependsOn = ["install"]
 cmds = ["BASE_PATH=/ pnpm --filter @workspace/astrobot run build", "pnpm --filter @workspace/api-server run build"]
 
 [start]
-cmd = "for i in 1 2 3 4 5; do pnpm --filter @workspace/db run push && break || sleep 10; done && NODE_ENV=production pnpm --filter @workspace/api-server run start"
+cmd = "for i in 1 2 3 4 5; do pnpm --filter @workspace/db run push:ci && break || sleep 10; done && NODE_ENV=production pnpm --filter @workspace/api-server run start"
