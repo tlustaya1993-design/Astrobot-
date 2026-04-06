@@ -9,8 +9,14 @@ import {
 
 const router: IRouter = Router();
 
-const ANTHROPIC_MEMORY_MODEL =
-  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-3-5-haiku-20241022";
+/**
+ * Дневной прогноз: отдельная переменная или общая с памятью.
+ * Дефолт — Haiku 4.5 (alias); старый id `claude-3-5-haiku-20241022` в API часто даёт 404.
+ */
+const dailyForecastAnthropicModel =
+  process.env.ANTHROPIC_FORECAST_MODEL?.trim() ||
+  process.env.ANTHROPIC_MEMORY_MODEL?.trim() ||
+  "claude-haiku-4-5";
 
 // Simple in-memory cache: sessionId → { date, text, moonPhase }
 const cache = new Map<string, { date: string; text: string; moonPhase: { name: string; emoji: string } }>();
@@ -87,7 +93,7 @@ ${lunarReturnLine}
 Только 3 предложения, ничего лишнего.`;
 
     const response = await anthropic.messages.create({
-      model: ANTHROPIC_MEMORY_MODEL,
+      model: dailyForecastAnthropicModel,
       max_tokens: 300,
       temperature: 0.7,
       messages: [{ role: "user", content: prompt }],

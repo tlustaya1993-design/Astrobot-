@@ -25,8 +25,9 @@ const CHAT_RESPONSE_TEMPERATURE = 0.2;
 /** Переопредели в Railway, если аккаунт Anthropic ещё не видит новый id. */
 const ANTHROPIC_CHAT_MODEL =
   process.env.ANTHROPIC_CHAT_MODEL?.trim() || "claude-sonnet-4-6";
+/** Память / дешёвые вызовы: дефолт Haiku 4.5; старый Haiku 3.5 snapshot часто недоступен в API. */
 const ANTHROPIC_MEMORY_MODEL =
-  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-3-5-haiku-20241022";
+  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-haiku-4-5";
 
 function hasAnthropicProvider(): boolean {
   return Boolean(
