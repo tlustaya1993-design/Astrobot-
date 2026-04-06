@@ -17,6 +17,7 @@ type AvatarSyncContextValue = {
 const AvatarSyncContext = createContext<AvatarSyncContextValue | null>(null);
 
 export function AvatarSyncProvider({ children }: { children: React.ReactNode }) {
+  const { isLoggedIn } = useAuth();
   const [avatarConfig, setState] = useState<AvatarConfig>(() => loadAvatar());
 
   const setAvatarConfigLocal = useCallback((cfg: AvatarConfig) => {

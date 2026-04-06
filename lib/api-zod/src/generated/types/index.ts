@@ -13,6 +13,7 @@ export * from "./generateOpenaiImageBodySize";
 export * from "./generateOpenaiImageResponse";
 export * from "./healthStatus";
 export * from "./openaiConversation";
+export * from "./openaiConversationContactAvatarConfig";
 export * from "./openaiConversationWithMessages";
 export * from "./openaiError";
 export * from "./openaiMessage";

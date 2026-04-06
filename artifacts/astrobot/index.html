@@ -39,7 +39,7 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', async () => {
-          const SW_VERSION = 'v10';
+          const SW_VERSION = 'v11';
           const stored = localStorage.getItem('sw_version');
           if (stored !== SW_VERSION) {
             // New version: unregister old SWs and purge all caches

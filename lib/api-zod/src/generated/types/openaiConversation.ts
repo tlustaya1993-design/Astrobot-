@@ -5,9 +5,15 @@
  * AstroBot API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { OpenaiConversationContactAvatarConfig } from "./openaiConversationContactAvatarConfig";
 
 export interface OpenaiConversation {
   id: number;
+  sessionId?: string;
   title: string;
+  contactId?: number | null;
   createdAt: Date;
+  contactName?: string | null;
+  contactRelation?: string | null;
+  contactAvatarConfig?: OpenaiConversationContactAvatarConfig;
 }

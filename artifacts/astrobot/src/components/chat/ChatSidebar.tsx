@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
+import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
 
 interface ChatSidebarProps {
   currentConversationId?: number;
@@ -189,9 +190,20 @@ export default function ChatSidebar({
                         : 'hover:bg-white/5 border border-transparent'
                     }`}
                   >
-                    <div className="p-1.5 rounded-lg bg-secondary/60 border border-white/5 shrink-0">
-                      <MessageSquare className="w-3.5 h-3.5 text-primary" />
-                    </div>
+                    {conv.contactId != null && conv.contactId > 0 ? (
+                      <SynastryRowAvatars
+                        userConfig={avatarConfig}
+                        contactAvatarConfig={conv.contactAvatarConfig}
+                        contactId={conv.contactId}
+                        contactName={conv.contactName}
+                        size={26}
+                        ringClassName="ring-card"
+                      />
+                    ) : (
+                      <div className="p-1.5 rounded-lg bg-secondary/60 border border-white/5 shrink-0">
+                        <MessageSquare className="w-3.5 h-3.5 text-primary" />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       {isEditing ? (
                         <div

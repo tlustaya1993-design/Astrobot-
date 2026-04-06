@@ -10,9 +10,12 @@ import Chat from "@/pages/Chat";
 import History from "@/pages/History";
 import ProfilePage from "@/pages/ProfilePage";
 import AuthCallback from "@/pages/AuthCallback";
+import BillingTestPage from "@/pages/BillingTestPage";
 import { getSessionId } from "@/lib/session";
 import { AuthProvider } from "@/context/AuthContext";
 import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
+
+const billingTestEnabled = import.meta.env.VITE_ENABLE_BILLING_TEST === "true";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,9 +36,19 @@ function Router() {
       <Route path="/profile" component={ProfilePage} />
       <Route path="/history" component={History} />
       <Route path="/auth/callback" component={AuthCallback} />
+      {billingTestEnabled ? (
+        <Route path="/billing/test" component={BillingTestPage} />
+      ) : null}
       <Route component={NotFound} />
     </Switch>
   );
+}
+
+/** Wouter: base не должен быть "" — при BASE_URL "/" после trim получалась пустая строка и ломался рендер. */
+function viteBaseForRouter(): string {
+  const b = import.meta.env.BASE_URL;
+  if (b === "/" || b === "") return "/";
+  return b.endsWith("/") ? b.slice(0, -1) : b;
 }
 
 function App() {
@@ -48,7 +61,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <WouterRouter base={viteBaseForRouter()}>
             <AvatarSyncProvider>
               <Router />
             </AvatarSyncProvider>

@@ -17,6 +17,7 @@ import {
   canAffordRequest,
   getBalanceAfterCharge,
 } from "../../lib/billing-policy.js";
+import { parseAvatarJson } from "../../lib/avatar-config.js";
 
 const router: IRouter = Router();
 const CHAT_RESPONSE_TEMPERATURE = 0.2;
@@ -43,12 +44,24 @@ router.get("/conversations", async (req, res) => {
       createdAt: conversations.createdAt,
       contactName: contactsTable.name,
       contactRelation: contactsTable.relation,
+      contactAvatarJson: contactsTable.avatarJson,
     })
     .from(conversations)
     .leftJoin(contactsTable, eq(conversations.contactId, contactsTable.id))
     .where(eq(conversations.sessionId, sessionId))
     .orderBy(desc(conversations.createdAt));
-  res.json(rows);
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      sessionId: r.sessionId,
+      title: r.title,
+      contactId: r.contactId ?? null,
+      createdAt: r.createdAt,
+      contactName: r.contactName ?? null,
+      contactRelation: r.contactRelation ?? null,
+      contactAvatarConfig: parseAvatarJson(r.contactAvatarJson ?? null),
+    })),
+  );
 });
 
 router.post("/conversations", async (req, res) => {

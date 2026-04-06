@@ -12,42 +12,9 @@ import {
 import { getAuthHeaders } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import AstroAvatar, { loadAvatar, type AvatarConfig } from '@/components/ui/AstroAvatar';
-
-const CONTACT_COLORS = [
-  'from-violet-500 to-purple-700',
-  'from-rose-500 to-pink-700',
-  'from-sky-500 to-blue-700',
-  'from-emerald-500 to-teal-700',
-  'from-amber-500 to-orange-700',
-];
-
-function getContactColor(id: number) {
-  return CONTACT_COLORS[id % CONTACT_COLORS.length];
-}
-
-function getInitials(name: string) {
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-}
-
-function SynastryAvatar({ contactId, contactName, userAvatar }: {
-  contactId: number;
-  contactName: string;
-  userAvatar: AvatarConfig | null;
-}) {
-  return (
-    <div className="relative w-10 h-6 shrink-0">
-      {/* User avatar (behind, left) */}
-      <div className="absolute left-0 top-0 w-6 h-6 rounded-full overflow-hidden border-2 border-card z-0">
-        <AstroAvatar config={userAvatar} size={24} />
-      </div>
-      {/* Contact circle (in front, right) */}
-      <div className={`absolute right-0 top-0 w-6 h-6 rounded-full bg-gradient-to-br ${getContactColor(contactId)} border-2 border-card z-10 flex items-center justify-center`}>
-        <span className="text-[8px] font-bold text-white leading-none">{getInitials(contactName)}</span>
-      </div>
-    </div>
-  );
-}
+import AstroAvatar, { loadAvatar } from '@/components/ui/AstroAvatar';
+import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
+import { useAvatarSync } from '@/context/AvatarSyncContext';
 
 interface Props {
   open: boolean;
@@ -118,7 +85,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
             <div className="flex items-center justify-between px-4 py-4 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
-                  <AstroAvatar config={avatar} size={40} />
+                  <AstroAvatar config={headerAvatar} size={40} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold leading-tight truncate">
@@ -161,24 +128,25 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                 </div>
               ) : (
                 <div className="space-y-0.5 px-2 pt-1">
-                  {conversations.map(conv => {
-                    const c = conv as typeof conv & { contactId?: number; contactName?: string; contactRelation?: string };
-                    return (
+                  {conversations.map((conv) => (
                     <button
                       key={conv.id}
                       onClick={() => openChat(conv.id)}
                       className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-all group text-left"
                     >
-                      {c.contactId && c.contactName ? (
-                        <SynastryAvatar
-                          contactId={c.contactId}
-                          contactName={c.contactName}
-                          userAvatar={avatar}
+                      {conv.contactId != null && conv.contactId > 0 ? (
+                        <SynastryRowAvatars
+                          userConfig={avatarConfig}
+                          contactAvatarConfig={conv.contactAvatarConfig}
+                          contactId={conv.contactId}
+                          contactName={conv.contactName}
+                          size={28}
+                          ringClassName="ring-card"
                         />
                       ) : (
-                      <div className="p-1.5 rounded-lg bg-secondary/60 border border-white/5 group-hover:border-primary/20 shrink-0">
-                        <MessageSquare className="w-4 h-4 text-primary" />
-                      </div>
+                        <div className="p-1.5 rounded-lg bg-secondary/60 border border-white/5 group-hover:border-primary/20 shrink-0">
+                          <MessageSquare className="w-4 h-4 text-primary" />
+                        </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground line-clamp-1">
@@ -195,8 +163,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </button>
-                  );
-                  })}
+                  ))}
                 </div>
               )}
             </div>

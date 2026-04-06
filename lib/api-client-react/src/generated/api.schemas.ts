@@ -51,10 +51,23 @@ export interface UpsertUserBody {
   toneFamiliarityLevel?: string | null;
 }
 
+export type OpenaiConversationContactAvatarConfig = {
+  archetype?: string;
+  hairStyle?: string;
+  hairColor?: string;
+  robeColor?: string;
+  eyeColor?: string;
+} | null;
+
 export interface OpenaiConversation {
   id: number;
+  sessionId?: string;
   title: string;
+  contactId?: number | null;
   createdAt: string;
+  contactName?: string | null;
+  contactRelation?: string | null;
+  contactAvatarConfig?: OpenaiConversationContactAvatarConfig;
 }
 
 export interface OpenaiMessage {

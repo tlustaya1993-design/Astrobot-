@@ -370,11 +370,36 @@ components:
       properties:
         id:
           type: integer
+        sessionId:
+          type: string
         title:
           type: string
+        contactId:
+          type: integer
+          nullable: true
         createdAt:
           type: string
           format: date-time
+        contactName:
+          type: string
+          nullable: true
+        contactRelation:
+          type: string
+          nullable: true
+        contactAvatarConfig:
+          nullable: true
+          type: object
+          properties:
+            archetype:
+              type: string
+            hairStyle:
+              type: string
+            hairColor:
+              type: string
+            robeColor:
+              type: string
+            eyeColor:
+              type: string
       required:
         - id
         - title

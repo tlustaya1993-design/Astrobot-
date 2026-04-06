@@ -85,8 +85,21 @@ export const UpsertMeResponse = zod.object({
  */
 export const ListOpenaiConversationsResponseItem = zod.object({
   id: zod.number(),
+  sessionId: zod.string().optional(),
   title: zod.string(),
+  contactId: zod.number().nullish(),
   createdAt: zod.date(),
+  contactName: zod.string().nullish(),
+  contactRelation: zod.string().nullish(),
+  contactAvatarConfig: zod
+    .object({
+      archetype: zod.string().optional(),
+      hairStyle: zod.string().optional(),
+      hairColor: zod.string().optional(),
+      robeColor: zod.string().optional(),
+      eyeColor: zod.string().optional(),
+    })
+    .nullish(),
 });
 export const ListOpenaiConversationsResponse = zod.array(
   ListOpenaiConversationsResponseItem,
@@ -134,8 +147,21 @@ export const UpdateOpenaiConversationBody = zod.object({
 
 export const UpdateOpenaiConversationResponse = zod.object({
   id: zod.number(),
+  sessionId: zod.string().optional(),
   title: zod.string(),
+  contactId: zod.number().nullish(),
   createdAt: zod.date(),
+  contactName: zod.string().nullish(),
+  contactRelation: zod.string().nullish(),
+  contactAvatarConfig: zod
+    .object({
+      archetype: zod.string().optional(),
+      hairStyle: zod.string().optional(),
+      hairColor: zod.string().optional(),
+      robeColor: zod.string().optional(),
+      eyeColor: zod.string().optional(),
+    })
+    .nullish(),
 });
 
 /**
