@@ -36,25 +36,40 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
-        setData(JSON.parse(cached));
-        setLoading(false);
-        return;
+        const parsed = JSON.parse(cached) as Partial<ForecastData>;
+        if (typeof parsed?.text === 'string' && parsed?.moonPhase?.emoji) {
+          setData(parsed as ForecastData);
+          setLoading(false);
+          return;
+        }
       } catch { /* ignore */ }
     }
 
     fetch(`${import.meta.env.BASE_URL}api/openai/daily-forecast`, {
       headers: getAuthHeaders(),
     })
-      .then(r => r.json())
-      .then((d: ForecastData) => {
-        setData(d);
-        sessionStorage.setItem(cacheKey, JSON.stringify(d));
+      .then(async (r) => {
+        const d = (await r.json()) as Partial<ForecastData>;
+        if (!r.ok || typeof d?.text !== 'string' || !d?.moonPhase?.emoji) {
+          setError(true);
+          return;
+        }
+        const payload: ForecastData = {
+          date: d.date ?? getToday(),
+          text: d.text,
+          moonPhase: {
+            name: d.moonPhase?.name ?? '',
+            emoji: d.moonPhase.emoji,
+          },
+        };
+        setData(payload);
+        sessionStorage.setItem(cacheKey, JSON.stringify(payload));
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
 
-  if (error || (!loading && !data)) return null;
+  if (error || (!loading && (!data || !data.moonPhase))) return null;
 
   // Strip leading markdown headings (# Title) and trim
   const cleanText = data?.text
@@ -80,7 +95,7 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
         >
           <div className="flex items-center gap-2">
             <span className="text-lg leading-none">
-              {loading ? '🌙' : (data?.moonPhase.emoji || '✨')}
+              {loading ? '🌙' : (data?.moonPhase?.emoji ?? '✨')}
             </span>
             <div className="text-left">
               <p className="text-xs text-primary/70 font-medium tracking-wide uppercase leading-none mb-0.5">
@@ -88,7 +103,7 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
               </p>
               {data && (
                 <p className="text-xs text-muted-foreground leading-none">
-                  {data.moonPhase.name && `${data.moonPhase.name} · `}{formatDate(data.date)}
+                  {data.moonPhase?.name && `${data.moonPhase.name} · `}{formatDate(data.date)}
                 </p>
               )}
             </div>

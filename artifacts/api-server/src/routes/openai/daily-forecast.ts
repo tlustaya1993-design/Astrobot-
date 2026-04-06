@@ -95,10 +95,14 @@ ${lunarReturnLine}
 
     const text = (response.content[0] as { type: string; text: string }).text?.trim() || "";
 
+    const mp = ephem.moonPhase;
     const result = {
       date: today,
       text,
-      moonPhase: { name: ephem.moonPhase.name, emoji: ephem.moonPhase.emoji },
+      moonPhase: {
+        name: mp?.name ?? "",
+        emoji: mp?.emoji ?? "🌙",
+      },
     };
 
     cache.set(sessionId, result);

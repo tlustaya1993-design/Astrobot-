@@ -132,7 +132,7 @@ export default function ChatSidebar({
               </p>
               {!isLoggedIn && (
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  После регистрации память и история сохраняются.
+                  После регистрации память и история сохраняются
                 </p>
               )}
             </div>

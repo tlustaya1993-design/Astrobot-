@@ -65,14 +65,23 @@ router.get("/me", async (req, res) => {
     return;
   }
 
-  const [user] = await db
+  let [user] = await db
     .select()
     .from(usersTable)
     .where(eq(usersTable.sessionId, sessionId))
     .limit(1);
 
   if (!user) {
-    res.status(404).json({ error: "User not found" });
+    await db.insert(usersTable).values({ sessionId }).onConflictDoNothing();
+    [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.sessionId, sessionId))
+      .limit(1);
+  }
+
+  if (!user) {
+    res.status(500).json({ error: "Не удалось создать профиль" });
     return;
   }
 

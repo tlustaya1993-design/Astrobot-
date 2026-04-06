@@ -94,7 +94,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                   </p>
                   {!isLoggedIn && (
                     <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                      Зарегистрируйтесь, чтобы сохранить историю и контекст.
+                      Зарегистрируйтесь, чтобы сохранить историю и контекст
                     </p>
                   )}
                   <p className="text-[11px] text-muted-foreground">AstroBot</p>
