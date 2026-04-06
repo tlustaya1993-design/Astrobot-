@@ -1,4 +1,4 @@
-const CACHE_NAME = "astrobot-v12";
+const CACHE_NAME = "astrobot-v13";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME));
@@ -21,6 +21,12 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
 
   if (request.method !== "GET") return;
+
+  // Не перехватываем загрузку HTML: на мобильных сеть часто рвётся, кэша страницы ещё нет —
+  // тогда старый обработчик давал «Network unavailable» и белый экран во всех вкладках.
+  if (request.mode === "navigate" || request.destination === "document") {
+    return;
+  }
 
   // Network-first to avoid stale app shell after deploys.
   // Fallback to cache only when offline/network fails.
