@@ -169,7 +169,7 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
                         icon={<Mail className="size-5" />}
                       />
                       <p className="text-[11px] text-muted-foreground leading-snug">
-                        После оплаты зарегистрируйтесь с этого же устройства — баланс и история останутся у вас.
+                        Кстати: когда захотите, можно оформить аккаунт с этого же устройства — баланс и история останутся с вами. Не обязательно сразу.
                       </p>
                       <button
                         type="button"

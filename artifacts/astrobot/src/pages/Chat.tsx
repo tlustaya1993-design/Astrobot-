@@ -115,10 +115,10 @@ export default function Chat() {
 
     const loggedIn = Boolean(getToken());
     toast({
-      title: 'Оплата прошла',
+      title: loggedIn ? 'Спасибо!' : 'Спасибо, всё прошло хорошо',
       description: loggedIn
-        ? 'Пакет запросов зачислен.'
-        : 'Пакет зачислен на это устройство. Зарегистрируйтесь с него же — чтобы не потерять баланс в другом браузере или на другом телефоне.',
+        ? 'Пакет запросов уже на вашем счёте — можно продолжать диалог.'
+        : 'Запросы уже доступны на этом устройстве. Когда будет удобно, можно спокойно оформить аккаунт здесь же — так проще зайти с другого браузера или телефона. Это не срочно.',
     });
     if (!loggedIn) {
       try {
@@ -198,25 +198,25 @@ export default function Chat() {
           </header>
 
           {showPostPaymentRegisterNudge && !isLoggedIn && (
-            <div className="shrink-0 mx-3 mt-2 mb-1 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2.5 flex items-start gap-2">
+            <div className="shrink-0 mx-3 mt-2 mb-1 rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5 flex items-start gap-2">
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-sm font-medium text-foreground">Закрепить оплату за аккаунтом</p>
-                <p className="text-xs text-muted-foreground mt-1 leading-snug">
-                  Регистрация с этого устройства сохранит уже купленные запросы и переписку под вашим email.
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Напоминание</p>
+                <p className="text-sm text-foreground/95 mt-1 leading-snug">
+                  Если когда-нибудь зайдёте с другого устройства, без аккаунта баланс там не подтянется. Оформить профиль можно в любой момент с этого же браузера — переписка и купленные запросы останутся с вами.
                 </p>
                 <button
                   type="button"
                   onClick={() => openAuthModal('register')}
-                  className="mt-2 text-xs font-semibold text-primary hover:text-primary/90"
+                  className="mt-2 text-xs font-medium text-primary hover:text-primary/85 underline underline-offset-2"
                 >
-                  Зарегистрироваться
+                  Оформить аккаунт, когда удобно
                 </button>
               </div>
               <button
                 type="button"
                 onClick={dismissPostPaymentNudge}
                 className="p-1 rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground shrink-0"
-                aria-label="Закрыть подсказку"
+                aria-label="Закрыть напоминание"
               >
                 <X className="w-4 h-4" />
               </button>
