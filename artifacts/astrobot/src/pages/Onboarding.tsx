@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { User, Sparkles, ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/DateInput';
 import { CityAutocomplete } from '@/components/ui/CityAutocomplete';
 import { useUpsertMe, UpsertUserBody } from '@workspace/api-client-react';
 import { getAuthHeaders } from '@/lib/session';
+import { cn } from '@/lib/utils';
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
@@ -55,13 +56,27 @@ export default function Onboarding() {
     exit: { x: -40, opacity: 0 },
   };
 
+  const ctaButtonClass =
+    'rounded-xl min-h-12 font-semibold border-0 bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] shadow-[0_0_28px_rgba(212,175,55,0.42),0_4px_20px_rgba(0,0,0,0.35)] hover:brightness-105 hover:shadow-[0_0_32px_rgba(212,175,55,0.5)] transition-[filter,box-shadow] disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100';
+
   return (
-    <div className="h-[100dvh] relative overflow-hidden bg-background">
+    <div className="h-[100dvh] relative overflow-hidden bg-[#06060c]">
       <div
-        className="absolute inset-0 pointer-events-none opacity-40"
+        className="absolute inset-0 pointer-events-none bg-background"
+        aria-hidden
+      />
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.85]"
         style={{
           background:
-            "radial-gradient(circle at 20% 0%, rgba(139, 92, 246, 0.22), transparent 45%), radial-gradient(circle at 80% 100%, rgba(212, 175, 55, 0.18), transparent 45%)",
+            "radial-gradient(ellipse 120% 80% at 50% 20%, rgba(139, 92, 246, 0.35), transparent 55%), radial-gradient(circle at 20% 0%, rgba(167, 139, 250, 0.25), transparent 45%), radial-gradient(circle at 85% 95%, rgba(212, 175, 55, 0.22), transparent 50%)",
+        }}
+      />
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.12] mix-blend-screen"
+        style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.35) 1px, transparent 0)`,
+          backgroundSize: '48px 48px',
         }}
       />
 
@@ -93,8 +108,9 @@ export default function Onboarding() {
                 exit="exit"
                 transition={{ duration: 0.35, ease: 'easeInOut' }}
               >
-                <div className="w-20 h-20 mx-auto mb-8 rounded-full bg-secondary flex items-center justify-center border border-white/10 shadow-xl shadow-primary/20">
-                  <Sparkles className="w-10 h-10 text-primary" />
+                <div className="relative mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_40px_rgba(212,175,55,0.35),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
+                  <div className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl" aria-hidden />
+                  <Sparkles className="relative z-[1] h-10 w-10 text-primary drop-shadow-[0_0_12px_rgba(212,175,55,0.55)]" />
                 </div>
                 <h1 className="text-3xl font-display font-bold text-center mb-2">Добро пожаловать</h1>
                 <p className="text-muted-foreground text-center mb-8">Ваш личный AI-астролог. Начнём с того, чтобы познакомиться.</p>
@@ -108,7 +124,7 @@ export default function Onboarding() {
                     onKeyDown={e => e.key === 'Enter' && formData.name?.trim() && handleNext()}
                   />
                   <Button
-                    className="w-full"
+                    className={cn('w-full', ctaButtonClass)}
                     onClick={handleNext}
                     disabled={!formData.name?.trim()}
                   >
@@ -192,7 +208,7 @@ export default function Onboarding() {
                   <div className="flex gap-3 pt-2">
                     <Button variant="outline" className="flex-1" onClick={handleBack}>Назад</Button>
                     <Button
-                      className="flex-1"
+                      className={cn('flex-1', ctaButtonClass)}
                       onClick={handleNext}
                       disabled={!formData.birthDate || !formData.birthPlace}
                     >
@@ -269,7 +285,7 @@ export default function Onboarding() {
                   <div className="flex gap-3">
                     <Button variant="outline" className="flex-1" onClick={handleBack}>Назад</Button>
                     <Button
-                      className="flex-1"
+                      className={cn('flex-1', ctaButtonClass)}
                       onClick={handleComplete}
                       isLoading={upsertMutation.isPending}
                     >
