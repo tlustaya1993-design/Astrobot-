@@ -124,6 +124,8 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    /** Старые мобильные Safari без части синтаксиса esnext */
+    target: ["es2020", "safari14"],
   },
   server: {
     port,

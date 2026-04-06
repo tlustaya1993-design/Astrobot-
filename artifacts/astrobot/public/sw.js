@@ -1,48 +1,20 @@
-const CACHE_NAME = "astrobot-v13";
+/**
+ * Минимальный SW: только сброс старых кэшей и активация.
+ * Перехват fetch отключён — на мобильных сетях он ломал загрузку HTML/чанков
+ * (ошибка до появления записи в кэше → белый экран).
+ */
+const CACHE_NAME = "astrobot-v14";
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME));
-  self.skipWaiting();
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
-
-  if (url.pathname.startsWith("/api/")) return;
-
-  if (request.method !== "GET") return;
-
-  // Не перехватываем загрузку HTML: на мобильных сеть часто рвётся, кэша страницы ещё нет —
-  // тогда старый обработчик давал «Network unavailable» и белый экран во всех вкладках.
-  if (request.mode === "navigate" || request.destination === "document") {
-    return;
-  }
-
-  // Network-first to avoid stale app shell after deploys.
-  // Fallback to cache only when offline/network fails.
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response && response.status === 200) {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
-        }
-        return response;
-      })
-      .catch(async () => {
-        const cached = await caches.match(request);
-        if (cached) return cached;
-        throw new Error("Network unavailable and no cached response");
-      }),
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+      await self.clients.claim();
+    })(),
   );
 });
