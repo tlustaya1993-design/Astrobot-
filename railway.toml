@@ -3,7 +3,8 @@ builder = "NIXPACKS"
 buildCommand = "pnpm install --frozen-lockfile=false && BASE_PATH=/ pnpm --filter @workspace/astrobot run build && pnpm --filter @workspace/api-server run build"
 
 [deploy]
-releaseCommand = "pnpm --filter @workspace/db run push:ci"
+# Схема БД до старта: drizzle-kit push --force (без TTY). В манифесте Railway — preDeployCommand, не releaseCommand.
+preDeployCommand = ["pnpm --filter @workspace/db run push:ci"]
 startCommand = "pnpm --filter @workspace/api-server run start"
 healthcheckPath = "/api/healthz"
 healthcheckTimeout = 30
