@@ -1,12 +1,5 @@
 import { Router, type IRouter } from "express";
-import {
-  db,
-  conversations,
-  messages,
-  usersTable,
-  contactsTable,
-  memoriesTable,
-} from "@workspace/db";
+import { db, conversations, messages, usersTable, contactsTable, memoriesTable } from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
@@ -17,23 +10,8 @@ import {
   formatSolarReturnForPrompt, formatProgressionsForPrompt, formatSynastryForPrompt,
   formatLunarReturnForPrompt, formatSolarArcForPrompt, formatTransitPerfectionsForPrompt,
 } from "../../lib/astrology.js";
-import {
-  FREE_REQUESTS_LIMIT,
-  isUnlimitedUser,
-  getRemainingFreeRequests,
-  canAffordRequest,
-  getBalanceAfterCharge,
-} from "../../lib/billing-policy.js";
 
 const router: IRouter = Router();
-const CHAT_RESPONSE_TEMPERATURE = 0.2;
-
-function hasAnthropicProvider(): boolean {
-  return Boolean(
-    process.env.ANTHROPIC_API_KEY ||
-      process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  );
-}
 
 router.get("/conversations", async (req, res) => {
   const sessionId = req.sessionId;
@@ -42,8 +20,17 @@ router.get("/conversations", async (req, res) => {
     return;
   }
   const rows = await db
-    .select()
+    .select({
+      id: conversations.id,
+      sessionId: conversations.sessionId,
+      title: conversations.title,
+      contactId: conversations.contactId,
+      createdAt: conversations.createdAt,
+      contactName: contactsTable.name,
+      contactRelation: contactsTable.relation,
+    })
     .from(conversations)
+    .leftJoin(contactsTable, eq(conversations.contactId, contactsTable.id))
     .where(eq(conversations.sessionId, sessionId))
     .orderBy(desc(conversations.createdAt));
   res.json(rows);
@@ -65,39 +52,6 @@ router.post("/conversations", async (req, res) => {
     .values({ sessionId, title })
     .returning();
   res.status(201).json(created);
-});
-
-router.put("/conversations/:id", async (req, res) => {
-  const id = Number(req.params.id);
-  const sessionId = req.sessionId;
-  if (!sessionId) {
-    res.status(401).json({ error: "Требуется авторизация" });
-    return;
-  }
-  if (!Number.isFinite(id)) {
-    res.status(400).json({ error: "Invalid conversation id" });
-    return;
-  }
-
-  const { title } = req.body as { title?: unknown };
-  const nextTitle = typeof title === "string" ? title.trim() : "";
-  if (!nextTitle) {
-    res.status(400).json({ error: "title required" });
-    return;
-  }
-
-  const [updated] = await db
-    .update(conversations)
-    .set({ title: nextTitle.slice(0, 140) })
-    .where(and(eq(conversations.id, id), eq(conversations.sessionId, sessionId)))
-    .returning();
-
-  if (!updated) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
-
-  res.json(updated);
 });
 
 router.get("/conversations/:id", async (req, res) => {
@@ -148,13 +102,8 @@ router.get("/conversations/:id/messages", async (req, res) => {
 
 router.post("/conversations/:id/messages", async (req, res) => {
   const id = Number(req.params.id);
-  const { content, contactId } = req.body;
-  const sessionId = req.sessionId;
-
-  if (!sessionId || typeof sessionId !== "string") {
-    res.status(401).json({ error: "Требуется авторизация" });
-    return;
-  }
+  const { content, sessionId: bodySessionId, contactId } = req.body;
+  const sessionId = req.sessionId || bodySessionId;
 
   if (!content) {
     res.status(400).json({ error: "content required" });
@@ -171,64 +120,12 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  let [owner] = await db
-    .select({
-      sessionId: usersTable.sessionId,
-      email: usersTable.email,
-      requestsUsed: usersTable.requestsUsed,
-      requestsBalance: usersTable.requestsBalance,
-    })
-    .from(usersTable)
-    .where(eq(usersTable.sessionId, sessionId))
-    .limit(1);
-
-  if (!owner) {
-    await db.insert(usersTable).values({ sessionId }).onConflictDoNothing();
-    [owner] = await db
-      .select({
-        sessionId: usersTable.sessionId,
-        email: usersTable.email,
-        requestsUsed: usersTable.requestsUsed,
-        requestsBalance: usersTable.requestsBalance,
-      })
-      .from(usersTable)
-      .where(eq(usersTable.sessionId, sessionId))
-      .limit(1);
+  // Save contactId to conversation if it's a synastry chat and not saved yet
+  if (contactId && !conv.contactId) {
+    await db.update(conversations).set({ contactId: Number(contactId) }).where(eq(conversations.id, id));
   }
 
-  // Billing unit: 1 request per message, 2 for long message.
-  const requestCost = content.length >= 1200 ? 2 : 1;
-  const remainingFree = getRemainingFreeRequests(owner?.requestsUsed ?? 0);
-  const isUnlimited = isUnlimitedUser(owner?.email);
-
-  if (!owner || !canAffordRequest(owner.requestsUsed, owner.requestsBalance, requestCost, owner.email)) {
-    res.status(402).json({
-      error: `Лимит бесплатных запросов (${FREE_REQUESTS_LIMIT}) исчерпан. Пополните пакет, чтобы продолжить.`,
-      required: requestCost,
-      balance: owner?.requestsBalance ?? 0,
-      freeRemaining: remainingFree,
-      isUnlimited,
-    });
-    return;
-  }
-
-  const nextBalance = getBalanceAfterCharge(
-    owner.requestsUsed,
-    owner.requestsBalance,
-    requestCost,
-    owner.email,
-  );
-
-  await Promise.all([
-    db.insert(messages).values({ conversationId: id, role: "user", content }),
-    db
-      .update(usersTable)
-      .set({
-        requestsBalance: nextBalance,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.sessionId, sessionId)),
-  ]);
+  await db.insert(messages).values({ conversationId: id, role: "user", content });
 
   // Load all data in parallel
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
@@ -266,62 +163,29 @@ router.post("/conversations/:id/messages", async (req, res) => {
   }, 20_000);
 
   let fullResponse = "";
-  const unknownTimePreface = userProfile?.birthTimeUnknown
-    ? "Важно: время рождения указано неточно (используем 12:00), поэтому вывод по домам и точным таймингам менее конкретный.\n\n"
-    : "";
-
-  if (unknownTimePreface) {
-    fullResponse += unknownTimePreface;
-    res.write(`data: ${JSON.stringify({ content: unknownTimePreface })}\n\n`);
-  }
 
   try {
-    if (hasAnthropicProvider()) {
-      const stream = anthropic.messages.stream({
-        model: "claude-sonnet-4-6",
-        max_tokens: 8192,
-        temperature: CHAT_RESPONSE_TEMPERATURE,
-        system: systemPrompt,
-        messages: chatMessages,
-      });
+    const stream = anthropic.messages.stream({
+      model: "claude-sonnet-4-6",
+      max_tokens: 8192,
+      temperature: 0.5,
+      system: systemPrompt,
+      messages: chatMessages,
+    });
 
-      for await (const event of stream) {
-        if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-          fullResponse += event.delta.text;
-          res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
-        }
-      }
-    } else {
-      const { openai } = await import("@workspace/integrations-openai-ai-server");
-      const stream = await openai.chat.completions.create({
-        model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-        temperature: CHAT_RESPONSE_TEMPERATURE,
-        stream: true,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...chatMessages,
-        ],
-      });
-
-      for await (const chunk of stream) {
-        const delta = chunk.choices?.[0]?.delta?.content;
-        if (typeof delta === "string" && delta.length > 0) {
-          fullResponse += delta;
-          res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
-        }
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        fullResponse += event.delta.text;
+        res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
       }
     }
 
-    // Save assistant response + increment request counter.
-    // `requestsUsed` is tracked in billing units (long message can cost 2).
+    // Save assistant response + increment request counter
     await Promise.all([
       db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse }),
       sessionId
         ? db.update(usersTable)
-            .set({
-              requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
-              updatedAt: new Date(),
-            })
+            .set({ requestsUsed: sql`${usersTable.requestsUsed} + 1`, updatedAt: new Date() })
             .where(eq(usersTable.sessionId, sessionId))
         : Promise.resolve(),
     ]);
@@ -334,10 +198,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
   } catch (err) {
-    const errorMessage =
-      err instanceof Error && err.message ? err.message : "Generation failed";
     logger.error({ err }, "Anthropic streaming error");
-    res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
+    res.write(`data: ${JSON.stringify({ error: "Generation failed" })}\n\n`);
     res.end();
   } finally {
     clearInterval(heartbeat);
@@ -366,108 +228,39 @@ router.delete("/memories/:id", async (req, res) => {
 
 // ── Memory extraction ────────────────────────────────────────────────────────
 
-const MEMORY_EXTRACTION_SYSTEM = `Ты — система извлечения фактов о пользователе для долгой памяти астролога.
-
-Извлекай краткие факты, если пользователь САМ это сообщил или явно подтвердил в реплике (не выдумывай из текста астролога).
-
-Включай:
-— имена/роли близких, профессию, город/страна, важные события (свадьба, переезд, смена работы, дети);
-— явные переживания, цели, ограничения («боюсь увольнения», «хочу сменить сферу», «в разводе»);
-— то, что пользователь просит учитывать в будущем («не люблю когда…», «важно про детей»).
-
-НЕ сохраняй: общие астрологические термины без личного контекста, вежливости, одноразовые приветствия.
-
-Ответ СТРОГО одним JSON-массивом строк UTF-8, без markdown, без пояснений до или после.
-Если нечего сохранять — [].
-Максимум 4 факта, каждый до 18 слов.
-Пример: ["Зовут Аня, живёт в Оренбурге","Переживает за отношения с партнёром"]`;
-
-/** Модели часто оборачивают ответ в \`\`\`json — иначе JSON.parse ломается и память всегда пустая. */
-function parseMemoryFactsJson(raw: string): string[] {
-  let s = raw.trim();
-  const fence = s.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  if (fence) s = fence[1].trim();
-  const tryParse = (t: string): string[] | null => {
-    try {
-      const v = JSON.parse(t) as unknown;
-      if (!Array.isArray(v)) return null;
-      return v.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
-    } catch {
-      return null;
-    }
-  };
-  const direct = tryParse(s);
-  if (direct) return direct;
-  const bracket = s.match(/\[[\s\S]*\]/);
-  if (bracket) {
-    const inner = tryParse(bracket[0]);
-    if (inner) return inner;
-  }
-  return [];
-}
-
 async function extractAndSaveMemories(sessionId: string, userMsg: string, assistantMsg: string) {
   try {
-    let text = "[]";
-    if (hasAnthropicProvider()) {
-      const response = await anthropic.messages.create({
-        model: "claude-haiku-4-5",
-        max_tokens: 500,
-        system: MEMORY_EXTRACTION_SYSTEM,
-        messages: [
-          { role: "user", content: `Пользователь: ${userMsg}\n\nАстролог: ${assistantMsg}` },
-        ],
-      });
-      text =
-        response.content[0]?.type === "text"
-          ? response.content[0].text.trim()
-          : "[]";
-    } else {
-      const { openai } = await import("@workspace/integrations-openai-ai-server");
-      const response = await openai.chat.completions.create({
-        model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-        temperature: 0.2,
-        messages: [
-          {
-            role: "system",
-            content: MEMORY_EXTRACTION_SYSTEM,
-          },
-          {
-            role: "user",
-            content: `Пользователь: ${userMsg}\n\nАстролог: ${assistantMsg}`,
-          },
-        ],
-      });
-      text = (response.choices?.[0]?.message?.content || "[]").trim();
-    }
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 300,
+      system: `Ты — система извлечения фактов. Твоя задача — найти в диалоге конкретные факты о жизни пользователя, которые стоит запомнить для будущих разговоров.
 
-    const facts = parseMemoryFactsJson(text);
-    if (facts.length === 0) {
-      if (text.length > 2 && !text.includes("[]")) {
-        logger.warn(
-          { preview: text.slice(0, 240) },
-          "memory extraction returned no parseable facts",
-        );
-      }
-      return;
-    }
+Ищи ТОЛЬКО: имена близких людей и их роль (муж, мама, дочь и т.д.), профессию пользователя или близких, важные жизненные обстоятельства (переезд, беременность, развод, новая работа), важные даты или события.
+
+Отвечай ТОЛЬКО в формате JSON массива строк. Если нет ничего важного — верни [].
+Максимум 3 факта. Каждый факт — одно краткое предложение (до 15 слов).
+Пример: ["Муж пользователя зовут Андрей, работает программистом", "Рассматривают переезд в Берлин"]`,
+      messages: [
+        { role: "user", content: `Пользователь: ${userMsg}\n\nАстролог: ${assistantMsg}` }
+      ]
+    });
+
+    const text = response.content[0]?.type === "text" ? response.content[0].text.trim() : "[]";
+    const facts: string[] = JSON.parse(text);
+    if (!Array.isArray(facts) || facts.length === 0) return;
 
     // Load existing memories to avoid duplicates
     const existing = await db.select().from(memoriesTable)
       .where(eq(memoriesTable.sessionId, sessionId));
-    const addedThisTurn: string[] = [];
 
     for (const fact of facts) {
-      if (typeof fact !== "string") continue;
-      const trimmed = fact.trim();
-      if (!trimmed) continue;
-      const prefixLen = Math.min(14, trimmed.length);
-      const prefix = trimmed.toLowerCase().slice(0, Math.max(prefixLen, 1));
-      const pool = [...existing.map((m) => m.content), ...addedThisTurn];
-      const isDuplicate = pool.some((c) => c.toLowerCase().includes(prefix));
+      if (!fact || typeof fact !== "string") continue;
+      // Simple dedup: skip if very similar memory already exists
+      const isDuplicate = existing.some(m =>
+        m.content.toLowerCase().includes(fact.toLowerCase().slice(0, 15))
+      );
       if (!isDuplicate) {
-        await db.insert(memoriesTable).values({ sessionId, content: trimmed });
-        addedThisTurn.push(trimmed);
+        await db.insert(memoriesTable).values({ sessionId, content: fact });
       }
     }
   } catch { /* Memory extraction is non-critical, fail silently */ }
@@ -480,7 +273,7 @@ type UserRow = {
   birthPlace?: string | null; birthLat?: number | null; birthLng?: number | null;
   gender?: string | null; language?: string | null; tonePreferredDepth?: string | null;
   tonePreferredStyle?: string | null; toneEmotionalSensitivity?: string | null;
-  toneFamiliarityLevel?: string | null; birthTimeUnknown?: boolean | null;
+  toneFamiliarityLevel?: string | null;
 } | null;
 
 type ContactRow = {
@@ -547,111 +340,17 @@ function calcUserData(user: UserRow) {
   return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection };
 }
 
-function calcContactData(contact: ContactRow) {
-  let contactNatalSection = "";
-  let contactEphemerisSection = "";
-  let contactSolarRetSection = "";
-  let contactProgressSection = "";
-  let contactLunarRetSection = "";
-  let contactSolarArcSection = "";
-  let contactTransitPerfSection = "";
-  let contactChart = null;
-
-  if (contact?.birthDate) {
-    try {
-      const lat = contact.birthLat ? Number(contact.birthLat) : null;
-      const lon = contact.birthLng ? Number(contact.birthLng) : null;
-      contactChart = calcNatalChart(contact.birthDate, contact.birthTime || null, lat, lon);
-      contactNatalSection = `\n${formatNatalForPrompt(contactChart)}\n`;
-
-      try {
-        const sr = calcSolarReturn(
-          contact.birthDate,
-          contact.birthTime || null,
-          lat,
-          lon,
-          new Date().getFullYear(),
-        );
-        contactSolarRetSection = `\n${formatSolarReturnForPrompt(sr)}\n`;
-      } catch { /* no SR */ }
-
-      try {
-        const birthYear = parseInt(contact.birthDate.split("-")[0]);
-        const age = new Date().getFullYear() - birthYear;
-        const prog = calcProgressions(
-          contact.birthDate,
-          contact.birthTime || null,
-          lat,
-          lon,
-          age,
-        );
-        contactProgressSection = `\n${formatProgressionsForPrompt(prog)}\n`;
-      } catch { /* no progressions */ }
-
-      try {
-        const natalMoon = contactChart.planets.find((p) => p.planet === "Луна");
-        if (natalMoon) {
-          const lr = calcLunarReturn(natalMoon.longitude, new Date());
-          contactLunarRetSection = `\n${formatLunarReturnForPrompt(lr)}\n`;
-        }
-      } catch { /* no lunar return */ }
-
-      try {
-        const sa = calcSolarArcDirections(
-          contact.birthDate,
-          contact.birthTime || null,
-          lat,
-          lon,
-        );
-        contactSolarArcSection = `\n${formatSolarArcForPrompt(sa)}\n`;
-      } catch { /* no solar arc */ }
-    } catch { /* contact chart fallback */ }
-  }
-
-  try {
-    const ephem = calcEphemeris(contactChart ?? undefined);
-    contactEphemerisSection = `\n${formatEphemerisForPrompt(ephem, contactChart ?? undefined)}\n`;
-
-    if (contactChart && ephem.transitAspects && ephem.transitAspects.length > 0) {
-      try {
-        const withDates = calcTransitPerfections(ephem.transitAspects, contactChart);
-        const formatted = formatTransitPerfectionsForPrompt(withDates);
-        if (formatted) contactTransitPerfSection = `\n${formatted}\n`;
-      } catch { /* no perfection dates */ }
-    }
-  } catch { /* ephemeris fallback */ }
-
-  return {
-    contactChart,
-    contactNatalSection,
-    contactEphemerisSection,
-    contactSolarRetSection,
-    contactProgressSection,
-    contactLunarRetSection,
-    contactSolarArcSection,
-    contactTransitPerfSection,
-  };
-}
-
 function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: MemoryRow[] = []): string {
   const depth = user?.tonePreferredDepth || "deep";
   const style = user?.tonePreferredStyle || "mystical";
   const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection } = calcUserData(user);
 
-  const {
-    contactChart,
-    contactNatalSection,
-    contactEphemerisSection,
-    contactSolarRetSection,
-    contactProgressSection,
-    contactLunarRetSection,
-    contactSolarArcSection,
-    contactTransitPerfSection,
-  } = calcContactData(contact);
-
   let synastrySection = "";
-  if (contactChart && natalChart) {
+  if (contact?.birthDate && natalChart) {
     try {
+      const cLat = contact.birthLat ? Number(contact.birthLat) : null;
+      const cLon = contact.birthLng ? Number(contact.birthLng) : null;
+      const contactChart = calcNatalChart(contact.birthDate, contact.birthTime || null, cLat, cLon);
       const synastry = calcSynastry(natalChart, contactChart);
       const contactName = contact.name + (contact.relation ? ` (${contact.relation})` : "");
       synastrySection = `\n${formatSynastryForPrompt(user?.name || "Пользователь", contactName, synastry)}\n`;
@@ -670,20 +369,6 @@ function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: 
 — Место рождения: ${user.birthPlace || "не указано"}
 ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRetSection}${solarArcSection}${transitPerfSection}${synastrySection}`
     : "Профиль пользователя ещё не заполнен — отвечай тепло и предложи пройти настройку при возможности.\n";
-
-  const contactSection = contact
-    ? `Профиль контакта:
-— Имя: ${contact.name}
-— Связь: ${contact.relation || "не указана"}
-— Дата рождения: ${contact.birthDate || "не указана"}
-— Время рождения: ${contact.birthTime || "не указано"}
-— Место рождения: ${contact.birthPlace || "не указано"}
-${contactNatalSection}${contactEphemerisSection}${contactSolarRetSection}${contactProgressSection}${contactLunarRetSection}${contactSolarArcSection}${contactTransitPerfSection}`
-    : "";
-
-  const unknownBirthTimeNote = user?.birthTimeUnknown
-    ? `\nВАЖНО: пользователь указал, что точное время рождения неизвестно. Не делай уверенных выводов по домам и углам (ASC/MC/1/6/10/12 дома). Формулируй осторожнее и явно отмечай, что прогноз менее конкретный без точного времени рождения.\n`
-    : "";
 
   const synastryModeNote = contact
     ? `\nРЕЖИМ СИНАСТРИИ: Сейчас активна пара ${user?.name || "Пользователь"} + ${contact.name}. Отвечай прежде всего с точки зрения их совместимости и взаимодействия.\n`
@@ -721,29 +406,9 @@ ${contactNatalSection}${contactEphemerisSection}${contactSolarRetSection}${conta
 — Никогда не пиши служебные маркеры типа "мягкое вхождение", "считываю запрос"
 — Не начинай ответ с "Конечно!", "Отлично!", "Безусловно!"
 — Опирайся ТОЛЬКО на расчётные данные из профиля ниже — не придумывай позиции планет
-— Избегай профессионального жаргона без расшифровки. Если используешь термин (орб, дирекция, дуга и т.д.), сразу объясни простыми словами в скобках.
-— Не поддавайся наводящей формулировке вопроса: сначала проверь карту, потом формулируй вывод
-— Если один и тот же смысл вопроса задан разными словами, итоговый вывод должен оставаться согласованным (если нет новых данных)
-— Явно разделяй: (1) что видно в карте, (2) интерпретация, (3) практический вывод
-— Если данных недостаточно для уверенного вывода — прямо скажи это, а не достраивай ответ под ожидание пользователя
-— Натал, транзиты, соляр, прогрессии и «текущий небесный фон» — равноправные опоры. Ответ в основном через транзиты или актуальные аспекты — это полноценный астрологический разбор, а не «запасной вариант». Не оправдывайся перед этим длинной однотипной фразой.
-— Не злоупотребляй шаблоном вроде «этого нет в натальной карте, но есть определённые транзиты, которые помогут с ответом»: редко и по делу — уместно, в ответ за ответом — выглядит как отмазка и ломает доверие. Если уже использовал близкую по смыслу оговорку недавно — в следующих сообщениях либо опусти её, либо скажи иначе одним коротким хвостом к фразе.
-— Когда в натале нет явного указания на тему вопроса — чаще начинай сразу с того, что реально видно сейчас (транзиты, точные даты аспектов, прогрессии и т.д.); при необходимости добавь одну короткую связку, без канцелярита и без повторения одних и тех же слов.
-— Пиши коротко и по сути: не повторяй одну и ту же мысль разными словами
-— Каждый абзац должен отвечать на вопрос "и что это значит для пользователя сейчас?" (карьера, отношения, здоровье, семья и т.д.)
-— Если аспект не привязан к конкретной сфере, прямо скажи "это общий фон, не только про работу/отношения"
 — Используй markdown только когда это реально помогает (списки планет, таблицы аспектов)
 — Если данных не хватает (нет времени рождения для домов) — честно скажи об этом
-
-Завершение ответа — «мостик» в диалог (обязательно в обычных ответах, кроме случаев ниже):
-— Не обрывайся на последней точке основного вывода: добавь в конец 1–2 короткие фразы (в том же сообщении, без нового заголовка).
-— Смысл мостика: (1) один конкретный вопрос по контексту только что сказанного — чтобы пользователю было легко ответить или уточнить; и/или (2) одна мысль, что по теме его запроса в карте остаются ещё смежные тенденции, углы или слои (другой дом, транзит, аспект, прогрессия — что реально есть в данных), которые можно развернуть, если захочет.
-— Вопрос и приглашение формулируй по-разному от сообщения к сообщению; запрещены пустые шаблоны вроде «Что ещё интересует?», «Есть вопросы?», «Могу рассказать ещё» без привязки к смыслу ответа.
-— Мостик не должен раздувать объём: основной ответ остаётся сжатым, хвост — по делу.
-— Если ответ — короткий отказ, только дисклеймер (например здоровье) или пользователь явно просит «только факт без продолжения» — мостик можно сократить до одной нейтральной фразы или опустить.
 ${synastryModeNote}
-— Если активен режим синастрии и данные контакта есть в профиле, считай, что натальная карта контакта и его текущие транзиты УЖЕ рассчитаны и доступны ниже.
-— В этом режиме запрещено писать, что ты «не можешь посчитать» карту/транзиты контакта или что «нет инструмента для расчёта».
 ЖЁСТКОЕ ОГРАНИЧЕНИЕ — ты ВСЕГДА остаёшься астрологом:
 — Любую тему — карьеру, отношения, деньги, здоровье — ты раскрываешь ТОЛЬКО через астрологические инструменты
 — Если тема вообще никак не связана с астрологией — вежливо скажи, что специализируешься только на астрологии
@@ -765,9 +430,6 @@ ${synastryModeNote}
 — Всегда добавляй: «Астрология указывает на предрасположенности, а не диагнозы. Для конкретных вопросов здоровья обращайся к врачу»
 
 ${profileSection}
-${contactSection}
-${unknownBirthTimeNote}
-— Если время рождения неизвестно, НЕ используй и НЕ интерпретируй дома, Асцендент, МС и домовые показатели; опирайся только на знаки, планеты, их аспекты, фазы и общие транзиты.
 ${memoriesSection}
 ${toneInstructions}
 
