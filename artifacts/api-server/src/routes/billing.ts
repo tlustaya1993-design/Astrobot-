@@ -31,10 +31,13 @@ const PACKAGE_CONFIG: Record<
 const DEFAULT_RECEIPT_EMAIL = "billing@astrobot.app";
 let paymentsTableReady: Promise<void> | null = null;
 const paymentCreateThrottle = new Map<string, number>();
+const paymentCreateIpWindow = new Map<string, number[]>();
 
 const PAYMENT_SUCCESS_RETURN_FLAG = "payment=success";
 const CREATE_PAYMENT_MIN_INTERVAL_MS = 2_500;
 const CREATE_PAYMENT_RETRY_DELAY_MS = 500;
+const CREATE_PAYMENT_IP_WINDOW_MS = 60_000;
+const CREATE_PAYMENT_IP_MAX_PER_WINDOW = 45;
 
 function isPackageCode(value: unknown): value is PackageCode {
   return typeof value === "string" && value in PACKAGE_CONFIG;
@@ -68,11 +71,30 @@ function canCreatePaymentNow(key: string, now = Date.now()): { ok: boolean; wait
   return { ok: false, waitMs: CREATE_PAYMENT_MIN_INTERVAL_MS - diff };
 }
 
+function canCreatePaymentByIp(ipKey: string, now = Date.now()): { ok: boolean; waitMs: number } {
+  const items = paymentCreateIpWindow.get(ipKey) ?? [];
+  const fresh = items.filter((ts) => now - ts < CREATE_PAYMENT_IP_WINDOW_MS);
+  if (fresh.length >= CREATE_PAYMENT_IP_MAX_PER_WINDOW) {
+    const oldest = fresh[0] ?? now;
+    const waitMs = Math.max(1, CREATE_PAYMENT_IP_WINDOW_MS - (now - oldest));
+    paymentCreateIpWindow.set(ipKey, fresh);
+    return { ok: false, waitMs };
+  }
+  fresh.push(now);
+  paymentCreateIpWindow.set(ipKey, fresh);
+  return { ok: true, waitMs: 0 };
+}
+
 function cleanupPaymentThrottle(now = Date.now()): void {
   // Простая защита от бесконечного роста map: TTL 10 минут.
   const ttl = 10 * 60_000;
   for (const [k, ts] of paymentCreateThrottle.entries()) {
     if (now - ts > ttl) paymentCreateThrottle.delete(k);
+  }
+  for (const [k, arr] of paymentCreateIpWindow.entries()) {
+    const fresh = arr.filter((ts) => now - ts < CREATE_PAYMENT_IP_WINDOW_MS);
+    if (fresh.length === 0) paymentCreateIpWindow.delete(k);
+    else paymentCreateIpWindow.set(k, fresh);
   }
 }
 
@@ -326,10 +348,8 @@ router.post("/payments/create", async (req, res) => {
   cleanupPaymentThrottle();
   const clientIp = getClientIp(req);
   const perSessionAllowed = canCreatePaymentNow(`sid:${sessionId}`);
-  const perIpAllowed = canCreatePaymentNow(`ip:${clientIp}`);
-  const allowed = !perSessionAllowed.ok
-    ? perSessionAllowed
-    : perIpAllowed;
+  const perIpAllowed = canCreatePaymentByIp(`ip:${clientIp}`);
+  const allowed = !perSessionAllowed.ok ? perSessionAllowed : perIpAllowed;
   if (!allowed.ok) {
     const waitSec = Math.max(1, Math.ceil(allowed.waitMs / 1000));
     res.setHeader("Retry-After", String(waitSec));
