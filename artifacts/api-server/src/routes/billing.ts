@@ -5,6 +5,7 @@ import { db, paymentsTable, usersTable } from "@workspace/db";
 import {
   createYookassaPayment,
   parseYookassaNotification,
+  YooKassaError,
   validateYookassaWebhook,
 } from "../lib/yookassa.js";
 import { logger } from "../lib/logger.js";
@@ -34,6 +35,57 @@ const PAYMENT_SUCCESS_RETURN_FLAG = "payment=success";
 
 function isPackageCode(value: unknown): value is PackageCode {
   return typeof value === "string" && value in PACKAGE_CONFIG;
+}
+
+function inferPaymentFailureResponse(err: unknown): { status: number; error: string } {
+  if (err instanceof YooKassaError) {
+    if (err.kind === "timeout") {
+      return {
+        status: 504,
+        error: "Платёжный сервис не ответил вовремя. Попробуйте ещё раз.",
+      };
+    }
+    if (err.kind === "network") {
+      return {
+        status: 503,
+        error: "Платёжный сервис временно недоступен. Попробуйте ещё раз.",
+      };
+    }
+    if (err.kind === "config") {
+      return {
+        status: 500,
+        error: "Платёжная интеграция настроена некорректно.",
+      };
+    }
+    if (err.kind === "http") {
+      if (err.status === 400 || err.status === 422) {
+        return {
+          status: 400,
+          error: "Параметры платежа отклонены платёжным провайдером.",
+        };
+      }
+      if (err.status === 401 || err.status === 403) {
+        return {
+          status: 502,
+          error: "Проблема авторизации в платёжном провайдере.",
+        };
+      }
+      if (err.status === 429) {
+        return {
+          status: 503,
+          error: "Слишком много запросов к платёжному провайдеру. Повторите чуть позже.",
+        };
+      }
+      if (err.status && err.status >= 500) {
+        return {
+          status: 503,
+          error: "Платёжный провайдер временно недоступен. Повторите чуть позже.",
+        };
+      }
+    }
+  }
+
+  return { status: 500, error: "Не удалось создать платеж" };
 }
 
 function toKopecks(amountRub: string): number {
@@ -299,8 +351,38 @@ router.post("/payments/create", async (req, res) => {
       status: ykPayment.status,
     });
   } catch (err) {
-    logger.error({ err }, "Failed to create yookassa payment");
-    res.status(500).json({ error: "Не удалось создать платеж" });
+    const failure = inferPaymentFailureResponse(err);
+    if (err instanceof YooKassaError) {
+      logger.error(
+        {
+          err,
+          appPaymentId,
+          sessionId,
+          packageCode,
+          provider: "yookassa",
+          yookassa: {
+            kind: err.kind,
+            operation: err.operation,
+            status: err.status,
+            requestId: err.requestId,
+            body: err.body,
+          },
+        },
+        "Failed to create yookassa payment",
+      );
+    } else {
+      logger.error(
+        {
+          err,
+          appPaymentId,
+          sessionId,
+          packageCode,
+          provider: "yookassa",
+        },
+        "Failed to create yookassa payment",
+      );
+    }
+    res.status(failure.status).json({ error: failure.error });
   }
 });
 

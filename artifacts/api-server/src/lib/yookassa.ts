@@ -92,10 +92,51 @@ type YooKassaWebhookEvent = {
   object: YooKassaPaymentObject;
 };
 
+export type YooKassaErrorKind =
+  | "http"
+  | "timeout"
+  | "network"
+  | "config"
+  | "unknown";
+
+export class YooKassaError extends Error {
+  readonly kind: YooKassaErrorKind;
+  readonly status?: number;
+  readonly body?: string;
+  readonly requestId?: string;
+  readonly operation: "create_payment" | "get_payment";
+
+  constructor(params: {
+    message: string;
+    kind: YooKassaErrorKind;
+    operation: "create_payment" | "get_payment";
+    status?: number;
+    body?: string;
+    requestId?: string;
+    cause?: unknown;
+  }) {
+    super(params.message);
+    this.name = "YooKassaError";
+    this.kind = params.kind;
+    this.operation = params.operation;
+    this.status = params.status;
+    this.body = params.body;
+    this.requestId = params.requestId;
+    if (params.cause !== undefined) {
+      // Node 18+ supports ErrorOptions.cause, but keep backward-compatible assignment.
+      (this as Error & { cause?: unknown }).cause = params.cause;
+    }
+  }
+}
+
 function getRequiredEnv(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new Error(`${name} is required for YooKassa integration`);
+    throw new YooKassaError({
+      kind: "config",
+      operation: "create_payment",
+      message: `${name} is required for YooKassa integration`,
+    });
   }
   return value;
 }
@@ -111,43 +152,125 @@ function getBaseUrl(): string {
   return process.env.YOOKASSA_API_BASE_URL || "https://api.yookassa.ru/v3";
 }
 
+function getTimeoutMs(): number {
+  const raw = Number.parseInt(process.env.YOOKASSA_TIMEOUT_MS ?? "", 10);
+  if (!Number.isFinite(raw) || raw < 1000) return 15_000;
+  return raw;
+}
+
 export async function createYooKassaPayment(
   payload: YooKassaCreatePaymentPayload,
   options?: { idempotenceKey?: string },
 ): Promise<YooKassaCreatePaymentResponse> {
   const idempotenceKey = options?.idempotenceKey ?? crypto.randomUUID();
-  const response = await fetch(`${getBaseUrl()}/payments`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: getAuthHeader(),
-      "Idempotence-Key": idempotenceKey,
-    },
-    body: JSON.stringify(payload),
-  });
+  try {
+    const response = await fetch(`${getBaseUrl()}/payments`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: getAuthHeader(),
+        "Idempotence-Key": idempotenceKey,
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(getTimeoutMs()),
+    });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`YooKassa create payment failed: ${response.status} ${body}`);
+    if (!response.ok) {
+      const body = await response.text();
+      const requestId =
+        response.headers.get("x-request-id") ??
+        response.headers.get("X-Request-Id") ??
+        undefined;
+      throw new YooKassaError({
+        kind: "http",
+        operation: "create_payment",
+        status: response.status,
+        body,
+        requestId,
+        message: `YooKassa create payment failed: ${response.status}`,
+      });
+    }
+
+    return (await response.json()) as YooKassaCreatePaymentResponse;
+  } catch (error) {
+    if (error instanceof YooKassaError) throw error;
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new YooKassaError({
+        kind: "timeout",
+        operation: "create_payment",
+        message: "YooKassa create payment timed out",
+        cause: error,
+      });
+    }
+    if (error instanceof Error) {
+      throw new YooKassaError({
+        kind: "network",
+        operation: "create_payment",
+        message: error.message || "YooKassa network error while creating payment",
+        cause: error,
+      });
+    }
+    throw new YooKassaError({
+      kind: "unknown",
+      operation: "create_payment",
+      message: "Unknown YooKassa error while creating payment",
+      cause: error,
+    });
   }
-
-  return (await response.json()) as YooKassaCreatePaymentResponse;
 }
 
 export async function getYooKassaPayment(paymentId: string): Promise<YooKassaPaymentObject> {
-  const response = await fetch(`${getBaseUrl()}/payments/${paymentId}`, {
-    method: "GET",
-    headers: {
-      Authorization: getAuthHeader(),
-    },
-  });
+  try {
+    const response = await fetch(`${getBaseUrl()}/payments/${paymentId}`, {
+      method: "GET",
+      headers: {
+        Authorization: getAuthHeader(),
+      },
+      signal: AbortSignal.timeout(getTimeoutMs()),
+    });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`YooKassa get payment failed: ${response.status} ${body}`);
+    if (!response.ok) {
+      const body = await response.text();
+      const requestId =
+        response.headers.get("x-request-id") ??
+        response.headers.get("X-Request-Id") ??
+        undefined;
+      throw new YooKassaError({
+        kind: "http",
+        operation: "get_payment",
+        status: response.status,
+        body,
+        requestId,
+        message: `YooKassa get payment failed: ${response.status}`,
+      });
+    }
+
+    return (await response.json()) as YooKassaPaymentObject;
+  } catch (error) {
+    if (error instanceof YooKassaError) throw error;
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new YooKassaError({
+        kind: "timeout",
+        operation: "get_payment",
+        message: "YooKassa get payment timed out",
+        cause: error,
+      });
+    }
+    if (error instanceof Error) {
+      throw new YooKassaError({
+        kind: "network",
+        operation: "get_payment",
+        message: error.message || "YooKassa network error while loading payment",
+        cause: error,
+      });
+    }
+    throw new YooKassaError({
+      kind: "unknown",
+      operation: "get_payment",
+      message: "Unknown YooKassa error while loading payment",
+      cause: error,
+    });
   }
-
-  return (await response.json()) as YooKassaPaymentObject;
 }
 
 export function parseYooKassaWebhook(body: unknown): YooKassaWebhookEvent {
