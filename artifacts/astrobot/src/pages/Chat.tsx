@@ -251,6 +251,9 @@ export default function Chat() {
                   </div>
                 )}
 
+                <div className="w-12 h-12 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-2.5 shadow-[0_0_20px_rgba(212,175,55,0.14)]">
+                  <Sparkles className="w-6 h-6 text-primary" />
+                </div>
                 <h3 className="text-base font-display font-semibold mb-1">С чего начнем?</h3>
                 <p className="text-muted-foreground mb-3 max-w-sm text-sm">
                   {selectedContactId

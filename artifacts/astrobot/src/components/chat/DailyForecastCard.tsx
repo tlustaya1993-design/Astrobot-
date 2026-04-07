@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { getAuthHeaders } from '@/lib/session';
 import AstroMarkdown from '@/components/chat/AstroMarkdown';
 
@@ -116,23 +116,9 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
           </div>
         </button>
 
-        {/* Preview (first sentence always visible) */}
-        <div className="px-4 pb-3">
-          {loading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
-              <Sparkles className="w-3.5 h-3.5 text-primary/50" />
-              <span>Читаю звёзды...</span>
-            </div>
-          ) : sentences.length > 0 ? (
-            <p className="text-sm text-foreground/90 leading-relaxed">
-              {sentences[0]}
-            </p>
-          ) : null}
-        </div>
-
         {/* Expanded content */}
         <AnimatePresence>
-          {expanded && sentences.length > 1 && (
+          {expanded && sentences.length > 0 && (
             <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
@@ -141,7 +127,7 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
               className="overflow-hidden"
             >
               <div className="px-4 pb-3 space-y-2 border-t border-white/5 pt-3">
-                {sentences.slice(1).map((s, i) => (
+                {sentences.map((s, i) => (
                   <p key={i} className="text-sm text-foreground/80 leading-relaxed">
                     {s}
                   </p>
