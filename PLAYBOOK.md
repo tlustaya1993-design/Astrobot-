@@ -1,31 +1,36 @@
 # AstroBot — Project Playbook
 
-> Документ для AI-агентов (Cursor, Claude). Содержит полное описание архитектуры, правила работы с кодом и спецификацию автотестов.
+> Актуально на: апрель 2026. Источник: GitHub `tlustaya1993-design/Astrobot-` (main).
+> Используй `@PLAYBOOK.md` в Cursor для контекста.
 
 ---
 
-## 1. Обзор проекта
+## 1. Продукт
 
-**AstroBot** — русскоязычный AI-астролог (PWA). Пользователь вводит дату рождения, получает натальную карту, ежедневный прогноз и ведёт чат с Claude.
+**AstroBot** — русскоязычный AI-астролог (PWA). Пользователь вводит данные рождения, получает персонализированный астрологический чат, ежедневный прогноз, синастрийный анализ с близкими.
 
-- **Продакшн**: https://astroai.site (Railway ← GitHub `tlustaya1993-design/Astrobot-`, ветка `main`)
-- **Язык интерфейса**: Русский
-- **AI модели**: Claude Sonnet (чат), Claude Haiku (память, прогноз)
+- **Домен**: `astroai.site` (Cloudflare → Railway)
+- **Монетизация**: YooKassa, пакеты запросов (5 бесплатных, потом оплата)
+- **Язык интерфейса**: русский
 
 ---
 
 ## 2. Технологический стек
 
-| Слой | Технологии |
+| Слой | Технология |
 |------|-----------|
-| Frontend | React 18, Vite, TypeScript, Tailwind CSS v4, Framer Motion |
-| Backend | Node.js, Express 5, TypeScript |
-| Database | PostgreSQL + Drizzle ORM |
-| AI | Anthropic Claude (через `lib/integrations-anthropic-ai/`) |
-| Auth | JWT (365 дней) + анонимные сессии через UUID |
-| Monorepo | pnpm workspaces |
-| Deploy | GitHub → Railway (автодеплой из main) |
-| DNS | Cloudflare (proxy) → Railway |
+| Frontend | React 18 + Vite, TypeScript, Tailwind CSS, Framer Motion |
+| Роутинг | Wouter |
+| State/Data | TanStack Query |
+| Backend | Express.js, TypeScript |
+| БД | PostgreSQL + Drizzle ORM |
+| AI (чат) | `claude-sonnet-4-6` через `lib/integrations-anthropic-ai/` |
+| AI (память/прогноз) | `claude-haiku-4-5` |
+| Астрология | Placidus дома, transit/synastry |
+| Оплата | YooKassa (Россия) |
+| Хостинг | Railway |
+| CDN/DNS | Cloudflare |
+| Монорепо | pnpm workspaces |
 
 ---
 
@@ -34,524 +39,397 @@
 ```
 /
 ├── artifacts/
-│   ├── astrobot/          # React PWA (frontend)
-│   │   ├── src/
-│   │   │   ├── pages/     # Chat, Home, Onboarding, History
-│   │   │   ├── components/
-│   │   │   │   ├── chat/  # PeoplePanel, DailyForecastCard, HistoryDrawer, AstroMarkdown
-│   │   │   │   ├── profile/   # ProfileSheet
-│   │   │   │   ├── layout/    # AppLayout
-│   │   │   │   └── ui/        # AstroAvatar, Button, Input, DateInput...
-│   │   │   ├── context/   # AuthContext
-│   │   │   ├── hooks/     # useChatStream
-│   │   │   └── lib/       # session.ts (JWT/sessionId), astrology.ts
-│   │   └── public/images/ # avatar-bot.png, cosmic-bg.png
-│   │
-│   └── api-server/        # Express API
+│   ├── astrobot/          # Frontend PWA
+│   │   └── src/
+│   │       ├── pages/         # Роуты
+│   │       ├── components/
+│   │       │   ├── billing/   # PaywallSheet
+│   │       │   ├── chat/      # Чат-компоненты
+│   │       │   ├── layout/
+│   │       │   ├── profile/
+│   │       │   └── ui/        # shadcn/ui
+│   │       ├── context/       # AuthContext, AvatarSyncContext
+│   │       └── lib/           # session, api helpers
+│   └── api-server/        # Backend Express
 │       └── src/
 │           ├── routes/
-│           │   ├── auth.ts          # /api/auth/register, /login, /logout
-│           │   ├── users.ts         # /api/users/me (GET/PUT)
-│           │   ├── contacts.ts      # /api/contacts (CRUD)
-│           │   ├── astrology.ts     # /api/astrology/natal-chart
+│           │   ├── auth.ts
+│           │   ├── billing.ts
+│           │   ├── contacts.ts
+│           │   ├── users.ts
+│           │   ├── astrology.ts
 │           │   └── openai/
-│           │       ├── conversations.ts  # /api/openai/conversations (CRUD + streaming)
-│           │       └── daily-forecast.ts # /api/openai/daily-forecast
-│           ├── lib/
-│           │   ├── astrology.ts     # Swiss Ephemeris, Placidus houses, синастрия
-│           │   └── logger.ts
-│           └── middleware/
-│               └── auth.ts          # sessionMiddleware (JWT/x-session-id)
-│
-├── lib/
-│   ├── db/                # Drizzle schema + migrations
-│   │   └── src/schema/
-│   │       ├── users.ts
-│   │       ├── conversations.ts  # contactId (nullable) для синастрии
-│   │       ├── messages.ts
-│   │       ├── contacts.ts
-│   │       └── memories.ts
-│   └── integrations-anthropic-ai/  # Anthropic client
-│
-└── PLAYBOOK.md            # этот файл
+│           │       ├── conversations.ts  # Chat + streaming
+│           │       └── daily-forecast.ts
+│           └── lib/
+│               ├── billing-policy.ts
+│               ├── yookassa.ts
+│               └── logger.ts
+└── lib/
+    ├── db/src/schema/     # Drizzle схемы
+    └── integrations-anthropic-ai/  # AI клиент
 ```
 
 ---
 
-## 4. База данных
+## 4. Страницы (роуты)
 
-### Таблицы
+| Путь | Компонент | Описание |
+|------|-----------|----------|
+| `/` | `Home` | Лендинг / стартовый экран |
+| `/onboarding` | `Onboarding` | 3-шаговый онбординг (имя, дата рождения, место) |
+| `/chat` | `Chat` | Новый чат |
+| `/chat/:id` | `Chat` | Существующий разговор |
+| `/profile` | `ProfilePage` | Профиль пользователя |
+| `/history` | `History` | История разговоров |
+| `/auth/callback` | `AuthCallback` | OAuth callback |
+| `/billing/test` | `BillingTestPage` | Тест оплаты (только при `VITE_ENABLE_BILLING_TEST=true`) |
 
-#### `users`
+---
+
+## 5. База данных — схемы
+
+### `users`
 | Поле | Тип | Описание |
-|------|-----|---------|
-| id | serial PK | |
-| session_id | text UNIQUE | UUID, создаётся на клиенте |
-| email | text UNIQUE | nullable (анонимы) |
-| password_hash | text | bcrypt |
-| name | text | имя пользователя |
-| birth_date | text | YYYY-MM-DD |
-| birth_time | text | HH:MM (nullable) |
-| birth_place | text | город |
-| birth_lat / birth_lng | double | геокоординаты |
-| gender | text | |
-| onboarding_done | boolean | false пока не пройдёт онбординг |
-| requests_used | integer | **СЧЁТЧИК — в данный момент не пишется, баг!** |
-| tone_preferred_depth | text | deep/medium/light |
-| tone_preferred_style | text | mystical/practical/... |
+|------|-----|----------|
+| `id` | serial PK | |
+| `session_id` | text UNIQUE | Анонимный идентификатор |
+| `email` | text UNIQUE nullable | При регистрации |
+| `password_hash` | text nullable | bcrypt |
+| `name` | text | Имя |
+| `birth_date` | text | ISO дата рождения |
+| `birth_time` | text | Время рождения |
+| `birth_time_unknown` | boolean default false | Время неизвестно |
+| `birth_place` | text | Название места |
+| `birth_lat/lng` | doublePrecision | Координаты |
+| `avatar_json` | text | JSON аватара |
+| `gender` | text | |
+| `language` | text default "ru" | |
+| `onboarding_done` | boolean | |
+| `tone_preferred_depth` | text | Глубина ответов |
+| `tone_preferred_style` | text | Стиль |
+| `tone_emotional_sensitivity` | text | |
+| `tone_familiarity_level` | text | |
+| `requests_balance` | integer default 0 | Купленные запросы |
+| `requests_used` | integer default 0 | Использованные (бесплатные) |
+| `created_at / updated_at` | timestamp | |
 
-#### `conversations`
+### `conversations`
 | Поле | Тип | Описание |
-|------|-----|---------|
-| id | serial PK | |
-| session_id | text | владелец |
-| title | text | авто-генерируется |
-| contact_id | integer | nullable, ссылка на contacts.id (синастрия) |
-| created_at | timestamp | |
+|------|-----|----------|
+| `id` | serial PK | |
+| `session_id` | text | Владелец |
+| `title` | text | Название чата |
+| `contact_id` | integer nullable | FK → contacts (синастрия) |
+| `created_at / updated_at` | timestamp | |
 
-#### `messages`
+### `messages`
 | Поле | Тип | Описание |
-|------|-----|---------|
-| id | serial PK | |
-| conversation_id | integer FK | |
-| role | text | 'user' / 'assistant' |
-| content | text | |
-| created_at | timestamp | |
+|------|-----|----------|
+| `id` | serial PK | |
+| `conversation_id` | integer FK | |
+| `role` | text | "user" / "assistant" |
+| `content` | text | |
+| `created_at` | timestamp | |
 
-#### `contacts`
+### `contacts`
 | Поле | Тип | Описание |
-|------|-----|---------|
-| id | serial PK | |
-| session_id | text | владелец |
-| name | text | имя контакта |
-| relation | text | муж/жена/ребёнок/... |
-| birth_date | text | YYYY-MM-DD |
-| birth_time / birth_place | text | nullable |
-| birth_lat / birth_lng | double | nullable |
+|------|-----|----------|
+| `id` | serial PK | |
+| `session_id` | text | Владелец |
+| `name` | text | |
+| `relation` | text | Тип связи (partner, friend, …) |
+| `birth_date / time / place` | text | Данные рождения |
+| `birth_lat / lng` | doublePrecision | |
+| `avatar_json` | text | JSON аватара |
+| `created_at / updated_at` | timestamp | |
 
-#### `memories`
+### `memories`
 | Поле | Тип | Описание |
-|------|-----|---------|
-| id | serial PK | |
-| session_id | text | |
-| content | text | факт для долгосрочной памяти AI |
-| created_at | timestamp | |
+|------|-----|----------|
+| `id` | serial PK | |
+| `session_id` | text | |
+| `content` | text | Факт/воспоминание |
+| `type` | text | Категория |
+| `created_at` | timestamp | |
 
-### Миграции
+### `payments`
+| Поле | Тип | Описание |
+|------|-----|----------|
+| `id` | serial PK | |
+| `session_id` | text | |
+| `provider` | text default "yookassa" | |
+| `provider_payment_id` | text UNIQUE | ID в YooKassa |
+| `app_payment_id` | text UNIQUE | Внутренний UUID |
+| `package_code` | text | pack10/30/50/100 |
+| `credits_granted` | integer | Кол-во запросов |
+| `amount_rub` | text | Сумма в рублях |
+| `currency` | text default "RUB" | |
+| `status` | text default "pending" | pending/succeeded/canceled |
+| `description` | text | |
+| `webhook_verified` | boolean | Подпись вебхука проверена |
+| `credits_applied_at` | timestamp nullable | Когда начислено |
+| `metadata` | jsonb | |
+| `created_at / updated_at` | timestamp | |
+
+---
+
+## 6. Платёжная система (YooKassa)
+
+### Пакеты запросов
+| Код | Название | Цена | Запросов |
+|-----|----------|------|----------|
+| `pack10` | Старт | 349 ₽ | 10 |
+| `pack30` | Стандарт | 799 ₽ | 30 |
+| `pack50` | Про | 1 149 ₽ | 50 |
+| `pack100` | Макс | 1 799 ₽ | 100 |
+
+### Логика billing-policy
+- `FREE_REQUESTS_LIMIT` = 5 (env `FREE_REQUESTS_QUOTA`, default 5)
+- `UNLIMITED_REQUEST_EMAILS` — comma-separated emails, которым всё бесплатно
+- Если `requests_used >= FREE_REQUESTS_LIMIT` и `requests_balance == 0` → API возвращает `402`
+- Frontend показывает `PaywallSheet` при получении 402
+
+### Антифрод / дросселирование
+- Per-session: минимум 2500ms между созданием платежей
+- Per-IP: max 45 попыток за 60 секунд (sliding window)
+
+### Эндпоинты оплаты
+```
+POST /billing/create                   — создать платёж YooKassa
+POST /billing/webhook                  — YooKassa webhook (начислить credits)
+GET  /billing/status/:appPaymentId     — статус платежа
+```
+
+---
+
+## 7. API эндпоинты
+
+### Auth (`/auth`)
+```
+POST /auth/register    — регистрация (email + password)
+POST /auth/login       — вход
+POST /auth/logout      — выход
+GET  /auth/me          — текущий пользователь
+```
+
+### Users (`/users`)
+```
+GET   /users/me        — профиль
+PATCH /users/me        — обновить профиль (имя, дата, место, тон и пр.)
+```
+
+### Conversations (`/openai/conversations`)
+```
+GET    /openai/conversations           — список чатов (с contactName/contactRelation)
+POST   /openai/conversations           — создать чат
+GET    /openai/conversations/:id       — чат + история сообщений
+DELETE /openai/conversations/:id       — удалить
+POST   /openai/conversations/:id/chat  — отправить сообщение (SSE streaming)
+```
+
+### Contacts (`/contacts`)
+```
+GET    /contacts       — список контактов
+POST   /contacts       — добавить контакт
+PATCH  /contacts/:id   — обновить
+DELETE /contacts/:id   — удалить
+```
+
+### Astrology (`/astrology`)
+```
+GET /astrology/chart     — натальная карта
+GET /astrology/synastry  — синастрия с контактом
+```
+
+### Daily Forecast (`/openai/daily-forecast`)
+```
+GET /openai/daily-forecast — ежедневный прогноз (SSE streaming)
+```
+
+---
+
+## 8. Авторизация
+
+- **Анонимный режим**: `sessionId` в localStorage → заголовок `x-session-id`
+- **JWT**: после регистрации/логина → `Authorization: Bearer <token>` + `x-session-id`
+- Все запросы используют `getAuthHeaders()` из `lib/session.ts`
+- `AuthContext` — состояние авторизации в React
+- `AvatarSyncContext` — синхронизация аватара между компонентами
+
+---
+
+## 9. AI интеграция
+
+- **Библиотека**: `lib/integrations-anthropic-ai/`
+- **Чат**: `claude-sonnet-4-6` — стриминг через SSE
+- **Память и прогноз**: `claude-haiku-4-5` — быстрее и дешевле
+- **AstroMarkdown**: компонент для рендеринга ответов Claude (не сырой HTML, не `#`-заголовки)
+- Промпт включает: натальную карту, воспоминания, историю сообщений, транзиты текущего дня
+
+---
+
+## 10. Фронтенд — ключевые компоненты
+
+### Chat (`/chat`)
+- `HistoryDrawer` — история чатов (левый drawer); синастрийные чаты = двойной аватар
+- `PeoplePanel` — список контактов для синастрии (правый drawer)
+- `DailyForecastCard` — карточка прогноза вверху чата
+- `AstroMarkdown` — рендеринг ответов AI
+- `PaywallSheet` — показывается при 402 (лимит исчерпан)
+- `ChatSidebar` — боковая панель на десктопе
+- `SynastryRowAvatars` — двойной аватар в истории
+
+### Billing
+- `PaywallSheet` — выбор пакета → создание платежа → редирект на YooKassa → callback на `/auth/callback`
+
+### Profile
+- `ProfileSheet` — шторка профиля (**не трогать, редизайн Cursor**)
+- `ProfilePage` — страница профиля `/profile`
+
+---
+
+## 11. Environment Variables
+
+| Переменная | Где | Описание |
+|-----------|-----|----------|
+| `DATABASE_URL` | Railway | PostgreSQL |
+| `JWT_SECRET` | Railway | Секрет JWT |
+| `YOOKASSA_SHOP_ID` | Railway | ID магазина |
+| `YOOKASSA_SECRET_KEY` | Railway | Ключ YooKassa |
+| `ANTHROPIC_API_KEY` | Railway | Claude API |
+| `FREE_REQUESTS_QUOTA` | Railway | Кол-во бесплатных запросов (default 5) |
+| `UNLIMITED_REQUEST_EMAILS` | Railway | Comma-separated emails без лимита |
+| `VITE_ENABLE_BILLING_TEST` | Railway/Vite | `"true"` = показать /billing/test |
+
+---
+
+## 12. Правила для Cursor
+
+### Что НЕ трогать без прямого указания
+- `AstroAvatar.tsx` — кастомный редизайн
+- `ProfileSheet.tsx` — кастомный редизайн
+- `PeoplePanel.tsx` — кастомный редизайн
+- Страницы оплаты (YooKassa) — финансовая логика
+
+### Кодстайл
+- TypeScript строгий, без `any`
+- Ответы Claude рендерить через `AstroMarkdown`, не через `<p>` или `dangerouslySetInnerHTML`
+- При добавлении полей в БД: `ALTER TABLE … ADD COLUMN IF NOT EXISTS` или `pnpm --filter @workspace/db run push-force`
+- Стриминг: SSE через `res.write()`, не WebSocket
+
+### Известные баги (проверить перед закрытием)
+- [ ] `requests_used` может не инкрементироваться в некоторых edge-cases — проверить в `conversations.ts` после стриминга
+- [ ] Pre-existing TS-ошибки на `req.sessionId`, `requestsUsed` — не трогать, они намеренно игнорируются
+
+---
+
+## 13. Деплой
+
+```
+GitHub main → Railway (auto-deploy) → astroai.site (Cloudflare)
+```
+
+- Push в `main` = автодеплой на Railway
+- Cloudflare проксирует весь трафик (TLS + кеш)
+- `_railway-verify` TXT-запись добавлена в Cloudflare вручную
+
+### Команды
 ```bash
-pnpm --filter @workspace/db run push-force   # применить изменения схемы
-```
-Или напрямую SQL (безопаснее для новых nullable колонок):
-```sql
-ALTER TABLE table_name ADD COLUMN IF NOT EXISTS column_name type;
-```
-
----
-
-## 5. API Endpoints
-
-### Auth
-```
-POST /api/auth/register    { email, password, sessionId? } → { token, sessionId, email }
-POST /api/auth/login       { email, password } → { token, sessionId, email }
-POST /api/auth/logout      → 200
-```
-
-### Users
-```
-GET  /api/users/me         → User (профиль текущего пользователя)
-PUT  /api/users/me         { name, birthDate, birthTime, birthPlace, ... } → User
-```
-
-### Contacts (синастрия)
-```
-GET    /api/contacts           → Contact[]
-POST   /api/contacts           { name, relation, birthDate, ... } → Contact
-GET    /api/contacts/:id       → Contact
-PUT    /api/contacts/:id       → Contact
-DELETE /api/contacts/:id       → 200
-```
-
-### Conversations
-```
-GET    /api/openai/conversations       → ConversationWithContact[]
-POST   /api/openai/conversations       { title } → Conversation
-GET    /api/openai/conversations/:id   → Conversation + messages[]
-DELETE /api/openai/conversations/:id   → 200
-POST   /api/openai/conversations/:id/messages  { content, contactId? } → streaming SSE
-```
-
-### Daily Forecast
-```
-GET /api/openai/daily-forecast   → { date, text, moonPhase: { name, emoji } }
-```
-Кешируется на клиенте в `sessionStorage` по ключу `daily-forecast-YYYY-MM-DD`.
-
-### Astrology
-```
-GET /api/astrology/natal-chart   → { planets[], houses[], aspects[] }
-```
-
----
-
-## 6. Система аутентификации
-
-**Два типа сессий:**
-
-1. **Анонимная** — UUID хранится в `localStorage` (`astrobot_session_id`). Запросы идут с заголовком `x-session-id: <uuid>`.
-
-2. **Зарегистрированная** — после логина JWT (365д) хранится в `localStorage` (`astrobot_jwt`). Запросы идут с `Authorization: Bearer <token>`.
-
-**middleware/auth.ts** парсит оба варианта и кладёт `sessionId` в `req.sessionId`.
-
-**Конвертация** анонима в аккаунт: при регистрации передаётся `sessionId` из localStorage, сервер мигрирует данные к новому аккаунту.
-
----
-
-## 7. Frontend — страницы и компоненты
-
-### Страницы (wouter routing)
-| Route | Компонент | Описание |
-|-------|-----------|---------|
-| `/` | Home | Лендинг с CTA в онбординг/чат |
-| `/onboarding` | Onboarding | 3-шаговый онбординг (имя, дата рождения, тон общения) |
-| `/chat` | Chat | Новый чат |
-| `/chat/:id` | Chat | Существующий диалог |
-| `/history` | History | История чатов (редирект, основной UI — HistoryDrawer) |
-
-### Ключевые компоненты
-
-**Chat.tsx** — основной экран:
-- `PeoplePanel` — горизонтальная прокрутка контактов (я + контакты для синастрии)
-- `DailyForecastCard` — карточка прогноза (разворачивается)
-- `HistoryDrawer` — левая панель с историей чатов
-- `AstroMarkdown` — рендеринг markdown ответов бота
-- `useChatStream` hook — streaming через SSE
-
-**Синастрийный режим**: при выборе контакта в `PeoplePanel` → `selectedContactId` передаётся в запрос сообщения → сервер строит синастрию двух карт.
-
-**HistoryDrawer** — показывает двойные аватары для синастрийных чатов (user + contact).
-
-**AstroAvatar** — кастомный SVG-аватар (цвет, знак, стиль). **НЕ ТРОГАТЬ** без явного задания.
-
----
-
-## 8. AI-система
-
-### Промпт-архитектура (`buildSystemPrompt`)
-1. **Натальная карта** пользователя (Swiss Ephemeris, дома Placidus)
-2. **Эфемериды** текущего дня (транзитные планеты)
-3. **Solar Return** текущего года
-4. **Прогрессии** (Secondary Progressions)
-5. **Лунный возврат**
-6. **Solar Arc Directions**
-7. **Transit Perfections**
-8. **Синастрия** (если выбран контакт): аспекты двух карт
-9. **Памятки** (`memories`): факты о пользователе из прошлых чатов
-
-### Модели
-- **claude-sonnet-4-6** — основной чат (streaming)
-- **claude-haiku-4-5** — извлечение фактов в память, генерация ежедневного прогноза
-
-### Память
-После каждого ответа бота Haiku анализирует разговор и извлекает факты (работа, дети, события), сохраняет в `memories`. Подключается в следующем разговоре.
-
----
-
-## 9. Деплой
-
-```
-Replit (разработка) → GitHub (main) → Railway (продакшн)
-```
-
-- **Railway сервис**: `astrobot` (id: `944065ba`)
-- **Railway проект**: `a9b8506b`
-- **URL**: `astrobot-production-04ad.up.railway.app` и `astroai.site`
-- **Автодеплой**: каждый push в `main` → Railway пересобирает
-- **Миграции**: `artifacts/api-server/src/migrate.ts` запускается перед стартом сервера
-
-### Переменные окружения (Railway)
-```
-DATABASE_URL       # PostgreSQL connection string
-JWT_SECRET         # секрет для подписи JWT
-ANTHROPIC_API_KEY  # ключ Claude
-PORT               # Railway подставляет автоматически
-FRONTEND_DIST      # путь к собранному frontend (Railway CWD issue)
-NODE_ENV=production
-```
-
----
-
-## 10. Правила работы с кодом
-
-### ❌ НЕ ТРОГАТЬ без явного задания
-- `AstroAvatar.tsx` — SVG-аватар, сложная логика. Редизайн запланирован отдельно
-- `ProfileSheet.tsx` — лист профиля, редизайн запланирован
-- `PeoplePanel.tsx` — панель контактов
-- Любые файлы связанные с оплатой (Stripe/ЮКасса) — работает Cursor отдельно
-
-### ⚠️ Известные баги (не чинить без задания)
-- `requests_used` в БД всегда 0 — счётчик не пишется после каждого запроса к Claude
-- Pre-existing TypeScript errors: `req.sessionId`, `requestsUsed` в схеме — игнорировать
-
-### ✅ Правила написания кода
-- Весь UI-текст на **русском**
-- Компоненты разбивать на отдельные файлы (не делать гигантские файлы)
-- Использовать `AstroMarkdown` для рендеринга ответов Claude (не `<p>` с raw-текстом)
-- При ошибке загрузки изображений — показывать иконку-фолбэк (не [?])
-- Автоскролл чата — только при новом сообщении, не во время стриминга
-
----
-
-## 11. Ценообразование (только для справки, в приложение НЕ добавлять)
-
-| Пакет | Цена | Запросы |
-|-------|------|---------|
-| Стартовый | 349₽ | 10 |
-| Базовый | 799₽ | 30 |
-| Популярный | 1149₽ | 50 |
-| Максимальный | 1799₽ | 100 |
-| Подписка/мес | 899₽ | безлимит |
-| Подписка/год | 6999₽ | безлимит |
-
----
-
-## 12. Автотесты (Playwright)
-
-### Setup
-```typescript
-// tests/playwright.config.ts
-import { defineConfig } from '@playwright/test';
-export default defineConfig({
-  testDir: './tests/e2e',
-  use: {
-    baseURL: 'http://localhost:80',
-    locale: 'ru-RU',
-  },
-});
-```
-
-### Тест 1: Онбординг
-```typescript
-// tests/e2e/onboarding.spec.ts
-test('полный онбординг новый пользователь', async ({ page }) => {
-  await page.goto('/onboarding');
-
-  // Шаг 1: Имя
-  await page.getByPlaceholder(/имя/i).fill('Анна');
-  await page.getByRole('button', { name: /далее/i }).click();
-
-  // Шаг 2: Дата рождения
-  await page.getByPlaceholder(/дата рождения/i).fill('15.05.1990');
-  // CityAutocomplete: вводим город, выбираем из списка
-  await page.getByPlaceholder(/город/i).fill('Москва');
-  await page.getByText('Москва, Россия').first().click();
-  await page.getByRole('button', { name: /далее/i }).click();
-
-  // Шаг 3: Тон общения
-  await page.getByRole('button', { name: /завершить|начать/i }).click();
-
-  // Должны попасть в чат
-  await expect(page).toHaveURL('/chat');
-  await expect(page.getByText('О чём спросить звёзды?')).toBeVisible();
-});
-```
-
-### Тест 2: Регистрация и логин
-```typescript
-// tests/e2e/auth.spec.ts
-test('регистрация нового пользователя', async ({ page }) => {
-  await page.goto('/chat');
-
-  // Открываем историю → логин
-  await page.locator('[aria-label="Открыть историю"]').click();
-  await page.getByText('Войти / Зарегистрироваться').click();
-
-  // Переключаем на регистрацию
-  await page.getByText('Регистрация').click();
-  await page.getByPlaceholder(/email/i).fill(`test${Date.now()}@test.com`);
-  await page.getByPlaceholder(/пароль/i).fill('test1234');
-  await page.getByRole('button', { name: /зарегистрироваться/i }).click();
-
-  // Модал должен закрыться, пользователь залогинен
-  await expect(page.getByText('Войти / Зарегистрироваться')).not.toBeVisible();
-});
-
-test('логин существующего пользователя', async ({ page }) => {
-  await page.goto('/chat');
-  await page.locator('[aria-label="Открыть историю"]').click();
-  await page.getByText('Войти / Зарегистрироваться').click();
-
-  await page.getByPlaceholder(/email/i).fill('test@existing.com');
-  await page.getByPlaceholder(/пароль/i).fill('password123');
-  await page.getByRole('button', { name: /войти/i }).click();
-
-  await expect(page.getByText('Войти / Зарегистрироваться')).not.toBeVisible();
-});
-```
-
-### Тест 3: Отправка сообщения в чат
-```typescript
-// tests/e2e/chat.spec.ts
-test('отправка вопроса и получение ответа', async ({ page }) => {
-  await page.goto('/chat');
-
-  // Кликаем на подсказку
-  await page.getByText('Расскажи о моей натальной карте').click();
-  // Текст должен попасть в поле ввода
-  await expect(page.getByPlaceholder(/спросите звёзды/i)).toHaveValue(/натальной карте/i);
-
-  // Отправляем
-  await page.getByRole('button', { name: /отправить/i }).click();
-
-  // Появляется сообщение пользователя
-  await expect(page.getByText('Расскажи о моей натальной карте')).toBeVisible();
-
-  // Бот начинает печатать (индикатор или текст)
-  await expect(page.locator('.typing-dot, [class*="streaming"]')).toBeVisible({ timeout: 5000 });
-
-  // Ждём полного ответа
-  await expect(page.locator('[class*="assistant"], [class*="prose"]').first()).toBeVisible({ timeout: 30000 });
-});
-
-test('чат создаёт URL /chat/:id после первого сообщения', async ({ page }) => {
-  await page.goto('/chat');
-  await page.getByPlaceholder(/спросите звёзды/i).fill('Привет');
-  await page.keyboard.press('Enter');
-
-  // URL должен смениться
-  await expect(page).toHaveURL(/\/chat\/\d+/, { timeout: 10000 });
-});
-```
-
-### Тест 4: Синастрия
-```typescript
-// tests/e2e/synastry.spec.ts
-test('добавление контакта и режим синастрии', async ({ page }) => {
-  await page.goto('/chat');
-
-  // Нажимаем + Добавить в PeoplePanel
-  await page.getByText('+ Добавить').click();
-
-  // Заполняем форму контакта
-  await page.getByPlaceholder(/имя/i).fill('Сергей');
-  await page.getByPlaceholder(/дата рождения/i).fill('20.03.1985');
-  await page.getByRole('button', { name: /сохранить|добавить/i }).click();
-
-  // Контакт появляется в PeoplePanel
-  await expect(page.getByText('Сергей')).toBeVisible();
-
-  // Кликаем по контакту
-  await page.getByText('Сергей').click();
-
-  // Появляется подсказка синастрии
-  await expect(page.getByText('Синастрия активна')).toBeVisible();
-  // Чипы меняются на синастрийные
-  await expect(page.getByText('Расскажи о нашей синастрии')).toBeVisible();
-  // Плейсхолдер меняется
-  await expect(page.getByPlaceholder(/совместимости/i)).toBeVisible();
-});
-```
-
-### Тест 5: История чатов
-```typescript
-// tests/e2e/history.spec.ts
-test('история отображает список диалогов', async ({ page }) => {
-  await page.goto('/chat');
-
-  // Открываем историю
-  await page.locator('[aria-label="Открыть историю"]').click();
-
-  // Ящик появился
-  await expect(page.getByText('Новый диалог')).toBeVisible();
-
-  // Закрываем по кнопке X
-  await page.locator('button').filter({ hasText: '' }).first().click();
-  await expect(page.getByText('Новый диалог')).not.toBeVisible();
-});
-
-test('смахивание с левого края открывает историю', async ({ page }) => {
-  await page.goto('/chat');
-
-  // Имитируем свайп
-  await page.touchscreen.tap(10, 400);
-  // Полноценный swipe через mouse events
-  await page.mouse.move(5, 400);
-  await page.mouse.down();
-  await page.mouse.move(100, 400, { steps: 10 });
-  await page.mouse.up();
-
-  await expect(page.getByText('Новый диалог')).toBeVisible({ timeout: 2000 });
-});
-```
-
-### Тест 6: Ежедневный прогноз
-```typescript
-// tests/e2e/forecast.spec.ts
-test('карточка прогноза отображается на главном экране чата', async ({ page }) => {
-  await page.goto('/chat');
-
-  // Если пользователь без даты рождения — заглушка
-  const card = page.locator('[class*="forecast"], [class*="rounded-2xl"]').first();
-  await expect(card).toBeVisible();
-  await expect(page.getByText(/прогноз на сегодня/i)).toBeVisible();
-});
-
-test('прогноз разворачивается по клику', async ({ page }) => {
-  await page.goto('/chat');
-
-  const header = page.getByText(/прогноз на сегодня/i);
-  await header.click();
-
-  // Появляется дополнительный контент или кнопки
-  await expect(page.getByText(/расскажи подробнее|какие транзиты/i)).toBeVisible({ timeout: 3000 });
-});
-```
-
-### Запуск тестов
-```bash
-# Установка Playwright
-pnpm add -D @playwright/test
-npx playwright install chromium
-
-# Запуск всех тестов
-npx playwright test
-
-# Запуск конкретного теста
-npx playwright test tests/e2e/chat.spec.ts
-
-# С UI (интерактивный режим)
-npx playwright test --ui
-
-# Репорт
-npx playwright show-report
-```
-
----
-
-## 13. Чеклист перед деплоем
-
-- [ ] `pnpm --filter @workspace/db run push-force` — применить изменения схемы
-- [ ] Проверить TypeScript: `pnpm -r run typecheck` (игнорировать pre-existing errors)
-- [ ] Локально открыть http://localhost:80 и пройти онбординг
-- [ ] Отправить тестовое сообщение в чат — убедиться что streaming работает
-- [ ] Push в `main` → ждать Railway деплой (~2-3 мин) → проверить https://astroai.site
-
----
-
-## 14. Быстрые команды
-
-```bash
-# Запуск локально
-pnpm --filter @workspace/api-server run dev   # API на порту из PORT env
-pnpm --filter @workspace/astrobot run dev     # Frontend
-
-# Сборка
-pnpm --filter @workspace/astrobot run build
-
-# Применить схему БД
+# Локальная разработка
+pnpm --filter @workspace/astrobot run dev
+pnpm --filter @workspace/api-server run dev
+
+# Применить изменения схемы БД
 pnpm --filter @workspace/db run push-force
-
-# Проверить типы
-pnpm -r run typecheck
 ```
+
+---
+
+## 14. Playwright E2E тесты (спецификация)
+
+### T1: Онбординг
+```typescript
+test('onboarding flow', async ({ page }) => {
+  await page.goto('/');
+  await page.fill('[data-testid="name-input"]', 'Тестовый');
+  await page.click('[data-testid="next-step"]');
+  await page.fill('[data-testid="birth-date"]', '15.06.1993');
+  await page.click('[data-testid="next-step"]');
+  await page.fill('[data-testid="birth-place"]', 'Москва');
+  await page.click('[data-testid="complete-onboarding"]');
+  await expect(page).toHaveURL('/chat');
+});
+```
+
+### T2: Регистрация
+```typescript
+test('register and login', async ({ page }) => {
+  await page.goto('/chat');
+  await page.click('[data-testid="auth-button"]');
+  await page.fill('[data-testid="email-input"]', 'test@example.com');
+  await page.fill('[data-testid="password-input"]', 'password123');
+  await page.click('[data-testid="register-submit"]');
+  await expect(page.locator('[data-testid="user-avatar"]')).toBeVisible();
+});
+```
+
+### T3: Чат со стримингом
+```typescript
+test('send message and receive streaming response', async ({ page }) => {
+  await page.goto('/chat');
+  await page.fill('[data-testid="chat-input"]', 'Расскажи про мой Асцендент');
+  await page.click('[data-testid="send-button"]');
+  await expect(page.locator('[data-testid="assistant-message"]')).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('[data-testid="send-button"]')).toBeEnabled({ timeout: 30000 });
+});
+```
+
+### T4: Синастрия
+```typescript
+test('synastry flow', async ({ page }) => {
+  await page.goto('/chat');
+  await page.click('[data-testid="people-panel-toggle"]');
+  await page.click('[data-testid="add-contact"]');
+  await page.fill('[data-testid="contact-name"]', 'Партнёр');
+  await page.fill('[data-testid="contact-birth-date"]', '01.01.1990');
+  await page.click('[data-testid="save-contact"]');
+  await page.click('[data-testid="contact-item"]:first-child');
+  await expect(page.locator('[data-testid="synastry-badge"]')).toBeVisible();
+});
+```
+
+### T5: PaywallSheet при лимите
+```typescript
+test('paywall shown when limit reached (402)', async ({ page }) => {
+  // Пользователь с requests_used >= 5 и balance == 0
+  await page.goto('/chat');
+  await page.fill('[data-testid="chat-input"]', 'Тест');
+  await page.click('[data-testid="send-button"]');
+  await expect(page.locator('[data-testid="paywall-sheet"]')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('text=Старт')).toBeVisible();
+  await expect(page.locator('text=349 ₽')).toBeVisible();
+});
+```
+
+### T6: История чатов
+```typescript
+test('history drawer open and close', async ({ page }) => {
+  await page.goto('/chat');
+  await page.click('[data-testid="history-toggle"]');
+  await expect(page.locator('[data-testid="history-drawer"]')).toBeVisible();
+  await page.click('[data-testid="history-close"]');
+  await expect(page.locator('[data-testid="history-drawer"]')).not.toBeVisible();
+});
+```
+
+---
+
+## 15. Чеклист перед пушем
+
+- [ ] TypeScript компилируется без новых ошибок
+- [ ] Нет `console.log` (кроме `logger.ts`)
+- [ ] Ответы AI через `AstroMarkdown`
+- [ ] Новые поля БД добавлены с `IF NOT EXISTS`
+- [ ] PaywallSheet не сломан (тест 402)
+- [ ] Биллинг: credits начисляются после webhook
