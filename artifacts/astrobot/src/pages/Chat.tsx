@@ -57,6 +57,14 @@ export default function Chat() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const shouldAutoScrollRef = useRef(false);
 
+  const resizeComposer = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const next = Math.min(Math.max(el.scrollHeight, 52), 140);
+    el.style.height = `${next}px`;
+  };
+
   // Swipe-from-left-edge detection
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
@@ -89,9 +97,7 @@ export default function Chat() {
   }, [conversationId]);
 
   useEffect(() => {
-    if (!inputRef.current) return;
-    inputRef.current.style.height = '0px';
-    inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 180)}px`;
+    resizeComposer();
   }, [inputValue]);
 
   useEffect(() => {
@@ -175,6 +181,7 @@ export default function Chat() {
     if (!inputValue.trim() || isStreaming) return;
     const text = inputValue.trim();
     setInputValue('');
+    requestAnimationFrame(() => resizeComposer());
     shouldAutoScrollRef.current = true;
     const newConvId = await sendMessage(text, selectedContactId);
     if (!conversationId && newConvId) {
@@ -193,28 +200,28 @@ export default function Chat() {
           onTouchEnd={handleTouchEnd}
         >
           {/* Header */}
-          <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 px-3 py-2.5 flex items-center justify-between shadow-sm">
+          <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 px-3 py-1.5 flex items-center justify-between shadow-sm">
             {conversationId ? (
               <button
                 onClick={() => setLocation('/chat')}
-                className="p-2 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
+                className="p-1.5 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
               >
-                <ChevronLeft className="w-6 h-6" />
+                <ChevronLeft className="w-5 h-5" />
               </button>
             ) : (
               <button
                 onClick={() => setShowHistory(true)}
-                className="p-2 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
+                className="p-1.5 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
                 aria-label="Открыть историю"
               >
-                <Menu className="w-6 h-6" />
+                <Menu className="w-5 h-5" />
               </button>
             )}
 
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent p-[1px]">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent p-[1px]">
                 <div className="w-full h-full rounded-full bg-background flex items-center justify-center overflow-hidden relative">
-                  <Sparkles className="w-4 h-4 text-primary/70 absolute" />
+                  <Sparkles className="w-3.5 h-3.5 text-primary/70 absolute" />
                   <img
                     src={`${import.meta.env.BASE_URL}images/avatar-bot.png`}
                     alt="AstroBot"
@@ -223,7 +230,7 @@ export default function Chat() {
                   />
                 </div>
               </div>
-              <h2 className="font-display font-semibold text-base">AstroBot</h2>
+              <h2 className="font-display font-semibold text-sm">AstroBot</h2>
             </div>
 
             <div className="w-10" />
@@ -378,7 +385,7 @@ export default function Chat() {
           </div>
 
           {/* Input */}
-          <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
+          <div className="px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
             {selectedContactId !== null && (
               <div className="flex items-center gap-1.5 text-xs text-primary/60 mb-2 px-1">
                 <span className="text-base leading-none">⚯</span>
@@ -391,19 +398,18 @@ export default function Chat() {
                 value={inputValue}
                 onChange={(e) => {
                   setInputValue(e.target.value);
-                  const el = e.currentTarget;
-                  el.style.height = '0px';
-                  el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+                  resizeComposer();
                 }}
+                onInput={resizeComposer}
                 placeholder={selectedContactId ? "Спросите о совместимости..." : "Спросите звёзды..."}
                 rows={1}
-                className="w-full resize-none overflow-y-auto bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-3xl py-3 pl-5 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50 leading-relaxed"
+                className="w-full min-h-[52px] max-h-[140px] resize-none overflow-y-auto bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-3xl py-3 pl-4 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50 leading-relaxed"
                 disabled={isStreaming}
               />
               <button
                 type="submit"
                 disabled={!inputValue.trim() || isStreaming}
-                className="absolute right-2 p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="absolute right-2 bottom-2 p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Send className="w-4 h-4 ml-0.5" />
               </button>
