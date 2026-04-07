@@ -37,7 +37,7 @@ const PAYMENT_SUCCESS_RETURN_FLAG = "payment=success";
 const CREATE_PAYMENT_MIN_INTERVAL_MS = 2_500;
 const CREATE_PAYMENT_RETRY_DELAY_MS = 500;
 const CREATE_PAYMENT_IP_WINDOW_MS = 60_000;
-const CREATE_PAYMENT_IP_MAX_PER_WINDOW = 45;
+const CREATE_PAYMENT_IP_MAX_PER_WINDOW = 180;
 
 function isPackageCode(value: unknown): value is PackageCode {
   return typeof value === "string" && value in PACKAGE_CONFIG;
@@ -55,6 +55,13 @@ function getClientIp(req: {
     return String(h[0]);
   }
   return req.ip ?? "unknown";
+}
+
+function hasForwardedIp(req: { headers?: Record<string, unknown> }): boolean {
+  const h = req.headers?.["x-forwarded-for"];
+  if (typeof h === "string") return h.trim().length > 0;
+  if (Array.isArray(h)) return h.length > 0;
+  return false;
 }
 
 function canCreatePaymentNow(key: string, now = Date.now()): { ok: boolean; waitMs: number } {
@@ -348,7 +355,9 @@ router.post("/payments/create", async (req, res) => {
   cleanupPaymentThrottle();
   const clientIp = getClientIp(req);
   const perSessionAllowed = canCreatePaymentNow(`sid:${sessionId}`);
-  const perIpAllowed = canCreatePaymentByIp(`ip:${clientIp}`);
+  const perIpAllowed = hasForwardedIp(req)
+    ? canCreatePaymentByIp(`ip:${clientIp}`)
+    : { ok: true, waitMs: 0 };
   const allowed = !perSessionAllowed.ok ? perSessionAllowed : perIpAllowed;
   if (!allowed.ok) {
     const waitSec = Math.max(1, Math.ceil(allowed.waitMs / 1000));
