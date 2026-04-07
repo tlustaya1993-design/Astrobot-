@@ -62,7 +62,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
 
   return (
     <>
-      <div className="flex items-center gap-2 px-4 py-2.5 overflow-x-auto scrollbar-none bg-background/60 border-b border-border/50">
+      <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto scrollbar-none bg-background/60 border-b border-border/50">
 
         {/* "Я" chip — shows avatar, opens profile */}
         <motion.button
@@ -75,14 +75,14 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
             }
             setLocation('/profile');
           }}
-          className={`flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium shrink-0 transition-all border ${
+          className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-sm font-medium shrink-0 transition-all border ${
             selectedContactId === null
               ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
               : 'bg-card border-border text-muted-foreground hover:border-primary/40'
           }`}
         >
-          <div className="w-9 h-9 rounded-full overflow-hidden border border-primary/30 shrink-0">
-            <IllustratedAvatar config={avatarConfig} size={36} relaxedCrop />
+          <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/30 shrink-0">
+            <IllustratedAvatar config={avatarConfig} size={32} relaxedCrop />
           </div>
           <span>Я</span>
         </motion.button>
@@ -105,17 +105,17 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
                   }
                   onSelect(contact.id);
                 }}
-                className={`flex items-center gap-1.5 pl-1.5 pr-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
+                className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-sm font-medium transition-all border ${
                   selectedContactId === contact.id
                     ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
                     : 'bg-card border-border text-muted-foreground hover:border-primary/40'
                 }`}
               >
-                <div className={`w-7 h-7 rounded-full overflow-hidden border border-primary/30 shrink-0 ${
+                <div className={`w-6.5 h-6.5 rounded-full overflow-hidden border border-primary/30 shrink-0 ${
                   contact.avatarConfig ? '' : `bg-gradient-to-br ${getColor(contact.id)}`
                 }`}>
                   {contact.avatarConfig ? (
-                    <IllustratedAvatar config={contact.avatarConfig} size={28} />
+                    <IllustratedAvatar config={contact.avatarConfig} size={26} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[9px] text-white font-bold">
                       {getInitials(contact.name)}
@@ -144,7 +144,7 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm text-muted-foreground border border-dashed border-border hover:border-primary/40 hover:text-primary transition-all shrink-0"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm text-muted-foreground border border-dashed border-border hover:border-primary/40 hover:text-primary transition-all shrink-0"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Добавить</span>

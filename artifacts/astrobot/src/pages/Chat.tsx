@@ -231,7 +231,7 @@ export default function Chat() {
           <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
             {isLoading && (
               <div className="flex justify-center py-10">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -242,25 +242,22 @@ export default function Chat() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center justify-center py-8 text-center"
+                className="flex flex-col items-center justify-center py-2 text-center"
               >
                 {/* Daily Forecast Card */}
                 {!selectedContactId && (
-                  <div className="w-full max-w-md mb-6">
+                  <div className="w-full max-w-md mb-3">
                     <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
                   </div>
                 )}
 
-                <div className="w-16 h-16 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-5 shadow-[0_0_30px_rgba(212,175,55,0.15)]">
-                  <Sparkles className="w-8 h-8 text-primary" />
-                </div>
-                <h3 className="text-xl font-display font-semibold mb-2">О чём спросить звёзды?</h3>
-                <p className="text-muted-foreground mb-6 max-w-sm text-sm">
+                <h3 className="text-base font-display font-semibold mb-1">С чего начнем?</h3>
+                <p className="text-muted-foreground mb-3 max-w-sm text-sm">
                   {selectedContactId
                     ? "Режим синастрии активен. Спросите о совместимости."
                     : "Спрашивайте о вашей карте, текущих транзитах или жизненных вопросах."}
                 </p>
-                <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+                <div className="grid grid-cols-1 gap-2 w-full max-w-md">
                   {(selectedContactId
                     ? ["Расскажи о нашей синастрии", "Какие у нас сильные аспекты?", "Есть ли напряжение в нашей карте?", "Что звёзды говорят о нас?"]
                     : SUGGESTED_PROMPTS
@@ -268,7 +265,7 @@ export default function Chat() {
                     <button
                       key={i}
                       onClick={() => setInputValue(prompt)}
-                      className="w-full px-4 py-2.5 rounded-full text-sm bg-card border border-border hover:border-primary/50 hover:bg-white/5 transition-all text-center leading-snug"
+                      className="w-full px-4 py-2 rounded-2xl text-sm bg-card border border-border hover:border-primary/50 hover:bg-white/5 transition-all text-center leading-snug"
                     >
                       {prompt}
                     </button>
