@@ -53,9 +53,7 @@ export default function Chat() {
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const shouldAutoScrollRef = useRef(false);
 
   const resizeComposer = () => {
     const el = inputRef.current;
@@ -85,12 +83,6 @@ export default function Chat() {
   const displayMessages = localMessages.length > 0
     ? (conversation?.messages ? [...conversation.messages.filter(m => !localMessages.find(lm => lm.content === m.content)), ...localMessages] : localMessages)
     : (conversation?.messages || []);
-
-  useEffect(() => {
-    if (!shouldAutoScrollRef.current) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    shouldAutoScrollRef.current = false;
-  }, [displayMessages.length]);
 
   useEffect(() => {
     clearLocalMessages();
@@ -182,7 +174,6 @@ export default function Chat() {
     const text = inputValue.trim();
     setInputValue('');
     requestAnimationFrame(() => resizeComposer());
-    shouldAutoScrollRef.current = true;
     const newConvId = await sendMessage(text, selectedContactId);
     if (!conversationId && newConvId) {
       setLocation(`/chat/${newConvId}`, { replace: true });
@@ -381,7 +372,7 @@ export default function Chat() {
               </motion.div>
             )}
 
-            <div ref={messagesEndRef} className="h-4" />
+            <div className="h-4 shrink-0" aria-hidden />
           </div>
 
           {/* Input */}
