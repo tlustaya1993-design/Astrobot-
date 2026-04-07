@@ -30,11 +30,73 @@ const PACKAGE_CONFIG: Record<
 
 const DEFAULT_RECEIPT_EMAIL = "billing@astrobot.app";
 let paymentsTableReady: Promise<void> | null = null;
+const paymentCreateThrottle = new Map<string, number>();
 
 const PAYMENT_SUCCESS_RETURN_FLAG = "payment=success";
+const CREATE_PAYMENT_MIN_INTERVAL_MS = 2_500;
+const CREATE_PAYMENT_RETRY_DELAY_MS = 500;
 
 function isPackageCode(value: unknown): value is PackageCode {
   return typeof value === "string" && value in PACKAGE_CONFIG;
+}
+
+function getClientIp(req: {
+  headers?: Record<string, unknown>;
+  ip?: string;
+}): string {
+  const h = req.headers?.["x-forwarded-for"];
+  if (typeof h === "string" && h.trim()) {
+    return h.split(",")[0]?.trim() || "unknown";
+  }
+  if (Array.isArray(h) && h[0]) {
+    return String(h[0]);
+  }
+  return req.ip ?? "unknown";
+}
+
+function canCreatePaymentNow(key: string, now = Date.now()): { ok: boolean; waitMs: number } {
+  const prev = paymentCreateThrottle.get(key);
+  if (!prev) {
+    paymentCreateThrottle.set(key, now);
+    return { ok: true, waitMs: 0 };
+  }
+  const diff = now - prev;
+  if (diff >= CREATE_PAYMENT_MIN_INTERVAL_MS) {
+    paymentCreateThrottle.set(key, now);
+    return { ok: true, waitMs: 0 };
+  }
+  return { ok: false, waitMs: CREATE_PAYMENT_MIN_INTERVAL_MS - diff };
+}
+
+function cleanupPaymentThrottle(now = Date.now()): void {
+  // Простая защита от бесконечного роста map: TTL 10 минут.
+  const ttl = 10 * 60_000;
+  for (const [k, ts] of paymentCreateThrottle.entries()) {
+    if (now - ts > ttl) paymentCreateThrottle.delete(k);
+  }
+}
+
+function isRetriableProviderError(err: unknown): boolean {
+  if (!(err instanceof YooKassaError)) return false;
+  if (err.kind === "timeout" || err.kind === "network") return true;
+  return err.kind === "http" && (err.status === 429 || (err.status != null && err.status >= 500));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function createPaymentWithRetry(
+  args: Parameters<typeof createYookassaPayment>[0],
+  options: Parameters<typeof createYookassaPayment>[1],
+): Promise<Awaited<ReturnType<typeof createYookassaPayment>>> {
+  try {
+    return await createYookassaPayment(args, options);
+  } catch (firstErr) {
+    if (!isRetriableProviderError(firstErr)) throw firstErr;
+    await sleep(CREATE_PAYMENT_RETRY_DELAY_MS + Math.floor(Math.random() * 250));
+    return createYookassaPayment(args, options);
+  }
 }
 
 function inferPaymentFailureResponse(err: unknown): { status: number; error: string } {
@@ -261,6 +323,23 @@ router.post("/payments/create", async (req, res) => {
     return;
   }
 
+  cleanupPaymentThrottle();
+  const clientIp = getClientIp(req);
+  const perSessionAllowed = canCreatePaymentNow(`sid:${sessionId}`);
+  const perIpAllowed = canCreatePaymentNow(`ip:${clientIp}`);
+  const allowed = !perSessionAllowed.ok
+    ? perSessionAllowed
+    : perIpAllowed;
+  if (!allowed.ok) {
+    const waitSec = Math.max(1, Math.ceil(allowed.waitMs / 1000));
+    res.setHeader("Retry-After", String(waitSec));
+    res.status(429).json({
+      error: "Слишком частые попытки оплаты. Повторите через пару секунд.",
+      retryAfterSec: waitSec,
+    });
+    return;
+  }
+
   const pkg = PACKAGE_CONFIG[packageCode];
   const appPaymentId = randomUUID();
   const paymentReturnUrl = appendReturnFlag(returnUrl);
@@ -286,7 +365,7 @@ router.post("/payments/create", async (req, res) => {
   }
 
   try {
-    const ykPayment = await createYookassaPayment(
+    const ykPayment = await createPaymentWithRetry(
       {
         amount: {
           value: pkg.amountRub,
@@ -381,6 +460,9 @@ router.post("/payments/create", async (req, res) => {
         },
         "Failed to create yookassa payment",
       );
+    }
+    if (failure.status === 503 || failure.status === 504 || failure.status === 429) {
+      res.setHeader("Retry-After", "2");
     }
     res.status(failure.status).json({ error: failure.error });
   }
