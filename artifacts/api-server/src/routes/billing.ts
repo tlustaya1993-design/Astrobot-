@@ -123,6 +123,35 @@ async function ensurePaymentsTableExists(): Promise<void> {
   await paymentsTableReady;
 }
 
+async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<number> {
+  return db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(paymentsTable)
+      .where(eq(paymentsTable.id, paymentId))
+      .limit(1);
+
+    if (!locked) return 0;
+    if (locked.status !== "succeeded") return 0;
+    if (locked.creditsAppliedAt) return 0;
+
+    await tx
+      .update(usersTable)
+      .set({
+        requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.sessionId, locked.sessionId));
+
+    await tx
+      .update(paymentsTable)
+      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
+      .where(eq(paymentsTable.id, paymentId));
+
+    return locked.creditsGranted;
+  });
+}
+
 router.get("/credits", async (req, res) => {
   const sessionId = req.sessionId;
   if (!sessionId) {
@@ -275,6 +304,35 @@ router.post("/payments/create", async (req, res) => {
   }
 });
 
+router.post("/payments/reconcile", async (req, res) => {
+  const sessionId = req.sessionId;
+  if (!sessionId) {
+    res.status(401).json({ error: "Требуется авторизация" });
+    return;
+  }
+  await ensurePaymentsTableExists();
+
+  const [latest] = await db
+    .select()
+    .from(paymentsTable)
+    .where(
+      and(
+        eq(paymentsTable.sessionId, sessionId),
+        eq(paymentsTable.provider, "yookassa"),
+      ),
+    )
+    .orderBy(sql`${paymentsTable.createdAt} DESC`)
+    .limit(1);
+
+  if (!latest) {
+    res.json({ ok: true, applied: 0, status: "none" });
+    return;
+  }
+
+  const applied = await applyCreditsIfNeededByPaymentId(latest.id);
+  res.json({ ok: true, applied, status: latest.status });
+});
+
 router.post("/payments/webhook", async (req, res) => {
   if (!validateYookassaWebhook(req)) {
     res.status(401).json({ error: "Invalid webhook signature" });
@@ -318,24 +376,7 @@ router.post("/payments/webhook", async (req, res) => {
     .where(eq(paymentsTable.id, paymentRow.id));
 
   if (nextStatus === "succeeded") {
-    await db.transaction(async (tx) => {
-      const [locked] = await tx
-        .select()
-        .from(paymentsTable)
-        .where(eq(paymentsTable.id, paymentRow.id))
-        .limit(1);
-
-      if (!locked) return;
-      if (locked.status === "succeeded" && paymentRow.status === "succeeded") return;
-
-      await tx
-        .update(usersTable)
-        .set({
-          requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(usersTable.sessionId, paymentRow.sessionId));
-    });
+    await applyCreditsIfNeededByPaymentId(paymentRow.id);
   }
 
   res.status(200).json({ ok: true });

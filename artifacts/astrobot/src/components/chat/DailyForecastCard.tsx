@@ -91,7 +91,7 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
         {/* Header */}
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.03] transition-colors"
+          className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.03] transition-colors"
         >
           <div className="flex items-center gap-2">
             <span className="text-lg leading-none">
@@ -108,7 +108,10 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
               )}
             </div>
           </div>
-          <div className="text-muted-foreground/50">
+          <div className="flex items-center gap-2 text-muted-foreground/70">
+            <span className="text-[11px]">
+              {expanded ? 'Скрыть' : 'Развернуть'}
+            </span>
             {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </div>
         </button>

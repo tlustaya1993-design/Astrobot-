@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Menu, X } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useGetOpenaiConversation } from '@workspace/api-client-react';
@@ -54,6 +54,8 @@ export default function Chat() {
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const shouldAutoScrollRef = useRef(false);
 
   // Swipe-from-left-edge detection
   const touchStartX = useRef(0);
@@ -77,12 +79,20 @@ export default function Chat() {
     : (conversation?.messages || []);
 
   useEffect(() => {
+    if (!shouldAutoScrollRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    shouldAutoScrollRef.current = false;
   }, [displayMessages.length]);
 
   useEffect(() => {
     clearLocalMessages();
   }, [conversationId]);
+
+  useEffect(() => {
+    if (!inputRef.current) return;
+    inputRef.current.style.height = '0px';
+    inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 180)}px`;
+  }, [inputValue]);
 
   useEffect(() => {
     try {
@@ -113,21 +123,42 @@ export default function Chat() {
     const path = window.location.pathname;
     window.history.replaceState({}, '', qs ? `${path}?${qs}` : path);
 
-    const loggedIn = Boolean(getToken());
-    toast({
-      title: loggedIn ? 'Спасибо!' : 'Спасибо, всё прошло хорошо',
-      description: loggedIn
-        ? 'Пакет запросов уже на вашем счёте — можно продолжать диалог.'
-        : 'Запросы уже доступны на этом устройстве. Когда будет удобно, можно спокойно оформить аккаунт здесь же — так проще зайти с другого браузера или телефона. Это не срочно.',
-    });
-    if (!loggedIn) {
+    const onPaymentSuccess = async () => {
+      let applied = 0;
       try {
-        sessionStorage.setItem(POST_PAYMENT_REGISTER_NUDGE_KEY, '1');
+        const res = await fetch('/api/billing/payments/reconcile', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+        });
+        if (res.ok) {
+          const payload = (await res.json()) as { applied?: number };
+          applied = typeof payload.applied === 'number' ? payload.applied : 0;
+        }
       } catch {
         /* ignore */
       }
-      setShowPostPaymentRegisterNudge(true);
-    }
+
+      const loggedIn = Boolean(getToken());
+      toast({
+        title: loggedIn ? 'Спасибо!' : 'Спасибо, всё прошло хорошо',
+        description: applied > 0
+          ? `Пакет зачислен: +${applied} запросов.`
+          : loggedIn
+            ? 'Оплата подтверждена. Баланс обновится автоматически.'
+            : 'Запросы привязаны к этому устройству. Если захотите, зарегистрируйтесь здесь же и они сохранятся за аккаунтом.',
+      });
+
+      if (!loggedIn) {
+        try {
+          sessionStorage.setItem(POST_PAYMENT_REGISTER_NUDGE_KEY, '1');
+        } catch {
+          /* ignore */
+        }
+        setShowPostPaymentRegisterNudge(true);
+      }
+    };
+
+    void onPaymentSuccess();
   }, []);
 
   const dismissPostPaymentNudge = () => {
@@ -144,6 +175,7 @@ export default function Chat() {
     if (!inputValue.trim() || isStreaming) return;
     const text = inputValue.trim();
     setInputValue('');
+    shouldAutoScrollRef.current = true;
     const newConvId = await sendMessage(text, selectedContactId);
     if (!conversationId && newConvId) {
       setLocation(`/chat/${newConvId}`, { replace: true });
@@ -161,18 +193,18 @@ export default function Chat() {
           onTouchEnd={handleTouchEnd}
         >
           {/* Header */}
-          <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 p-4 flex items-center justify-between shadow-sm">
+          <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 px-3 py-2.5 flex items-center justify-between shadow-sm">
             {conversationId ? (
               <button
                 onClick={() => setLocation('/chat')}
-                className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
+                className="p-2 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
             ) : (
               <button
                 onClick={() => setShowHistory(true)}
-                className="p-2 -ml-2 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
+                className="p-2 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
                 aria-label="Открыть историю"
               >
                 <Menu className="w-6 h-6" />
@@ -191,37 +223,11 @@ export default function Chat() {
                   />
                 </div>
               </div>
-              <h2 className="font-display font-semibold text-lg">AstroBot</h2>
+              <h2 className="font-display font-semibold text-base">AstroBot</h2>
             </div>
 
             <div className="w-10" />
           </header>
-
-          {showPostPaymentRegisterNudge && !isLoggedIn && (
-            <div className="shrink-0 mx-3 mt-2 mb-1 rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5 flex items-start gap-2">
-              <div className="flex-1 min-w-0 text-left">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Напоминание</p>
-                <p className="text-sm text-foreground/95 mt-1 leading-snug">
-                  Если когда-нибудь зайдёте с другого устройства, без аккаунта баланс там не подтянется. Оформить профиль можно в любой момент с этого же браузера — переписка и купленные запросы останутся с вами.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => openAuthModal('register')}
-                  className="mt-2 text-xs font-medium text-primary hover:text-primary/85 underline underline-offset-2"
-                >
-                  Оформить аккаунт, когда удобно
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={dismissPostPaymentNudge}
-                className="p-1 rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground shrink-0"
-                aria-label="Закрыть напоминание"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
 
           {/* People Panel */}
           <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
@@ -301,6 +307,50 @@ export default function Chat() {
               </motion.div>
             ))}
 
+            {showPostPaymentRegisterNudge && !isLoggedIn && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex justify-start"
+              >
+                <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden relative">
+                  <Sparkles className="w-4 h-4 text-primary/50 absolute" />
+                  <img
+                    src={`${import.meta.env.BASE_URL}images/avatar-bot.png`}
+                    alt="Bot"
+                    className="w-full h-full object-cover relative z-10"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                </div>
+                <div className="max-w-[82%] rounded-2xl p-4 shadow-lg bg-card border border-white/5 text-foreground rounded-tl-sm">
+                  <p className="text-sm leading-relaxed">
+                    Хотел сказать: если ты пройдешь регистрацию, я смогу помнить твои чаты даже при входе с другого устройства.
+                    Сейчас память и пакеты запросов привязаны только к этому браузеру и этому устройству.
+                    Если захочешь - можно зарегистрироваться сейчас или через меню (кнопка-бургер) внизу профиля.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={dismissPostPaymentNudge}
+                      className="px-3 py-2 rounded-full text-xs bg-white/5 border border-border hover:bg-white/10 transition"
+                    >
+                      Продолжить чат
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        dismissPostPaymentNudge();
+                        openAuthModal('register');
+                      }}
+                      className="px-3 py-2 rounded-full text-xs bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 transition"
+                    >
+                      Зарегистрироваться
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {isStreaming && (
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
                 <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden relative">
@@ -335,13 +385,19 @@ export default function Chat() {
                 <span>Синастрия активна — вопросы будут разобраны с учётом карты выбранного человека</span>
               </div>
             )}
-            <form onSubmit={handleSend} className="relative flex items-center">
-              <input
-                type="text"
+            <form onSubmit={handleSend} className="relative flex items-end">
+              <textarea
+                ref={inputRef}
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(e) => {
+                  setInputValue(e.target.value);
+                  const el = e.currentTarget;
+                  el.style.height = '0px';
+                  el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+                }}
                 placeholder={selectedContactId ? "Спросите о совместимости..." : "Спросите звёзды..."}
-                className="w-full bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-full py-3.5 pl-5 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50"
+                rows={1}
+                className="w-full resize-none overflow-y-auto bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-3xl py-3 pl-5 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50 leading-relaxed"
                 disabled={isStreaming}
               />
               <button
