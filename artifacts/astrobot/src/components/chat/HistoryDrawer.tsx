@@ -220,6 +220,13 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                             >
                               <Check className="w-3.5 h-3.5" />
                             </button>
+                            <button
+                              onClick={cancelEditing}
+                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-white/5 transition shrink-0"
+                              title="Отмена"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         ) : (
                           <p className="text-sm font-medium text-foreground line-clamp-1">
