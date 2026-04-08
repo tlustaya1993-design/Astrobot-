@@ -114,7 +114,10 @@ export function loadAvatar(): AvatarConfig {
   try {
     const raw = localStorage.getItem(AVATAR_KEY);
     if (raw) return { ...DEFAULT_AVATAR, ...JSON.parse(raw) };
-  } catch {}
+  } catch (err) {
+    console.warn('loadAvatar failed, fallback to default avatar', err);
+    localStorage.removeItem(AVATAR_KEY);
+  }
   return DEFAULT_AVATAR;
 }
 

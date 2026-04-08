@@ -42,7 +42,10 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
           setLoading(false);
           return;
         }
-      } catch { /* ignore */ }
+      } catch (err) {
+        console.warn('daily forecast cache parse failed', err);
+        sessionStorage.removeItem(cacheKey);
+      }
     }
 
     fetch(`${import.meta.env.BASE_URL}api/openai/daily-forecast`, {
