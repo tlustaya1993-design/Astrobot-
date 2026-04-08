@@ -80,9 +80,32 @@ export default function Chat() {
     }
   };
 
-  const displayMessages = localMessages.length > 0
-    ? (conversation?.messages ? [...conversation.messages.filter(m => !localMessages.find(lm => lm.content === m.content)), ...localMessages] : localMessages)
-    : (conversation?.messages || []);
+  const isLikelySameMessage = (
+    persisted: { role: string; content: string; createdAt?: string | Date },
+    local: { role: string; content: string; createdAt?: string | Date },
+  ) => {
+    if (persisted.role !== local.role) return false;
+    if (persisted.content !== local.content) return false;
+
+    const pTime = persisted.createdAt ? new Date(persisted.createdAt).getTime() : NaN;
+    const lTime = local.createdAt ? new Date(local.createdAt).getTime() : NaN;
+    if (!Number.isFinite(pTime) || !Number.isFinite(lTime)) return false;
+
+    // Optimistic local copy and persisted DB copy should be close in time.
+    return Math.abs(pTime - lTime) < 120_000;
+  };
+
+  const displayMessages = (() => {
+    const persisted = conversation?.messages ?? [];
+    if (localMessages.length === 0) return persisted;
+    if (persisted.length === 0) return localMessages;
+
+    const pendingLocal = localMessages.filter(
+      (lm) => !persisted.some((pm) => isLikelySameMessage(pm, lm)),
+    );
+
+    return [...persisted, ...pendingLocal];
+  })();
 
   useEffect(() => {
     clearLocalMessages();
