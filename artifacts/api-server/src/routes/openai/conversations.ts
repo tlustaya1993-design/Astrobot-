@@ -265,17 +265,37 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  // Only attach a contact that belongs to this same session (prevents cross-user linking).
-  if (contactId && !conv.contactId) {
+  let effectiveContactId: number | null = conv.contactId ?? null;
+
+  // Keep conversation's contact binding in sync with explicit user selection.
+  if (contactId != null) {
+    const requestedContactId = Number(contactId);
     const [contactOk] = await db
       .select({ id: contactsTable.id })
       .from(contactsTable)
-      .where(and(eq(contactsTable.id, Number(contactId)), eq(contactsTable.sessionId, sessionId)))
+      .where(and(eq(contactsTable.id, requestedContactId), eq(contactsTable.sessionId, sessionId)))
       .limit(1);
     if (contactOk) {
+      effectiveContactId = requestedContactId;
+      if (conv.contactId !== requestedContactId) {
+        await db
+          .update(conversations)
+          .set({ contactId: requestedContactId })
+          .where(eq(conversations.id, id));
+      }
+    }
+  } else if (conv.contactId != null) {
+    // If bound contact was deleted, clear stale link to prevent wrong person appearing in this chat.
+    const [boundContact] = await db
+      .select({ id: contactsTable.id })
+      .from(contactsTable)
+      .where(and(eq(contactsTable.id, conv.contactId), eq(contactsTable.sessionId, sessionId)))
+      .limit(1);
+    if (!boundContact) {
+      effectiveContactId = null;
       await db
         .update(conversations)
-        .set({ contactId: Number(contactId) })
+        .set({ contactId: null })
         .where(eq(conversations.id, id));
     }
   }
@@ -346,12 +366,12 @@ router.post("/conversations/:id/messages", async (req, res) => {
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
     db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
     db.select().from(usersTable).where(eq(usersTable.sessionId, sessionId)).limit(1).then((r) => r[0] || null),
-    contactId
+    effectiveContactId
       ? db
           .select()
           .from(contactsTable)
           .where(
-            and(eq(contactsTable.id, Number(contactId)), eq(contactsTable.sessionId, sessionId)),
+            and(eq(contactsTable.id, effectiveContactId), eq(contactsTable.sessionId, sessionId)),
           )
           .limit(1)
           .then((r) => r[0] || null)

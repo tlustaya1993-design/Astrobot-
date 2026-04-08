@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, contactsTable } from "@workspace/db";
+import { db, contactsTable, conversations } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { normalizeAvatarConfig, parseAvatarJson } from "../lib/avatar-config.js";
 
@@ -70,6 +70,12 @@ router.delete("/contacts/:id", async (req, res) => {
   const id = Number(req.params.id);
   const sessionId = req.sessionId;
   if (!sessionId) { res.status(401).json({ error: "Требуется авторизация" }); return; }
+
+  // Detach deleted contact from all user's conversations to avoid stale/misbound synastry chats.
+  await db
+    .update(conversations)
+    .set({ contactId: null })
+    .where(and(eq(conversations.sessionId, sessionId), eq(conversations.contactId, id)));
 
   await db.delete(contactsTable)
     .where(and(eq(contactsTable.id, id), eq(contactsTable.sessionId, sessionId)));
