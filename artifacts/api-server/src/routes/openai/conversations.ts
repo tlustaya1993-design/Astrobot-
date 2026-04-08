@@ -22,6 +22,7 @@ import { parseAvatarJson } from "../../lib/avatar-config.js";
 const router: IRouter = Router();
 const CHAT_RESPONSE_TEMPERATURE = 0.2;
 const MAX_CHAT_MESSAGE_CHARS = 8000;
+const AUTH_REQUIRED_ERROR = "Требуется авторизация";
 
 /** Переопредели в Railway, если аккаунт Anthropic ещё не видит новый id. */
 const ANTHROPIC_CHAT_MODEL =
@@ -37,12 +38,34 @@ function hasAnthropicProvider(): boolean {
   );
 }
 
-router.get("/conversations", async (req, res) => {
-  const sessionId = req.sessionId;
-  if (!sessionId) {
-    res.status(401).json({ error: "Требуется авторизация" });
-    return;
+function requireSessionId(
+  req: { sessionId?: string },
+  res: { status: (code: number) => { json: (payload: unknown) => void } },
+): string | null {
+  if (!req.sessionId) {
+    res.status(401).json({ error: AUTH_REQUIRED_ERROR });
+    return null;
   }
+  return req.sessionId;
+}
+
+async function rollbackRequestsBalance(sessionId: string, balanceBeforeCharge: number, context: string) {
+  try {
+    await db
+      .update(usersTable)
+      .set({
+        requestsBalance: balanceBeforeCharge,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.sessionId, sessionId));
+  } catch (rollbackErr) {
+    logger.error({ err: rollbackErr }, context);
+  }
+}
+
+router.get("/conversations", async (req, res) => {
+  const sessionId = requireSessionId(req, res);
+  if (!sessionId) return;
   const rows = await db
     .select({
       id: conversations.id,
@@ -73,11 +96,8 @@ router.get("/conversations", async (req, res) => {
 });
 
 router.post("/conversations", async (req, res) => {
-  const sessionId = req.sessionId;
-  if (!sessionId) {
-    res.status(401).json({ error: "Требуется авторизация" });
-    return;
-  }
+  const sessionId = requireSessionId(req, res);
+  if (!sessionId) return;
   const { title } = req.body;
   if (!title) {
     res.status(400).json({ error: "title required" });
@@ -92,11 +112,8 @@ router.post("/conversations", async (req, res) => {
 
 router.get("/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const sessionId = req.sessionId;
-  if (!sessionId) {
-    res.status(401).json({ error: "Требуется авторизация" });
-    return;
-  }
+  const sessionId = requireSessionId(req, res);
+  if (!sessionId) return;
 
   const [conv] = await db
     .select()
@@ -117,11 +134,8 @@ router.get("/conversations/:id", async (req, res) => {
 
 router.delete("/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const sessionId = req.sessionId;
-  if (!sessionId) {
-    res.status(401).json({ error: "Требуется авторизация" });
-    return;
-  }
+  const sessionId = requireSessionId(req, res);
+  if (!sessionId) return;
 
   const [conv] = await db
     .select()
@@ -138,11 +152,8 @@ router.delete("/conversations/:id", async (req, res) => {
 
 router.get("/conversations/:id/messages", async (req, res) => {
   const id = Number(req.params.id);
-  const sessionId = req.sessionId;
-  if (!sessionId) {
-    res.status(401).json({ error: "Требуется авторизация" });
-    return;
-  }
+  const sessionId = requireSessionId(req, res);
+  if (!sessionId) return;
 
   const [conv] = await db
     .select({ id: conversations.id })
@@ -168,12 +179,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
     content?: string;
     contactId?: number;
   };
-  const sessionId = req.sessionId;
-
-  if (!sessionId) {
-    res.status(401).json({ error: "Требуется авторизация" });
-    return;
-  }
+  const sessionId = requireSessionId(req, res);
+  if (!sessionId) return;
 
   if (typeof content !== "string") {
     res.status(400).json({ error: "Поле content должно быть строкой" });
@@ -410,17 +417,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
       const errorMessage =
         err instanceof Error && err.message ? err.message : "Generation failed";
       logger.error({ err }, "Chat streaming error");
-      try {
-        await db
-          .update(usersTable)
-          .set({
-            requestsBalance: balanceBeforeCharge,
-            updatedAt: new Date(),
-          })
-          .where(eq(usersTable.sessionId, sessionId));
-      } catch (rollbackErr) {
-        logger.error({ err: rollbackErr }, "Failed to rollback requestsBalance after stream error");
-      }
+      await rollbackRequestsBalance(
+        sessionId,
+        balanceBeforeCharge,
+        "Failed to rollback requestsBalance after stream error",
+      );
       try {
         if (!res.writableEnded) {
           res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
@@ -434,17 +435,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
   } catch (sseErr) {
     logger.error({ err: sseErr }, "Chat SSE setup or write failed");
-    try {
-      await db
-        .update(usersTable)
-        .set({
-          requestsBalance: balanceBeforeCharge,
-          updatedAt: new Date(),
-        })
-        .where(eq(usersTable.sessionId, sessionId));
-    } catch (rollbackErr) {
-      logger.error({ err: rollbackErr }, "Failed to rollback requestsBalance after SSE failure");
-    }
+    await rollbackRequestsBalance(
+      sessionId,
+      balanceBeforeCharge,
+      "Failed to rollback requestsBalance after SSE failure",
+    );
     if (heartbeat) clearInterval(heartbeat);
     if (!res.headersSent) {
       res.status(500).json({
@@ -467,17 +462,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
         await db.delete(messages).where(eq(messages.id, insertedUserId));
       } catch { /* ignore */ }
     }
-    if (sessionId) {
-      try {
-        await db
-          .update(usersTable)
-          .set({
-            requestsBalance: balanceBeforeCharge,
-            updatedAt: new Date(),
-          })
-          .where(eq(usersTable.sessionId, sessionId));
-      } catch { /* ignore */ }
-    }
+    await rollbackRequestsBalance(
+      sessionId,
+      balanceBeforeCharge,
+      "Failed to rollback requestsBalance after top-level handler error",
+    );
     if (!res.headersSent) {
       res.status(500).json({
         error:
