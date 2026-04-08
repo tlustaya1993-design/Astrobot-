@@ -16,6 +16,7 @@ import { useAuth } from '@/context/AuthContext';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
+import { toast } from '@/hooks/use-toast';
 
 interface Props {
   open: boolean;
@@ -81,7 +82,12 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
       await updateMutation.mutateAsync({ id, data: { title: nextTitle } });
       setEditingConversationId(null);
       setEditingTitle('');
-    } catch {
+    } catch (err) {
+      console.error('update conversation title failed', err);
+      toast({
+        title: 'Не удалось переименовать чат',
+        description: 'Попробуйте ещё раз.',
+      });
       // keep edit mode so user can retry
     }
   };

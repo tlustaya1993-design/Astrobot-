@@ -150,6 +150,45 @@ router.delete("/conversations/:id", async (req, res) => {
   res.status(204).end();
 });
 
+router.put("/conversations/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const sessionId = requireSessionId(req, res);
+  if (!sessionId) return;
+
+  const rawTitle = (req.body as { title?: unknown })?.title;
+  if (typeof rawTitle !== "string") {
+    res.status(400).json({ error: "title required" });
+    return;
+  }
+  const title = rawTitle.trim();
+  if (!title) {
+    res.status(400).json({ error: "title required" });
+    return;
+  }
+  if (title.length > 140) {
+    res.status(400).json({ error: "title too long" });
+    return;
+  }
+
+  const [conv] = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(and(eq(conversations.id, id), eq(conversations.sessionId, sessionId)))
+    .limit(1);
+  if (!conv) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(conversations)
+    .set({ title })
+    .where(eq(conversations.id, id))
+    .returning();
+
+  res.json(updated);
+});
+
 router.get("/conversations/:id/messages", async (req, res) => {
   const id = Number(req.params.id);
   const sessionId = requireSessionId(req, res);
