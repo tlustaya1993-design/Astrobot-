@@ -42,6 +42,8 @@ export default function AddContactModal({
   const [error, setError] = useState('');
   const [geocoding, setGeocoding] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [placeSuggestions, setPlaceSuggestions] = useState<Array<{ label: string; lat: number; lng: number }>>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
 
@@ -74,7 +76,53 @@ export default function AddContactModal({
       setCoords(null);
     }
     setError('');
+    setPlaceSuggestions([]);
+    setShowSuggestions(false);
   }, [open, mode, initialContact]);
+
+  useEffect(() => {
+    const query = birthPlace.trim();
+    if (query.length < 2) {
+      setPlaceSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setGeocoding(true);
+      try {
+        const r = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=0`,
+          { signal: controller.signal },
+        );
+        const d = (await r.json()) as Array<{ display_name?: string; lat?: string; lon?: string }>;
+        const options = (Array.isArray(d) ? d : [])
+          .filter((x) => x?.display_name && x?.lat && x?.lon)
+          .map((x) => ({
+            label: String(x.display_name),
+            lat: parseFloat(String(x.lat)),
+            lng: parseFloat(String(x.lon)),
+          }))
+          .filter((x) => Number.isFinite(x.lat) && Number.isFinite(x.lng))
+          .slice(0, 5);
+        setPlaceSuggestions(options);
+        setShowSuggestions(options.length > 0);
+      } catch {
+        if (!controller.signal.aborted) {
+          setPlaceSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } finally {
+        if (!controller.signal.aborted) setGeocoding(false);
+      }
+    }, 280);
+
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [birthPlace]);
 
   const geocodePlace = async (place: string) => {
     if (!place.trim()) return;
@@ -252,8 +300,17 @@ export default function AddContactModal({
                     <div className="relative">
                       <input
                         value={birthPlace}
-                        onChange={(e) => setBirthPlace(e.target.value)}
-                        onBlur={() => void geocodePlace(birthPlace)}
+                        onChange={(e) => {
+                          setBirthPlace(e.target.value);
+                          setCoords(null);
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => setShowSuggestions(false), 120);
+                          if (!coords) void geocodePlace(birthPlace);
+                        }}
+                        onFocus={() => {
+                          if (placeSuggestions.length > 0) setShowSuggestions(true);
+                        }}
                         placeholder="Город, страна"
                         autoComplete="off"
                         enterKeyHint="done"
@@ -269,6 +326,25 @@ export default function AddContactModal({
                         )}
                       </div>
                     </div>
+                    {showSuggestions && (
+                      <div className="mt-1 rounded-xl border border-border bg-card/95 max-h-44 overflow-y-auto">
+                        {placeSuggestions.map((s, idx) => (
+                          <button
+                            key={`${s.label}-${idx}`}
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setBirthPlace(s.label);
+                              setCoords({ lat: s.lat, lng: s.lng });
+                              setShowSuggestions(false);
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-white/5 transition border-b border-border/40 last:border-b-0"
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {coords && (
                       <p className="text-xs text-green-400/80 mt-1">
                         Координаты: {coords.lat.toFixed(2)}°, {coords.lng.toFixed(2)}°
