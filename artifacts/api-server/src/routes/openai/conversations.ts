@@ -275,14 +275,18 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .from(contactsTable)
       .where(and(eq(contactsTable.id, requestedContactId), eq(contactsTable.sessionId, sessionId)))
       .limit(1);
-    if (contactOk) {
-      effectiveContactId = requestedContactId;
-      if (conv.contactId !== requestedContactId) {
-        await db
-          .update(conversations)
-          .set({ contactId: requestedContactId })
-          .where(eq(conversations.id, id));
-      }
+    if (!contactOk) {
+      res.status(400).json({
+        error: "Выбранный контакт не найден в вашем профиле. Откройте чат заново и выберите человека снова.",
+      });
+      return;
+    }
+    effectiveContactId = requestedContactId;
+    if (conv.contactId !== requestedContactId) {
+      await db
+        .update(conversations)
+        .set({ contactId: requestedContactId })
+        .where(eq(conversations.id, id));
     }
   } else if (conv.contactId != null) {
     // If bound contact was deleted, clear stale link to prevent wrong person appearing in this chat.
@@ -726,6 +730,16 @@ function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: 
 ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRetSection}${solarArcSection}${transitPerfSection}${synastrySection}`
     : "Профиль пользователя ещё не заполнен — отвечай тепло и предложи пройти настройку при возможности.\n";
 
+  const contactProfileSection = contact
+    ? `Профиль выбранного человека для разбора:
+— Имя: ${contact.name || "не указано"}
+— Роль/связь: ${contact.relation || "не указано"}
+— Дата рождения: ${contact.birthDate || "не указана"}
+— Время рождения: ${contact.birthTime || "не указано"}
+— Место рождения: ${contact.birthPlace || "не указано"}
+`
+    : "";
+
   const synastryModeNote = contact
     ? `\nРЕЖИМ СИНАСТРИИ: Сейчас активна пара ${user?.name || "Пользователь"} + ${contact.name}. Отвечай прежде всего с точки зрения их совместимости и взаимодействия.\n`
     : "";
@@ -767,6 +781,7 @@ ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRet
 — НЕ подстраивай вывод под желание пользователя "услышать приятное"; при несогласии с его позицией объясняй это прямо и бережно
 — Не противоречь собственным рекомендациям в рамках диалога; если позиция меняется, явно объясняй почему (новый факт/другая астрологическая доминанта)
 — Рекомендации должны вытекать из астрологических факторов (транзиты/дома/аспекты), а не из попытки поддержать любое решение
+— Если активен режим синастрии и профиль выбранного человека передан ниже, НЕЛЬЗЯ говорить "у меня нет его данных"; используй эти данные
 ${synastryModeNote}
 ЖЁСТКОЕ ОГРАНИЧЕНИЕ — ты ВСЕГДА остаёшься астрологом:
 — Любую тему — карьеру, отношения, деньги, здоровье — ты раскрываешь ТОЛЬКО через астрологические инструменты
@@ -789,6 +804,7 @@ ${synastryModeNote}
 — Всегда добавляй: «Астрология указывает на предрасположенности, а не диагнозы. Для конкретных вопросов здоровья обращайся к врачу»
 
 ${profileSection}
+${contactProfileSection}
 ${memoriesSection}
 ${toneInstructions}
 

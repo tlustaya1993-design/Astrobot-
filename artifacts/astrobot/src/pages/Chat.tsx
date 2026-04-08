@@ -115,6 +115,18 @@ export default function Chat() {
   }, [inputValue]);
 
   useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      // iPad/Safari: after app resume textarea layout/focus can get stuck.
+      requestAnimationFrame(() => {
+        resizeComposer();
+      });
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+
+  useEffect(() => {
     try {
       if (sessionStorage.getItem(POST_PAYMENT_REGISTER_NUDGE_KEY) === '1' && !isLoggedIn) {
         setShowPostPaymentRegisterNudge(true);
@@ -307,7 +319,7 @@ export default function Chat() {
             {displayMessages.map((msg, idx) => (
               <motion.div
                 key={msg.id || idx}
-                initial={{ opacity: 0, y: 10 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
@@ -401,6 +413,11 @@ export default function Chat() {
               <textarea
                 ref={inputRef}
                 value={inputValue}
+                onPointerDown={() => {
+                  if (isStreaming) return;
+                  // iPad/Safari: explicit focus nudge after resume.
+                  setTimeout(() => inputRef.current?.focus(), 0);
+                }}
                 onChange={(e) => {
                   setInputValue(e.target.value);
                   resizeComposer();
