@@ -29,7 +29,7 @@ const PACKAGE_CONFIG: Record<
 };
 
 const DEFAULT_RECEIPT_EMAIL = "billing@astrobot.app";
-let paymentsTableReady: Promise<void> | null = null;
+let paymentsTableChecked: Promise<void> | null = null;
 const paymentCreateThrottle = new Map<string, number>();
 const paymentCreateIpWindow = new Map<string, number[]>();
 
@@ -38,6 +38,8 @@ const CREATE_PAYMENT_MIN_INTERVAL_MS = 2_500;
 const CREATE_PAYMENT_RETRY_DELAY_MS = 500;
 const CREATE_PAYMENT_IP_WINDOW_MS = 60_000;
 const CREATE_PAYMENT_IP_MAX_PER_WINDOW = 180;
+const REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL?.trim() || "";
+const REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN?.trim() || "";
 
 function isPackageCode(value: unknown): value is PackageCode {
   return typeof value === "string" && value in PACKAGE_CONFIG;
@@ -102,6 +104,62 @@ function cleanupPaymentThrottle(now = Date.now()): void {
     const fresh = arr.filter((ts) => now - ts < CREATE_PAYMENT_IP_WINDOW_MS);
     if (fresh.length === 0) paymentCreateIpWindow.delete(k);
     else paymentCreateIpWindow.set(k, fresh);
+  }
+}
+
+function hasRedisRateLimitBackend(): boolean {
+  return Boolean(REDIS_REST_URL && REDIS_REST_TOKEN);
+}
+
+async function upstashCall(path: string): Promise<unknown> {
+  const url = `${REDIS_REST_URL.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${REDIS_REST_TOKEN}`,
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Upstash request failed (${res.status})`);
+  }
+  const json = (await res.json()) as { result?: unknown };
+  return json.result;
+}
+
+async function canCreatePaymentNowShared(key: string): Promise<{ ok: boolean; waitMs: number }> {
+  try {
+    const redisKey = `billing:pay:create:session:${key}`;
+    const setResult = await upstashCall(
+      `set/${encodeURIComponent(redisKey)}/${Date.now()}?NX=true&PX=${CREATE_PAYMENT_MIN_INTERVAL_MS}`,
+    );
+    if (setResult === "OK") {
+      return { ok: true, waitMs: 0 };
+    }
+    const pttl = await upstashCall(`pttl/${encodeURIComponent(redisKey)}`);
+    const waitMs = typeof pttl === "number" && pttl > 0 ? pttl : CREATE_PAYMENT_MIN_INTERVAL_MS;
+    return { ok: false, waitMs };
+  } catch (err) {
+    logger.warn({ err }, "Shared session throttle failed, fallback to in-memory throttle");
+    return canCreatePaymentNow(key);
+  }
+}
+
+async function canCreatePaymentByIpShared(ipKey: string): Promise<{ ok: boolean; waitMs: number }> {
+  try {
+    const redisKey = `billing:pay:create:ip:${ipKey}`;
+    const count = await upstashCall(`incr/${encodeURIComponent(redisKey)}`);
+    const numericCount = typeof count === "number" ? count : Number(count);
+    if (numericCount === 1) {
+      await upstashCall(`expire/${encodeURIComponent(redisKey)}/${Math.ceil(CREATE_PAYMENT_IP_WINDOW_MS / 1000)}`);
+    }
+    if (numericCount > CREATE_PAYMENT_IP_MAX_PER_WINDOW) {
+      const ttl = await upstashCall(`ttl/${encodeURIComponent(redisKey)}`);
+      const waitMs = typeof ttl === "number" && ttl > 0 ? ttl * 1000 : CREATE_PAYMENT_IP_WINDOW_MS;
+      return { ok: false, waitMs };
+    }
+    return { ok: true, waitMs: 0 };
+  } catch (err) {
+    logger.warn({ err }, "Shared IP throttle failed, fallback to in-memory throttle");
+    return canCreatePaymentByIp(ipKey);
   }
 }
 
@@ -233,37 +291,16 @@ function appendReturnFlag(returnUrl: string): string {
   }
 }
 
-async function ensurePaymentsTableExists(): Promise<void> {
-  if (!paymentsTableReady) {
-    paymentsTableReady = (async () => {
-      await db.execute(sql`
-        CREATE TABLE IF NOT EXISTS payments (
-          id serial PRIMARY KEY,
-          session_id text NOT NULL,
-          provider text NOT NULL DEFAULT 'yookassa',
-          provider_payment_id text NOT NULL UNIQUE,
-          app_payment_id text NOT NULL UNIQUE,
-          package_code text NOT NULL,
-          credits_granted integer NOT NULL,
-          amount_rub text NOT NULL,
-          currency text NOT NULL DEFAULT 'RUB',
-          status text NOT NULL DEFAULT 'pending',
-          description text,
-          metadata_json text,
-          webhook_verified boolean NOT NULL DEFAULT false,
-          metadata jsonb,
-          created_at timestamptz NOT NULL DEFAULT now(),
-          updated_at timestamptz NOT NULL DEFAULT now(),
-          credits_applied_at timestamptz
-        )
-      `);
+async function ensurePaymentsTableReady(): Promise<void> {
+  if (!paymentsTableChecked) {
+    paymentsTableChecked = (async () => {
+      await db.select({ id: paymentsTable.id }).from(paymentsTable).limit(1);
     })().catch((error) => {
-      paymentsTableReady = null;
+      paymentsTableChecked = null;
       throw error;
     });
   }
-
-  await paymentsTableReady;
+  await paymentsTableChecked;
 }
 
 async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<number> {
@@ -354,9 +391,17 @@ router.post("/payments/create", async (req, res) => {
 
   cleanupPaymentThrottle();
   const clientIp = getClientIp(req);
-  const perSessionAllowed = canCreatePaymentNow(`sid:${sessionId}`);
+  const throttleSessionKey = `sid:${sessionId}`;
+  const throttleIpKey = `ip:${clientIp}`;
+  const perSessionAllowed = hasRedisRateLimitBackend()
+    ? await canCreatePaymentNowShared(throttleSessionKey)
+    : canCreatePaymentNow(throttleSessionKey);
   const perIpAllowed = hasForwardedIp(req)
-    ? canCreatePaymentByIp(`ip:${clientIp}`)
+    ? (
+      hasRedisRateLimitBackend()
+        ? await canCreatePaymentByIpShared(throttleIpKey)
+        : canCreatePaymentByIp(throttleIpKey)
+    )
     : { ok: true, waitMs: 0 };
   const allowed = !perSessionAllowed.ok ? perSessionAllowed : perIpAllowed;
   if (!allowed.ok) {
@@ -374,7 +419,7 @@ router.post("/payments/create", async (req, res) => {
   const paymentReturnUrl = appendReturnFlag(returnUrl);
 
   await ensureUserSession(sessionId);
-  await ensurePaymentsTableExists();
+  await ensurePaymentsTableReady();
   const [user] = await db
     .select({ email: usersTable.email })
     .from(usersTable)
@@ -503,7 +548,7 @@ router.post("/payments/reconcile", async (req, res) => {
     res.status(401).json({ error: "Требуется авторизация" });
     return;
   }
-  await ensurePaymentsTableExists();
+  await ensurePaymentsTableReady();
 
   const [latest] = await db
     .select()
@@ -531,7 +576,7 @@ router.post("/payments/webhook", async (req, res) => {
     res.status(401).json({ error: "Invalid webhook signature" });
     return;
   }
-  await ensurePaymentsTableExists();
+  await ensurePaymentsTableReady();
 
   const notification = parseYookassaNotification(req.body);
   if (!notification) {
