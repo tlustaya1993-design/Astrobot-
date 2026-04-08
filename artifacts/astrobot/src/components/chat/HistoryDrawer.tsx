@@ -1,12 +1,13 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, MessageSquare, Trash2, CalendarDays, LogIn } from 'lucide-react';
+import { X, Plus, MessageSquare, Trash2, CalendarDays, LogIn, Pencil, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { Link, useLocation } from 'wouter';
 import {
   useListOpenaiConversations,
   useDeleteOpenaiConversation,
+  useUpdateOpenaiConversation,
   getListOpenaiConversationsQueryKey,
 } from '@workspace/api-client-react';
 import { getAuthHeaders } from '@/lib/session';
@@ -27,6 +28,8 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
   const queryClient = useQueryClient();
   const { isLoggedIn, email } = useAuth();
   const { avatarConfig } = useAvatarSync();
+  const [editingConversationId, setEditingConversationId] = useState<number | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   const { data: conversations, isLoading } = useListOpenaiConversations({
     request: { headers: getAuthHeaders() },
@@ -41,6 +44,13 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     },
   });
 
+  const updateMutation = useUpdateOpenaiConversation({
+    request: { headers: getAuthHeaders() },
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListOpenaiConversationsQueryKey() }),
+    },
+  });
+
   const handleDelete = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     if (confirm('Удалить диалог?')) deleteMutation.mutate({ id });
@@ -49,6 +59,31 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
   const openChat = (id?: number) => {
     onClose();
     setLocation(id ? `/chat/${id}` : '/chat');
+  };
+
+  const startEditing = (e: React.MouseEvent, id: number, title: string) => {
+    e.stopPropagation();
+    setEditingConversationId(id);
+    setEditingTitle(title || 'Чтение');
+  };
+
+  const cancelEditing = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setEditingConversationId(null);
+    setEditingTitle('');
+  };
+
+  const saveEditing = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    const nextTitle = editingTitle.trim();
+    if (!nextTitle) return;
+    try {
+      await updateMutation.mutateAsync({ id, data: { title: nextTitle } });
+      setEditingConversationId(null);
+      setEditingTitle('');
+    } catch {
+      // keep edit mode so user can retry
+    }
   };
 
   // Swipe-left to close
@@ -138,7 +173,9 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                 </div>
               ) : (
                 <div className="space-y-0.5 px-2 pt-1">
-                  {conversations.map((conv) => (
+                  {conversations.map((conv) => {
+                    const isEditing = editingConversationId === conv.id;
+                    return (
                     <button
                       key={conv.id}
                       onClick={() => openChat(conv.id)}
@@ -150,7 +187,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                           contactAvatarConfig={conv.contactAvatarConfig}
                           contactId={conv.contactId}
                           contactName={conv.contactName}
-                          size={28}
+                          size={24}
                           ringClassName="ring-card"
                         />
                       ) : (
@@ -159,21 +196,57 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground line-clamp-1">
-                          {conv.title || 'Чтение'}
-                        </p>
+                        {isEditing ? (
+                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              value={editingTitle}
+                              onChange={(e) => setEditingTitle(e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  void saveEditing(e as unknown as React.MouseEvent, conv.id);
+                                }
+                                if (e.key === 'Escape') cancelEditing();
+                              }}
+                              className="h-8 flex-1 min-w-0 px-2.5 rounded-lg bg-background border border-primary/40 text-sm outline-none focus:border-primary/70"
+                              autoFocus
+                            />
+                            <button
+                              onClick={(e) => void saveEditing(e, conv.id)}
+                              className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/15 transition shrink-0"
+                              title="Сохранить"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="text-sm font-medium text-foreground line-clamp-1">
+                            {conv.title || 'Чтение'}
+                          </p>
+                        )}
                         <p className="text-[11px] text-muted-foreground mt-0.5">
                           {format(new Date(conv.createdAt), 'd MMM, HH:mm', { locale: ru })}
                         </p>
                       </div>
+                      {!isEditing && (
+                        <button
+                          onClick={(e) => startEditing(e, conv.id, conv.title || 'Чтение')}
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shrink-0"
+                          title="Переименовать"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={(e) => handleDelete(e, conv.id)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </button>
-                  ))}
+                  )})}
                 </div>
               )}
             </div>
