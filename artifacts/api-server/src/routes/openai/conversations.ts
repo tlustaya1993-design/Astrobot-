@@ -21,6 +21,7 @@ import { parseAvatarJson } from "../../lib/avatar-config.js";
 
 const router: IRouter = Router();
 const CHAT_RESPONSE_TEMPERATURE = 0.2;
+const MAX_CHAT_MESSAGE_CHARS = 8000;
 
 /** Переопредели в Railway, если аккаунт Anthropic ещё не видит новый id. */
 const ANTHROPIC_CHAT_MODEL =
@@ -174,8 +175,27 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  if (!content) {
-    res.status(400).json({ error: "content required" });
+  if (typeof content !== "string") {
+    res.status(400).json({ error: "Поле content должно быть строкой" });
+    return;
+  }
+  const normalizedContent = content.trim();
+  if (!normalizedContent) {
+    res.status(400).json({ error: "Сообщение не может быть пустым" });
+    return;
+  }
+  if (normalizedContent.length > MAX_CHAT_MESSAGE_CHARS) {
+    res.status(413).json({
+      error: `Сообщение слишком длинное. Максимум ${MAX_CHAT_MESSAGE_CHARS} символов.`,
+    });
+    return;
+  }
+
+  if (
+    contactId != null &&
+    (!Number.isFinite(Number(contactId)) || Number(contactId) <= 0)
+  ) {
+    res.status(400).json({ error: "Некорректный contactId" });
     return;
   }
 
@@ -239,7 +259,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .limit(1);
   }
 
-  const requestCost = content.length >= 1200 ? 2 : 1;
+  const requestCost = normalizedContent.length >= 1200 ? 2 : 1;
   const remainingFree = getRemainingFreeRequests(owner?.requestsUsed ?? 0);
   const isUnlimited = isUnlimitedUser(owner?.email);
 
@@ -265,7 +285,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   const [insertedUser] = await db
     .insert(messages)
-    .values({ conversationId: id, role: "user", content })
+    .values({ conversationId: id, role: "user", content: normalizedContent })
     .returning({ id: messages.id });
   insertedUserId = insertedUser?.id;
 
@@ -381,7 +401,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
       ]);
 
       if (sessionId && fullResponse) {
-        extractAndSaveMemories(sessionId, content, fullResponse).catch(() => {});
+        extractAndSaveMemories(sessionId, normalizedContent, fullResponse).catch(() => {});
       }
 
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
