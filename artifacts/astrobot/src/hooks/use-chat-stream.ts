@@ -22,6 +22,7 @@ export function useChatStream(conversationId?: number) {
   const sendMessage = async (content: string, contactId?: number | null) => {
     const sessionId = getSessionId();
     let targetId = conversationId;
+    const streamingAssistantId = -Date.now();
 
     const tempUserMsg: OpenaiMessage = {
       id: Date.now(),
@@ -30,7 +31,14 @@ export function useChatStream(conversationId?: number) {
       content,
       createdAt: new Date().toISOString()
     };
-    setLocalMessages(prev => [...prev, tempUserMsg]);
+    const tempAssistantMsg: OpenaiMessage = {
+      id: streamingAssistantId,
+      conversationId: targetId || 0,
+      role: 'assistant',
+      content: '',
+      createdAt: new Date().toISOString()
+    };
+    setLocalMessages(prev => [...prev, tempUserMsg, tempAssistantMsg]);
     setIsStreaming(true);
     setStreamingText('');
 
@@ -58,6 +66,7 @@ export function useChatStream(conversationId?: number) {
       });
 
       if (!res.ok) {
+        setLocalMessages(prev => prev.filter((m) => m.id !== streamingAssistantId));
         let message = `Ошибка сервера (${res.status})`;
         let payloadMeta: { freeRemaining?: number; required?: number; balance?: number } = {};
         const raw = await res.clone().text();
@@ -107,7 +116,10 @@ export function useChatStream(conversationId?: number) {
       }
 
       const reader = res.body?.getReader();
-      if (!reader) return targetId;
+      if (!reader) {
+        setLocalMessages(prev => prev.filter((m) => m.id !== streamingAssistantId));
+        return targetId;
+      }
       const decoder = new TextDecoder();
       let assistantMsg = '';
       let streamError: string | null = null;
@@ -130,6 +142,11 @@ export function useChatStream(conversationId?: number) {
               if (data.content) {
                 assistantMsg += data.content;
                 setStreamingText(assistantMsg);
+                setLocalMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === streamingAssistantId ? { ...m, content: assistantMsg } : m,
+                  ),
+                );
               }
               if (data.error) {
                 streamError = typeof data.error === 'string' ? data.error : 'Generation failed';
@@ -149,14 +166,6 @@ export function useChatStream(conversationId?: number) {
         throw new Error(streamError);
       }
 
-      const tempAssistantMsg: OpenaiMessage = {
-        id: Date.now() + 1,
-        conversationId: targetId,
-        role: 'assistant',
-        content: assistantMsg,
-        createdAt: new Date().toISOString()
-      };
-      setLocalMessages(prev => [...prev, tempAssistantMsg]);
       queryClient.invalidateQueries({ queryKey: getGetOpenaiConversationQueryKey(targetId) });
 
     } catch (error) {
@@ -171,14 +180,24 @@ export function useChatStream(conversationId?: number) {
       if (errorCode === 402) {
         return targetId;
       }
-      const tempAssistantError: OpenaiMessage = {
-        id: Date.now() + 1,
-        conversationId: targetId || 0,
-        role: 'assistant',
-        content: `Не удалось получить ответ: ${message}`,
-        createdAt: new Date().toISOString(),
-      };
-      setLocalMessages(prev => [...prev, tempAssistantError]);
+      setLocalMessages((prev) => {
+        const hasStreaming = prev.some((m) => m.id === streamingAssistantId);
+        if (hasStreaming) {
+          return prev.map((m) =>
+            m.id === streamingAssistantId
+              ? { ...m, content: `Не удалось получить ответ: ${message}` }
+              : m,
+          );
+        }
+        const tempAssistantError: OpenaiMessage = {
+          id: Date.now() + 1,
+          conversationId: targetId || 0,
+          role: 'assistant',
+          content: `Не удалось получить ответ: ${message}`,
+          createdAt: new Date().toISOString(),
+        };
+        return [...prev, tempAssistantError];
+      });
     } finally {
       setIsStreaming(false);
       setStreamingText('');

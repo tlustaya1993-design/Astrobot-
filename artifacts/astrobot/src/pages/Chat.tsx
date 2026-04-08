@@ -43,7 +43,6 @@ export default function Chat() {
   const {
     localMessages,
     isStreaming,
-    streamingText,
     sendMessage,
     clearLocalMessages,
     paywallState,
@@ -328,7 +327,17 @@ export default function Chat() {
                     ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm'
                     : 'bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none'
                 }`}>
-                  {msg.role === 'assistant' ? <AstroMarkdown content={msg.content} /> : msg.content}
+                  {msg.role === 'assistant' ? (
+                    msg.content?.trim() ? (
+                      <AstroMarkdown content={msg.content} />
+                    ) : (
+                      <div className="flex space-x-1 py-1 not-prose">
+                        <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
+                        <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
+                        <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
+                      </div>
+                    )
+                  ) : msg.content}
                 </div>
               </motion.div>
             ))}
@@ -373,29 +382,6 @@ export default function Chat() {
                       Зарегистрироваться
                     </button>
                   </div>
-                </div>
-              </motion.div>
-            )}
-
-            {isStreaming && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-start">
-                <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden relative">
-                  <Sparkles className="w-4 h-4 text-primary/50 absolute" />
-                  <img
-                    src={`${import.meta.env.BASE_URL}images/avatar-bot.png`}
-                    alt="Bot"
-                    className="w-full h-full object-cover relative z-10"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
-                </div>
-                <div className="max-w-[82%] rounded-2xl p-4 shadow-lg bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-sm max-w-none">
-                  {streamingText ? <AstroMarkdown content={streamingText} /> : (
-                    <div className="flex space-x-1 py-1">
-                      <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
-                      <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
-                      <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
-                    </div>
-                  )}
                 </div>
               </motion.div>
             )}
