@@ -92,12 +92,17 @@ router.post("/conversations", async (req, res) => {
 router.get("/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
   const sessionId = req.sessionId;
+  if (!sessionId) {
+    res.status(401).json({ error: "Требуется авторизация" });
+    return;
+  }
+
   const [conv] = await db
     .select()
     .from(conversations)
-    .where(eq(conversations.id, id))
+    .where(and(eq(conversations.id, id), eq(conversations.sessionId, sessionId)))
     .limit(1);
-  if (!conv || (sessionId && conv.sessionId !== sessionId)) {
+  if (!conv) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -112,12 +117,17 @@ router.get("/conversations/:id", async (req, res) => {
 router.delete("/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
   const sessionId = req.sessionId;
+  if (!sessionId) {
+    res.status(401).json({ error: "Требуется авторизация" });
+    return;
+  }
+
   const [conv] = await db
     .select()
     .from(conversations)
-    .where(eq(conversations.id, id))
+    .where(and(eq(conversations.id, id), eq(conversations.sessionId, sessionId)))
     .limit(1);
-  if (!conv || (sessionId && conv.sessionId !== sessionId)) {
+  if (!conv) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -127,6 +137,22 @@ router.delete("/conversations/:id", async (req, res) => {
 
 router.get("/conversations/:id/messages", async (req, res) => {
   const id = Number(req.params.id);
+  const sessionId = req.sessionId;
+  if (!sessionId) {
+    res.status(401).json({ error: "Требуется авторизация" });
+    return;
+  }
+
+  const [conv] = await db
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(and(eq(conversations.id, id), eq(conversations.sessionId, sessionId)))
+    .limit(1);
+  if (!conv) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
   const msgs = await db
     .select()
     .from(messages)
@@ -137,14 +163,13 @@ router.get("/conversations/:id/messages", async (req, res) => {
 
 router.post("/conversations/:id/messages", async (req, res) => {
   const id = Number(req.params.id);
-  const { content, sessionId: bodySessionId, contactId } = req.body as {
+  const { content, contactId } = req.body as {
     content?: string;
-    sessionId?: string;
     contactId?: number;
   };
-  const sessionId = (req.sessionId || bodySessionId) as string | undefined;
+  const sessionId = req.sessionId;
 
-  if (!sessionId || typeof sessionId !== "string") {
+  if (!sessionId) {
     res.status(401).json({ error: "Требуется авторизация" });
     return;
   }
@@ -174,11 +199,19 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
+  // Only attach a contact that belongs to this same session (prevents cross-user linking).
   if (contactId && !conv.contactId) {
-    await db
-      .update(conversations)
-      .set({ contactId: Number(contactId) })
-      .where(eq(conversations.id, id));
+    const [contactOk] = await db
+      .select({ id: contactsTable.id })
+      .from(contactsTable)
+      .where(and(eq(contactsTable.id, Number(contactId)), eq(contactsTable.sessionId, sessionId)))
+      .limit(1);
+    if (contactOk) {
+      await db
+        .update(conversations)
+        .set({ contactId: Number(contactId) })
+        .where(eq(conversations.id, id));
+    }
   }
 
   let [owner] = await db
