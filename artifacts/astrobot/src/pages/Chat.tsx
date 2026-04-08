@@ -146,6 +146,7 @@ export default function Chat() {
 
     const onPaymentSuccess = async () => {
       let applied = 0;
+      let reconcileFailed = false;
       try {
         const res = await fetch('/api/billing/payments/reconcile', {
           method: 'POST',
@@ -154,9 +155,11 @@ export default function Chat() {
         if (res.ok) {
           const payload = (await res.json()) as { applied?: number };
           applied = typeof payload.applied === 'number' ? payload.applied : 0;
+        } else {
+          reconcileFailed = true;
         }
       } catch {
-        /* ignore */
+        reconcileFailed = true;
       }
 
       const loggedIn = Boolean(getToken());
@@ -165,7 +168,9 @@ export default function Chat() {
         description: applied > 0
           ? `Пакет зачислен: +${applied} запросов.`
           : loggedIn
-            ? 'Оплата подтверждена. Баланс обновится автоматически.'
+            ? reconcileFailed
+              ? 'Оплата подтверждена, но баланс обновить не удалось. Попробуйте обновить страницу.'
+              : 'Оплата подтверждена. Баланс обновится автоматически.'
             : 'Запросы привязаны к этому устройству. Если захотите, зарегистрируйтесь здесь же и они сохранятся за аккаунтом.',
       });
 

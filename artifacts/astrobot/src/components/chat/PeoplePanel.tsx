@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { getAuthHeaders } from '@/lib/session';
+import { toast } from '@/hooks/use-toast';
 import AddContactModal from './AddContactModal';
 import type { AvatarConfig } from '@/components/ui/AstroAvatar';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
@@ -37,8 +38,21 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
   const fetchContacts = useCallback(async () => {
     try {
       const res = await fetch('/api/contacts', { headers: getAuthHeaders() });
-      if (res.ok) setContacts(await res.json());
-    } catch {}
+      if (res.ok) {
+        setContacts(await res.json());
+        return;
+      }
+      toast({
+        title: 'Не удалось загрузить контакты',
+        description: 'Попробуйте обновить страницу.',
+      });
+    } catch (err) {
+      console.error('fetchContacts failed', err);
+      toast({
+        title: 'Проблема с сетью',
+        description: 'Не удалось загрузить контакты. Попробуйте позже.',
+      });
+    }
   }, []);
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
@@ -50,7 +64,13 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
       await fetch(`/api/contacts/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
       setContacts(prev => prev.filter(c => c.id !== id));
       if (selectedContactId === id) onSelect(null);
-    } catch {}
+    } catch (err) {
+      console.error('delete contact failed', err);
+      toast({
+        title: 'Не удалось удалить контакт',
+        description: 'Попробуйте ещё раз.',
+      });
+    }
     setDeleting(null);
   };
 
