@@ -18,8 +18,23 @@ function isAdminEmail(email: string | null | undefined): boolean {
   return parseAdminEmails().includes(email.trim().toLowerCase());
 }
 
-function requireAdmin(req: { authEmail?: string }, res: { status: (n: number) => { json: (x: unknown) => void } }): boolean {
-  if (!isAdminEmail(req.authEmail)) {
+async function resolveEffectiveEmail(req: { authEmail?: string; sessionId?: string }): Promise<string | null> {
+  if (req.authEmail?.trim()) return req.authEmail.trim().toLowerCase();
+  if (!req.sessionId) return null;
+  const [user] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(eq(usersTable.sessionId, req.sessionId))
+    .limit(1);
+  return user?.email?.trim().toLowerCase() ?? null;
+}
+
+async function requireAdmin(
+  req: { authEmail?: string; sessionId?: string },
+  res: { status: (n: number) => { json: (x: unknown) => void } },
+): Promise<boolean> {
+  const effectiveEmail = await resolveEffectiveEmail(req);
+  if (!isAdminEmail(effectiveEmail)) {
     res.status(403).json({ error: "Доступ только для администратора" });
     return false;
   }
@@ -56,12 +71,12 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
 }
 
 router.get("/me", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
-  res.json({ ok: true, email: req.authEmail });
+  if (!(await requireAdmin(req, res))) return;
+  res.json({ ok: true, email: await resolveEffectiveEmail(req) });
 });
 
 router.get("/users", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   const rawEmail = typeof req.query.email === "string" ? req.query.email : "";
   const email = rawEmail.trim().toLowerCase();
@@ -111,7 +126,7 @@ router.get("/users", async (req, res) => {
 });
 
 router.post("/users/grant-credits", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const credits = Number(req.body?.credits);
@@ -151,7 +166,7 @@ router.post("/users/grant-credits", async (req, res) => {
 });
 
 router.post("/users/reconcile", async (req, res) => {
-  if (!requireAdmin(req, res)) return;
+  if (!(await requireAdmin(req, res))) return;
 
   const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   if (!email) {
