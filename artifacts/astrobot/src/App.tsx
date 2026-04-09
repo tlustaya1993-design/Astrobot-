@@ -11,6 +11,7 @@ import History from "@/pages/History";
 import ProfilePage from "@/pages/ProfilePage";
 import AuthCallback from "@/pages/AuthCallback";
 import BillingTestPage from "@/pages/BillingTestPage";
+import AdminPage from "@/pages/AdminPage";
 import { getSessionId } from "@/lib/session";
 import { AuthProvider } from "@/context/AuthContext";
 import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/chat/:id" component={Chat} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/history" component={History} />
+      <Route path="/admin" component={AdminPage} />
       <Route path="/auth/callback" component={AuthCallback} />
       {billingTestEnabled ? (
         <Route path="/billing/test" component={BillingTestPage} />
