@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, usersTable } from "@workspace/db";
 import {
   createYookassaPayment,
+  getYookassaPayment,
   parseYookassaNotification,
   YooKassaError,
   validateYookassaWebhook,
@@ -567,8 +568,41 @@ router.post("/payments/reconcile", async (req, res) => {
     return;
   }
 
-  const applied = await applyCreditsIfNeededByPaymentId(latest.id);
-  res.json({ ok: true, applied, status: latest.status });
+  let effectiveStatus = latest.status;
+  let applied = await applyCreditsIfNeededByPaymentId(latest.id);
+
+  // Fallback for cases when webhook was delayed/lost: reconcile directly with YooKassa.
+  if (applied === 0 && latest.providerPaymentId && effectiveStatus !== "succeeded") {
+    try {
+      const providerPayment = await getYookassaPayment(latest.providerPaymentId);
+      if (providerPayment?.status) {
+        effectiveStatus = providerPayment.status;
+        await db
+          .update(paymentsTable)
+          .set({
+            status: providerPayment.status,
+            metadata: providerPayment as unknown as Record<string, unknown>,
+            updatedAt: new Date(),
+          })
+          .where(eq(paymentsTable.id, latest.id));
+      }
+      if (effectiveStatus === "succeeded") {
+        applied = await applyCreditsIfNeededByPaymentId(latest.id);
+      }
+    } catch (err) {
+      logger.warn(
+        {
+          err,
+          paymentId: latest.id,
+          providerPaymentId: latest.providerPaymentId,
+          sessionId,
+        },
+        "Payment reconcile fallback via YooKassa failed",
+      );
+    }
+  }
+
+  res.json({ ok: true, applied, status: effectiveStatus });
 });
 
 router.post("/payments/webhook", async (req, res) => {
