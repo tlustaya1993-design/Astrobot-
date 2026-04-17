@@ -121,6 +121,24 @@ router.put("/me", async (req, res) => {
     .where(eq(usersTable.sessionId, sessionId))
     .limit(1);
 
+  // Guard against accidental overwrite when someone opens /onboarding
+  // in an already configured account/session.
+  const requestedOnboardingComplete = onboardingDone !== undefined && Boolean(onboardingDone);
+  const requestedChartOverwrite =
+    birthDate !== undefined
+    || birthTime !== undefined
+    || birthTimeUnknown !== undefined
+    || birthPlace !== undefined
+    || birthLat !== undefined
+    || birthLng !== undefined;
+  if (existing?.onboardingDone && requestedOnboardingComplete && requestedChartOverwrite) {
+    res.status(409).json({
+      error: "Онбординг уже завершён для этого аккаунта. Редактируйте профиль через экран профиля.",
+      code: "ONBOARDING_ALREADY_COMPLETED",
+    });
+    return;
+  }
+
   const fields: Partial<typeof usersTable.$inferInsert> = {
     ...(name !== undefined && { name }),
     ...(birthDate !== undefined && { birthDate }),

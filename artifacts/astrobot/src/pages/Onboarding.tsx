@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { User, Sparkles, ArrowRight } from 'lucide-react';
@@ -6,12 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/DateInput';
 import { CityAutocomplete } from '@/components/ui/CityAutocomplete';
-import { useUpsertMe, UpsertUserBody } from '@workspace/api-client-react';
+import { useGetMe, useUpsertMe, UpsertUserBody } from '@workspace/api-client-react';
 import { getAuthHeaders } from '@/lib/session';
 import { cn } from '@/lib/utils';
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
+  const { data: me, isLoading: isMeLoading } = useGetMe({
+    request: { headers: getAuthHeaders() },
+    query: { retry: 1 },
+  });
   const [step, setStep] = useState(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [birthTimeUnknown, setBirthTimeUnknown] = useState(false);
@@ -30,6 +34,14 @@ export default function Onboarding() {
     request: { headers: getAuthHeaders() }
   });
 
+  useEffect(() => {
+    // Prevent accidental profile overwrite via direct /onboarding link
+    // when the current account has already completed setup.
+    if (!isMeLoading && me?.onboardingDone) {
+      setLocation('/chat', { replace: true });
+    }
+  }, [isMeLoading, me?.onboardingDone, setLocation]);
+
   const handleNext = () => { setErrorMsg(null); setStep(s => s + 1); };
   const handleBack = () => { setErrorMsg(null); setStep(s => s - 1); };
 
@@ -46,7 +58,13 @@ export default function Onboarding() {
       setLocation('/chat');
     } catch (e) {
       console.error('Onboarding error', e);
-      setErrorMsg('Не удалось сохранить данные. Проверьте подключение и попробуйте снова.');
+      const message = e instanceof Error ? e.message : '';
+      if (message.includes('Онбординг уже завершён')) {
+        setErrorMsg('Этот аккаунт уже настроен. Переходим в чат.');
+        setTimeout(() => setLocation('/chat', { replace: true }), 600);
+      } else {
+        setErrorMsg('Не удалось сохранить данные. Проверьте подключение и попробуйте снова.');
+      }
     }
   };
 
