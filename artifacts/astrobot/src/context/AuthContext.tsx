@@ -58,6 +58,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void apiLogout();
     clearAuth();
     setState({ isLoggedIn: false, email: null, loading: false });
+    // Force immediate UX transition to a fresh profile flow after logout.
+    // This keeps all logout entry points consistent.
+    window.location.replace('/onboarding');
   }, []);
 
   const openAuthModal = useCallback((tab: 'login' | 'register' = 'login') => {
