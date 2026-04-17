@@ -9,9 +9,11 @@ import { CityAutocomplete } from '@/components/ui/CityAutocomplete';
 import { useGetMe, useUpsertMe, UpsertUserBody } from '@workspace/api-client-react';
 import { getAuthHeaders } from '@/lib/session';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/context/AuthContext';
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
+  const { openAuthModal } = useAuth();
   const { data: me, isLoading: isMeLoading } = useGetMe({
     request: { headers: getAuthHeaders() },
     query: { retry: 1 },
@@ -110,6 +112,17 @@ export default function Onboarding() {
             }`}
           />
         ))}
+      </div>
+
+      <div className="absolute top-16 inset-x-0 z-20 flex justify-center px-6">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 rounded-full border border-primary/30 bg-black/20 px-4 text-xs sm:text-sm font-medium text-primary hover:bg-primary/10"
+          onClick={() => openAuthModal('login')}
+        >
+          Войти / зарегистрироваться
+        </Button>
       </div>
 
       {/* Centered content */}
