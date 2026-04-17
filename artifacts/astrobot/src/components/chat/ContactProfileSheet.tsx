@@ -7,6 +7,7 @@ import IllustratedAvatar, { AvatarPortraitImage } from '@/components/ui/Illustra
 import { getAuthHeaders } from '@/lib/session';
 import type { Contact } from './PeoplePanel';
 import AvatarEditor from '@/components/ui/AvatarEditor';
+import { CityAutocomplete } from '@/components/ui/CityAutocomplete';
 import { useRegisterChatChromeOverlay } from '@/context/ChatChromeBlockContext';
 
 function normalizeAvatarConfig(input: unknown): AvatarConfig {
@@ -426,11 +427,20 @@ export default function ContactProfileSheet({
 
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground">Место рождения</label>
-                    <input
+                    <CityAutocomplete
                       value={birthPlace}
-                      onChange={(e) => setBirthPlace(e.target.value)}
-                      autoComplete="off"
-                      className="w-full min-h-[48px] text-base bg-background border border-border rounded-xl px-4 py-3 text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30"
+                      onChange={(v, lat, lng) => {
+                        setBirthPlace(v);
+                        if (lat != null && lng != null) {
+                          setBirthLat(String(lat));
+                          setBirthLng(String(lng));
+                        } else if (!v.trim()) {
+                          setBirthLat('');
+                          setBirthLng('');
+                        }
+                      }}
+                      placeholder="Город, страна"
+                      className="min-h-[48px] text-base py-3"
                     />
                   </div>
 

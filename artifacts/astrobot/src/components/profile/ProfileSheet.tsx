@@ -21,6 +21,7 @@ import { useAvatarSync } from "@/context/AvatarSyncContext";
 import AuthModal from "@/components/AuthModal";
 import AddContactModal from "@/components/chat/AddContactModal";
 import type { Contact } from "@/components/chat/PeoplePanel";
+import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
 
 interface UserProfile {
   name?: string | null;
@@ -644,11 +645,19 @@ export default function ProfileSheet({
                     </label>
                   )}
                   <label className="block space-y-1.5">
-                    <span className="text-xs text-muted-foreground">Место рождения (текст)</span>
-                    <input
+                    <span className="text-xs text-muted-foreground">Место рождения</span>
+                    <CityAutocomplete
                       value={editBirthPlace}
-                      onChange={(e) => setEditBirthPlace(e.target.value)}
-                      className="w-full rounded-xl bg-background border border-border px-3 py-2.5 text-sm outline-none focus:border-primary/50"
+                      onChange={(v, lat, lng) => {
+                        setEditBirthPlace(v);
+                        if (lat != null && lng != null) {
+                          setEditBirthLat(String(lat));
+                          setEditBirthLng(String(lng));
+                        } else if (!v.trim()) {
+                          setEditBirthLat("");
+                          setEditBirthLng("");
+                        }
+                      }}
                       placeholder="Город, страна"
                     />
                   </label>

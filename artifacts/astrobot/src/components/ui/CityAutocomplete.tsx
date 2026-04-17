@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -53,9 +54,10 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
     }
     setIsLoading(true);
     try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6&addressdetails=1&featuretype=city,town,village`;
+      // Broad search (no featuretype filter): restrictive params often return empty results in browsers.
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=8&addressdetails=1`;
       const res = await fetch(url, {
-        headers: { 'Accept-Language': 'ru,en' }
+        headers: { 'Accept-Language': 'ru,en' },
       });
       const data: CityResult[] = await res.json();
       const unique = data.filter((r, i, arr) => {
@@ -72,24 +74,57 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
     }
   }, []);
 
+  const listRef = useRef<HTMLDivElement>(null);
+  const [listStyle, setListStyle] = useState<React.CSSProperties>({});
+
+  const updateListPosition = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setListStyle({
+      position: 'fixed',
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    });
+  }, []);
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (query === value) return;
-    debounceRef.current = setTimeout(() => search(query), 350);
+    debounceRef.current = setTimeout(() => void search(query), 350);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, value, search]);
 
   useEffect(() => {
     setQuery(value);
   }, [value]);
 
+  useLayoutEffect(() => {
+    if (!isOpen || results.length === 0) return;
+    updateListPosition();
+  }, [isOpen, results, updateListPosition]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onScrollOrResize = () => updateListPosition();
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [isOpen, updateListPosition]);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      const t = e.target as Node;
+      if (containerRef.current?.contains(t)) return;
+      if (listRef.current?.contains(t)) return;
+      setIsOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -134,7 +169,10 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
           }}
           onKeyDown={handleKeyDown}
           onFocus={() => {
-            if (results.length > 0) setIsOpen(true);
+            if (results.length > 0) {
+              setIsOpen(true);
+              updateListPosition();
+            }
           }}
           placeholder={placeholder}
           autoComplete="off"
@@ -149,26 +187,34 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
         />
       </div>
 
-      {isOpen && results.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-xl shadow-xl shadow-black/50 overflow-hidden">
-          {results.map((result, i) => (
-            <button
-              key={`${result.lat}-${result.lon}`}
-              type="button"
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => handleSelect(result)}
-              className={cn(
-                "w-full text-left px-4 py-3 flex items-center gap-3 transition-colors",
-                "hover:bg-white/5 border-b border-white/5 last:border-0",
-                i === selectedIndex && "bg-primary/10"
-              )}
-            >
-              <MapPin className="w-4 h-4 text-primary shrink-0" />
-              <span className="text-sm text-foreground">{getCityLabel(result)}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {typeof document !== 'undefined' &&
+        isOpen &&
+        results.length > 0 &&
+        createPortal(
+          <div
+            ref={listRef}
+            style={listStyle}
+            className="bg-card border border-border rounded-xl shadow-xl shadow-black/50 overflow-hidden"
+          >
+            {results.map((result, i) => (
+              <button
+                key={`${result.lat}-${result.lon}-${i}`}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => handleSelect(result)}
+                className={cn(
+                  'w-full text-left px-4 py-3 flex items-center gap-3 transition-colors',
+                  'hover:bg-white/5 border-b border-white/5 last:border-0',
+                  i === selectedIndex && 'bg-primary/10',
+                )}
+              >
+                <MapPin className="w-4 h-4 text-primary shrink-0" />
+                <span className="text-sm text-foreground">{getCityLabel(result)}</span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
