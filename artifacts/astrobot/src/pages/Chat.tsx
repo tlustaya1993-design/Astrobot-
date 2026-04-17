@@ -15,6 +15,7 @@ import PaywallSheet from '@/components/billing/PaywallSheet';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { getToken } from '@/lib/session';
+import { ToastAction } from '@/components/ui/toast';
 
 const POST_PAYMENT_REGISTER_NUDGE_KEY = 'astrobot_post_payment_register_nudge';
 
@@ -28,7 +29,7 @@ const SUGGESTED_PROMPTS = [
 export default function Chat() {
   const [match, params] = useRoute('/chat/:id');
   const [, setLocation] = useLocation();
-  const { isLoggedIn, openAuthModal } = useAuth();
+  const { isLoggedIn, openAuthModal, logout } = useAuth();
   const [showPostPaymentRegisterNudge, setShowPostPaymentRegisterNudge] = useState(false);
   const conversationId = match && params?.id ? parseInt(params.id, 10) : undefined;
 
@@ -197,6 +198,30 @@ export default function Chat() {
 
     void onPaymentSuccess();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('onboardingBlocked') !== '1') return;
+
+    params.delete('onboardingBlocked');
+    const qs = params.toString();
+    const path = window.location.pathname;
+    window.history.replaceState({}, '', qs ? `${path}?${qs}` : path);
+
+    toast({
+      title: 'Этот аккаунт уже настроен',
+      description: 'Для создания нового профиля необходимо выйти из текущего аккаунта.',
+      action: (
+        <ToastAction
+          altText="Выйти из текущего аккаунта"
+          className="border-0 bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] hover:brightness-105"
+          onClick={() => logout()}
+        >
+          Выйти
+        </ToastAction>
+      ),
+    });
+  }, [logout]);
 
   const dismissPostPaymentNudge = () => {
     try {

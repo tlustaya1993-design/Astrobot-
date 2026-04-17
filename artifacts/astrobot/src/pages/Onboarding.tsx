@@ -38,7 +38,7 @@ export default function Onboarding() {
     // Prevent accidental profile overwrite via direct /onboarding link
     // when the current account has already completed setup.
     if (!isMeLoading && me?.onboardingDone) {
-      setLocation('/chat', { replace: true });
+      setLocation('/chat?onboardingBlocked=1', { replace: true });
     }
   }, [isMeLoading, me?.onboardingDone, setLocation]);
 
@@ -61,7 +61,7 @@ export default function Onboarding() {
       const message = e instanceof Error ? e.message : '';
       if (message.includes('Онбординг уже завершён')) {
         setErrorMsg('Этот аккаунт уже настроен. Переходим в чат.');
-        setTimeout(() => setLocation('/chat', { replace: true }), 600);
+        setTimeout(() => setLocation('/chat?onboardingBlocked=1', { replace: true }), 600);
       } else {
         setErrorMsg('Не удалось сохранить данные. Проверьте подключение и попробуйте снова.');
       }
