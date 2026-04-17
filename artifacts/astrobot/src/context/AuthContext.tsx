@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { getStoredEmail, getToken, saveAuth, clearAuth, getSessionId } from '@/lib/session';
-import { apiVerifyToken } from '@/lib/auth';
+import { apiLogout, apiVerifyToken } from '@/lib/auth';
 import AuthModal from '@/components/AuthModal';
 
 interface AuthState {
@@ -55,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    void apiLogout();
     clearAuth();
     setState({ isLoggedIn: false, email: null, loading: false });
   }, []);

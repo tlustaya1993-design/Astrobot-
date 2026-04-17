@@ -30,6 +30,9 @@ export function saveAuth(token: string, sessionId: string, email: string) {
 export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(EMAIL_KEY);
+  // Rotate session id on logout so backend no longer associates this browser
+  // with the previous authenticated profile.
+  localStorage.setItem(SESSION_KEY, uuidv4());
 }
 
 export function getAuthHeaders(): Record<string, string> {

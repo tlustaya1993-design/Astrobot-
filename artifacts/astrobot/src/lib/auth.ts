@@ -57,3 +57,14 @@ export function getYandexOAuthStartUrl(returnTo = '/chat'): string {
   });
   return `${API_BASE}/api/auth/yandex/start?${params.toString()}`;
 }
+
+export async function apiLogout(): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/api/auth/logout`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+  } catch {
+    // Best-effort call. Client-side token/session cleanup is the source of truth.
+  }
+}

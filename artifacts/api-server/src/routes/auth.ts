@@ -362,5 +362,29 @@ router.get("/verify", (req, res) => {
   }
 });
 
+// POST /auth/logout
+// Client-side auth is token-based, so logout primarily happens on the client.
+// This endpoint exists for explicit logout flow and observability.
+router.post("/logout", (req, res) => {
+  const auth = req.headers["authorization"];
+  if (auth?.startsWith("Bearer ")) {
+    const token = auth.slice(7);
+    try {
+      const payload = jwt.verify(token, JWT_SECRET) as { sessionId?: string; email?: string };
+      logger.info(
+        {
+          sessionId: payload.sessionId ?? null,
+          email: payload.email ?? null,
+        },
+        "User logged out",
+      );
+    } catch {
+      // Token may already be invalid/expired; logout should still be idempotently successful.
+    }
+  }
+
+  res.json({ ok: true });
+});
+
 export { JWT_SECRET };
 export default router;
