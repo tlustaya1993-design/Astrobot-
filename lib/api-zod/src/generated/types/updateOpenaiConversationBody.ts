@@ -7,5 +7,6 @@
  */
 
 export interface UpdateOpenaiConversationBody {
-  title: string;
+  title?: string;
+  contactExtendedMode?: boolean;
 }

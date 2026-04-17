@@ -250,6 +250,23 @@ export default function AddContactModal({
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] touch-pan-y">
               <form onSubmit={handleSubmit} className="space-y-4">
+                <div
+                  className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground space-y-1.5 leading-relaxed"
+                  role="note"
+                >
+                  <p className="font-medium text-foreground/90">Что входит в базовый разбор</p>
+                  <p>
+                    По умолчанию бот опирается на: личную карту человека по дате, месту и времени рождения; как
+                    сейчас небо «накладывается» на его карту (транзиты); как ваши карты сочетаются (синастрия).
+                  </p>
+                  <p>
+                    Так можно отвечать на вопросы про настроение и фон периода и про вашу пару — без долгого
+                    прогноза на месяцы, пока не включён расширенный режим в чате.
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/90 pt-0.5">
+                    Это не медицина и не предсказание судьбы — интерпретация в астрологической логике приложения.
+                  </p>
+                </div>
                 <div className="space-y-4">
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">Имя *</label>

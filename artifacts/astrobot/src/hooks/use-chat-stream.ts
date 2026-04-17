@@ -19,7 +19,11 @@ export function useChatStream(conversationId?: number) {
   const [paywallState, setPaywallState] = useState<PaywallState | null>(null);
   const queryClient = useQueryClient();
 
-  const sendMessage = async (content: string, contactId?: number | null) => {
+  const sendMessage = async (
+    content: string,
+    contactId?: number | null,
+    contactExtendedMode?: boolean,
+  ) => {
     const sessionId = getSessionId();
     let targetId = conversationId;
     const streamingAssistantId = -Date.now();
@@ -54,7 +58,10 @@ export function useChatStream(conversationId?: number) {
       }
 
       const body: Record<string, unknown> = { content, sessionId };
-      if (contactId != null) body.contactId = contactId;
+      if (contactId != null) {
+        body.contactId = contactId;
+        body.contactExtendedMode = Boolean(contactExtendedMode);
+      }
 
       const res = await fetch(`/api/openai/conversations/${targetId}/messages`, {
         method: 'POST',

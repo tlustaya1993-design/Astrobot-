@@ -2,8 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { Send, Sparkles, ChevronLeft, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useGetOpenaiConversation } from '@workspace/api-client-react';
+import {
+  useGetOpenaiConversation,
+  getGetOpenaiConversationQueryKey,
+  getListOpenaiConversationsQueryKey,
+} from '@workspace/api-client-react';
 import { getAuthHeaders } from '@/lib/session';
 import { useChatStream } from '@/hooks/use-chat-stream';
 import AstroMarkdown from '@/components/chat/AstroMarkdown';
@@ -31,6 +36,7 @@ export default function Chat() {
   const { isLoggedIn, openAuthModal, logout } = useAuth();
   const [showPostPaymentRegisterNudge, setShowPostPaymentRegisterNudge] = useState(false);
   const conversationId = match && params?.id ? parseInt(params.id, 10) : undefined;
+  const queryClient = useQueryClient();
 
   const { data: conversation, isLoading } = useGetOpenaiConversation(
     conversationId || 0,
@@ -50,6 +56,8 @@ export default function Chat() {
   } = useChatStream(conversationId);
   const [inputValue, setInputValue] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
+  /** Расширенный разбор по контакту: каждое сообщение = 2× запроса (см. сервер). */
+  const [contactExtendedMode, setContactExtendedMode] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -109,6 +117,31 @@ export default function Chat() {
   useEffect(() => {
     clearLocalMessages();
   }, [conversationId]);
+
+  const lastSyncedConversationId = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!conversationId) {
+      lastSyncedConversationId.current = undefined;
+    }
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!conversationId || !conversation) return;
+    if (lastSyncedConversationId.current === conversationId) return;
+    lastSyncedConversationId.current = conversationId;
+    if (conversation.contactId != null && conversation.contactId > 0) {
+      setSelectedContactId(conversation.contactId);
+    } else {
+      setSelectedContactId(null);
+    }
+    setContactExtendedMode(Boolean(conversation.contactExtendedMode));
+  }, [conversationId, conversation]);
+
+  useEffect(() => {
+    if (selectedContactId === null) {
+      setContactExtendedMode(false);
+    }
+  }, [selectedContactId]);
 
   useEffect(() => {
     resizeComposer();
@@ -244,7 +277,7 @@ export default function Chat() {
     const text = inputValue.trim();
     setInputValue('');
     requestAnimationFrame(() => resizeComposer());
-    const newConvId = await sendMessage(text, selectedContactId);
+    const newConvId = await sendMessage(text, selectedContactId, contactExtendedMode);
     if (!conversationId && newConvId) {
       setLocation(`/chat/${newConvId}`, { replace: true });
     }
@@ -298,7 +331,17 @@ export default function Chat() {
           </header>
 
           {/* People Panel */}
-          <PeoplePanel selectedContactId={selectedContactId} onSelect={setSelectedContactId} />
+          <PeoplePanel
+            selectedContactId={selectedContactId}
+            onSelect={setSelectedContactId}
+            contactTier={
+              selectedContactId != null
+                ? contactExtendedMode
+                  ? 'extended'
+                  : 'base'
+                : null
+            }
+          />
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
@@ -327,7 +370,9 @@ export default function Chat() {
                 <h3 className="text-base font-display font-semibold mb-1">С чего начнем?</h3>
                 <p className="text-muted-foreground mb-3 max-w-sm text-sm">
                   {selectedContactId
-                    ? "Режим синастрии активен. Спросите о совместимости."
+                    ? contactExtendedMode
+                      ? 'Расширенный разбор: прогноз и сценарий отношений — обычно 2 запроса за сообщение, очень длинный текст — 3.'
+                      : 'Базовый разбор: карта человека, транзиты к его наталу и синастрия с вами. Спросите, что с ним сейчас и что между вами.'
                     : "Спрашивайте о вашей карте, текущих транзитах или жизненных вопросах."}
                 </p>
                 <div className="grid grid-cols-1 gap-2 w-full max-w-md">
@@ -435,9 +480,56 @@ export default function Chat() {
           {/* Input */}
           <div className="px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
             {selectedContactId !== null && (
-              <div className="flex items-center gap-1.5 text-xs text-primary/60 mb-2 px-1">
-                <span className="text-base leading-none">⚯</span>
-                <span>Синастрия активна — вопросы будут разобраны с учётом карты выбранного человека</span>
+              <div className="space-y-2 mb-2 px-1">
+                <div className="flex items-start gap-1.5 text-xs text-primary/70">
+                  <span className="text-base leading-none shrink-0">⚯</span>
+                  <span>
+                    {contactExtendedMode
+                      ? 'Расширенный разбор: соляр, прогрессии и др. Обычно 2 запроса за сообщение, очень длинный текст — 3.'
+                      : 'Базовый разбор: натал контакта, транзиты к его наталу и синастрия с вами.'}
+                  </span>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
+                  <input
+                    type="checkbox"
+                    className="rounded border-border bg-background accent-primary shrink-0"
+                    checked={contactExtendedMode}
+                    onChange={async (e) => {
+                      const next = e.target.checked;
+                      setContactExtendedMode(next);
+                      if (conversationId) {
+                        try {
+                          await fetch(`/api/openai/conversations/${conversationId}`, {
+                            method: 'PUT',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              ...getAuthHeaders(),
+                            },
+                            body: JSON.stringify({
+                              title: conversation?.title?.trim() || 'Чат',
+                              contactExtendedMode: next,
+                            }),
+                          });
+                          await queryClient.invalidateQueries({
+                            queryKey: getGetOpenaiConversationQueryKey(conversationId),
+                          });
+                          await queryClient.invalidateQueries({
+                            queryKey: getListOpenaiConversationsQueryKey(),
+                          });
+                        } catch {
+                          /* ignore */
+                        }
+                      }
+                    }}
+                  />
+                  <span>
+                    Углубить разбор контакта (соляр, прогрессии, прогноз) —{' '}
+                    <span className="text-primary/80 font-medium">
+                      2 запроса за сообщение
+                    </span>
+                    <span className="text-muted-foreground"> (очень длинное — 3)</span>
+                  </span>
+                </label>
               </div>
             )}
             <form onSubmit={handleSend} className="relative flex items-end">
@@ -454,7 +546,13 @@ export default function Chat() {
                   resizeComposer();
                 }}
                 onInput={resizeComposer}
-                placeholder={selectedContactId ? "Спросите о совместимости..." : "Спросите звёзды..."}
+                placeholder={
+                  selectedContactId
+                    ? contactExtendedMode
+                      ? 'Прогноз, этапы отношений, сценарий...'
+                      : 'Что с ним сейчас, что между вами...'
+                    : 'Спросите звёзды...'
+                }
                 rows={1}
                 className="w-full min-h-[52px] max-h-[140px] resize-none overflow-y-auto bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-3xl py-3 pl-4 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50 leading-relaxed"
                 disabled={isStreaming}

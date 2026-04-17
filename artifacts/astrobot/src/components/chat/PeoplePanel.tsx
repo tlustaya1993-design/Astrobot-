@@ -25,9 +25,11 @@ export interface Contact {
 interface PeoplePanelProps {
   selectedContactId: number | null;
   onSelect: (id: number | null) => void;
+  /** Показать метку режима при выбранном контакте: база или расширение. */
+  contactTier?: 'base' | 'extended' | null;
 }
 
-export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanelProps) {
+export default function PeoplePanel({ selectedContactId, onSelect, contactTier = null }: PeoplePanelProps) {
   const { avatarConfig } = useAvatarSync();
   const [, setLocation] = useLocation();
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -171,13 +173,13 @@ export default function PeoplePanel({ selectedContactId, onSelect }: PeoplePanel
         </motion.button>
 
         {/* Synastry indicator */}
-        {selectedContactId !== null && (
+        {selectedContactId !== null && contactTier && (
           <motion.div
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
             className="shrink-0 ml-auto text-[11px] text-primary/70 font-medium whitespace-nowrap"
           >
-            ⚯ режим синастрии
+            {contactTier === 'extended' ? 'Расширенный разбор' : 'Базовый разбор'}
           </motion.div>
         )}
       </div>

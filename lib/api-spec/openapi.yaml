@@ -377,6 +377,9 @@ components:
         contactId:
           type: integer
           nullable: true
+        contactExtendedMode:
+          type: boolean
+          description: Расширенный разбор по контакту (×2 запроса за сообщение при активном контакте)
         createdAt:
           type: string
           format: date-time
@@ -439,8 +442,8 @@ components:
       properties:
         title:
           type: string
-      required:
-        - title
+        contactExtendedMode:
+          type: boolean
 
     SendOpenaiMessageBody:
       type: object
@@ -449,6 +452,10 @@ components:
           type: string
         sessionId:
           type: string
+        contactId:
+          type: integer
+        contactExtendedMode:
+          type: boolean
       required:
         - content
         - sessionId
@@ -458,8 +465,15 @@ components:
       properties:
         id:
           type: integer
+        sessionId:
+          type: string
         title:
           type: string
+        contactId:
+          type: integer
+          nullable: true
+        contactExtendedMode:
+          type: boolean
         createdAt:
           type: string
           format: date-time

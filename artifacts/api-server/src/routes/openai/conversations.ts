@@ -72,6 +72,7 @@ router.get("/conversations", async (req, res) => {
       sessionId: conversations.sessionId,
       title: conversations.title,
       contactId: conversations.contactId,
+      contactExtendedMode: conversations.contactExtendedMode,
       createdAt: conversations.createdAt,
       contactName: contactsTable.name,
       contactRelation: contactsTable.relation,
@@ -87,6 +88,7 @@ router.get("/conversations", async (req, res) => {
       sessionId: r.sessionId,
       title: r.title,
       contactId: r.contactId ?? null,
+      contactExtendedMode: Boolean(r.contactExtendedMode),
       createdAt: r.createdAt,
       contactName: r.contactName ?? null,
       contactRelation: r.contactRelation ?? null,
@@ -155,19 +157,32 @@ router.put("/conversations/:id", async (req, res) => {
   const sessionId = requireSessionId(req, res);
   if (!sessionId) return;
 
-  const rawTitle = (req.body as { title?: unknown })?.title;
-  if (typeof rawTitle !== "string") {
-    res.status(400).json({ error: "title required" });
+  const body = req.body as { title?: unknown; contactExtendedMode?: unknown };
+  const rawTitle = body?.title;
+  const hasTitle = typeof rawTitle === "string";
+  const title = hasTitle ? rawTitle.trim() : "";
+  let contactExtendedMode: boolean | undefined;
+  if (body.contactExtendedMode !== undefined) {
+    if (typeof body.contactExtendedMode !== "boolean") {
+      res.status(400).json({ error: "contactExtendedMode must be boolean" });
+      return;
+    }
+    contactExtendedMode = body.contactExtendedMode;
+  }
+
+  if (!hasTitle && contactExtendedMode === undefined) {
+    res.status(400).json({ error: "title or contactExtendedMode required" });
     return;
   }
-  const title = rawTitle.trim();
-  if (!title) {
-    res.status(400).json({ error: "title required" });
-    return;
-  }
-  if (title.length > 140) {
-    res.status(400).json({ error: "title too long" });
-    return;
+  if (hasTitle) {
+    if (!title) {
+      res.status(400).json({ error: "title required" });
+      return;
+    }
+    if (title.length > 140) {
+      res.status(400).json({ error: "title too long" });
+      return;
+    }
   }
 
   const [conv] = await db
@@ -180,9 +195,13 @@ router.put("/conversations/:id", async (req, res) => {
     return;
   }
 
+  const patch: { title?: string; contactExtendedMode?: boolean } = {};
+  if (hasTitle) patch.title = title;
+  if (contactExtendedMode !== undefined) patch.contactExtendedMode = contactExtendedMode;
+
   const [updated] = await db
     .update(conversations)
-    .set({ title })
+    .set(patch)
     .where(eq(conversations.id, id))
     .returning();
 
@@ -214,9 +233,10 @@ router.get("/conversations/:id/messages", async (req, res) => {
 
 router.post("/conversations/:id/messages", async (req, res) => {
   const id = Number(req.params.id);
-  const { content, contactId } = req.body as {
+  const { content, contactId, contactExtendedMode: bodyContactExtendedMode } = req.body as {
     content?: string;
     contactId?: number;
+    contactExtendedMode?: boolean;
   };
   const sessionId = requireSessionId(req, res);
   if (!sessionId) return;
@@ -265,6 +285,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
+  const initialContactId = conv.contactId ?? null;
+
   let effectiveContactId: number | null = conv.contactId ?? null;
 
   // Keep conversation's contact binding in sync with explicit user selection.
@@ -299,9 +321,30 @@ router.post("/conversations/:id/messages", async (req, res) => {
       effectiveContactId = null;
       await db
         .update(conversations)
-        .set({ contactId: null })
+        .set({ contactId: null, contactExtendedMode: false })
         .where(eq(conversations.id, id));
     }
+  }
+
+  const contactSwitched =
+    initialContactId != null &&
+    effectiveContactId != null &&
+    effectiveContactId !== initialContactId;
+
+  let nextExtended = Boolean(conv.contactExtendedMode);
+  if (!effectiveContactId) {
+    nextExtended = false;
+  } else if (typeof bodyContactExtendedMode === "boolean") {
+    nextExtended = bodyContactExtendedMode;
+  } else if (contactSwitched) {
+    nextExtended = false;
+  }
+
+  if (nextExtended !== Boolean(conv.contactExtendedMode)) {
+    await db
+      .update(conversations)
+      .set({ contactExtendedMode: nextExtended })
+      .where(eq(conversations.id, id));
   }
 
   let [owner] = await db
@@ -329,7 +372,12 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .limit(1);
   }
 
-  const requestCost = normalizedContent.length >= 1200 ? 2 : 1;
+  const baseCost = normalizedContent.length >= 1200 ? 2 : 1;
+  /** Расширение по контакту: ×2 от базы, но длинное+расширение = 3 (не 4), чтобы не штрафовать за оба фактора сразу. */
+  let requestCost = baseCost;
+  if (effectiveContactId && nextExtended) {
+    requestCost = baseCost >= 2 ? 3 : 2;
+  }
   const remainingFree = getRemainingFreeRequests(owner?.requestsUsed ?? 0);
   const isUnlimited = isUnlimitedUser(owner?.email);
 
@@ -388,7 +436,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .limit(20),
   ]);
 
-  const systemPrompt = safeBuildSystemPrompt(userProfile, contactProfile, userMemories);
+  const systemPrompt = safeBuildSystemPrompt(userProfile, contactProfile, userMemories, nextExtended);
 
   const chatMessages = history.map((m) => ({
     role: m.role as "user" | "assistant",
@@ -623,9 +671,10 @@ function safeBuildSystemPrompt(
   user: UserRow,
   contact: ContactRow = null,
   memories: MemoryRow[] = [],
+  contactExtendedMode = false,
 ): string {
   try {
-    return buildSystemPrompt(user, contact, memories);
+    return buildSystemPrompt(user, contact, memories, contactExtendedMode);
   } catch (err) {
     logger.error({ err }, "buildSystemPrompt failed; using fallback system prompt");
     const name = user?.name || "гость";
@@ -700,7 +749,79 @@ function calcUserData(user: UserRow) {
   return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection };
 }
 
-function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: MemoryRow[] = []): string {
+/** Натал + транзиты к наталу (база); при extended — соляр, прогрессии, лунар, солнечная дуга, даты транзитов. */
+function calcContactChartSections(contact: NonNullable<ContactRow>, extended: boolean): { base: string; extra: string } {
+  let natalSection = "";
+  let ephemerisSection = "";
+  let solarRetSection = "";
+  let progressSection = "";
+  let lunarRetSection = "";
+  let solarArcSection = "";
+  let transitPerfSection = "";
+  let natalChart = null;
+
+  if (contact.birthDate) {
+    try {
+      const lat = contact.birthLat ? Number(contact.birthLat) : null;
+      const lon = contact.birthLng ? Number(contact.birthLng) : null;
+      natalChart = calcNatalChart(contact.birthDate, contact.birthTime || null, lat, lon);
+      natalSection = `\n${formatNatalForPrompt(natalChart)}\n`;
+
+      if (extended) {
+        try {
+          const sr = calcSolarReturn(contact.birthDate, contact.birthTime || null, lat, lon, new Date().getFullYear());
+          solarRetSection = `\n${formatSolarReturnForPrompt(sr)}\n`;
+        } catch { /* no SR */ }
+
+        try {
+          const birthYear = parseInt(contact.birthDate.split("-")[0], 10);
+          const age = new Date().getFullYear() - birthYear;
+          const prog = calcProgressions(contact.birthDate, contact.birthTime || null, lat, lon, age);
+          progressSection = `\n${formatProgressionsForPrompt(prog)}\n`;
+        } catch { /* no progressions */ }
+
+        try {
+          const natalMoon = natalChart.planets.find((p) => p.planet === "Луна");
+          if (natalMoon) {
+            const lr = calcLunarReturn(natalMoon.longitude, new Date());
+            lunarRetSection = `\n${formatLunarReturnForPrompt(lr)}\n`;
+          }
+        } catch { /* no lunar return */ }
+
+        try {
+          const sa = calcSolarArcDirections(contact.birthDate, contact.birthTime || null, lat, lon);
+          solarArcSection = `\n${formatSolarArcForPrompt(sa)}\n`;
+        } catch { /* no solar arc */ }
+      }
+    } catch {
+      natalSection = "";
+    }
+  }
+
+  try {
+    const ephem = calcEphemeris(natalChart ?? undefined);
+    ephemerisSection = `\n${formatEphemerisForPrompt(ephem, natalChart ?? undefined)}\n`;
+
+    if (extended && natalChart && ephem.transitAspects && ephem.transitAspects.length > 0) {
+      try {
+        const withDates = calcTransitPerfections(ephem.transitAspects, natalChart);
+        const formatted = formatTransitPerfectionsForPrompt(withDates);
+        if (formatted) transitPerfSection = `\n${formatted}\n`;
+      } catch { /* no perfection dates */ }
+    }
+  } catch { /* ephemeris fallback */ }
+
+  const base = `${natalSection}${ephemerisSection}`;
+  const extra = `${solarRetSection}${progressSection}${lunarRetSection}${solarArcSection}${transitPerfSection}`;
+  return { base, extra };
+}
+
+function buildSystemPrompt(
+  user: UserRow,
+  contact: ContactRow = null,
+  memories: MemoryRow[] = [],
+  contactExtendedMode = false,
+): string {
   const depth = user?.tonePreferredDepth || "deep";
   const style = user?.tonePreferredStyle || "mystical";
   const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection } = calcUserData(user);
@@ -730,6 +851,20 @@ function buildSystemPrompt(user: UserRow, contact: ContactRow = null, memories: 
 ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRetSection}${solarArcSection}${transitPerfSection}${synastrySection}`
     : "Профиль пользователя ещё не заполнен — отвечай тепло и предложи пройти настройку при возможности.\n";
 
+  let contactAstroSection = "";
+  if (contact?.birthDate) {
+    try {
+      const { base, extra } = calcContactChartSections(contact, contactExtendedMode);
+      const labelBase = `АСТРОЛОГИЯ ВЫБРАННОГО ЧЕЛОВЕКА — база (натал и актуальные транзиты к его наталу):\n`;
+      contactAstroSection = `${labelBase}${base}`;
+      if (contactExtendedMode && extra.trim()) {
+        contactAstroSection += `\nАСТРОЛОГИЯ ВЫБРАННОГО ЧЕЛОВЕКА — расширение (тема года, прогрессии, лунар, солнечная дуга, даты точных транзитов):\n${extra}`;
+      }
+    } catch {
+      contactAstroSection = "";
+    }
+  }
+
   const contactProfileSection = contact
     ? `Профиль выбранного человека для разбора:
 — Имя: ${contact.name || "не указано"}
@@ -737,11 +872,13 @@ ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRet
 — Дата рождения: ${contact.birthDate || "не указана"}
 — Время рождения: ${contact.birthTime || "не указано"}
 — Место рождения: ${contact.birthPlace || "не указано"}
-`
+${contactAstroSection ? `\n${contactAstroSection}\n` : ""}`
     : "";
 
   const synastryModeNote = contact
-    ? `\nРЕЖИМ СИНАСТРИИ: Сейчас активна пара ${user?.name || "Пользователь"} + ${contact.name}. Отвечай прежде всего с точки зрения их совместимости и взаимодействия.\n`
+    ? contactExtendedMode
+      ? `\nРЕЖИМ КОНТАКТА (расширенный): Активна пара ${user?.name || "Пользователь"} + ${contact.name}. У тебя есть натал и транзиты пользователя, натал и транзиты контакта (и расширенные слои по контакту), плюс синастрия. Отвечай на вопросы «что с ним сейчас», «как он», «что между нами», а также на прогноз и сценарий отношений — опираясь на переданные расчёты; не выдумывай позиции планет.\n`
+      : `\nРЕЖИМ КОНТАКТА (база): Активна пара ${user?.name || "Пользователь"} + ${contact.name}. У тебя есть полный расчёт карты пользователя, натал контакта + транзиты к наталу контакта, и синастрия. Отвечай на «что с ним сейчас», «в каком он состоянии», «что между нами» — без долгосрочного прогноза и без соляра/прогрессий по контакту, пока не передан расширенный слой.\n`
     : "";
 
   const toneInstructions = `

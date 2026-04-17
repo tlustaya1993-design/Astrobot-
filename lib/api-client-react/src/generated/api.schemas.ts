@@ -64,6 +64,8 @@ export interface OpenaiConversation {
   sessionId?: string;
   title: string;
   contactId?: number | null;
+  /** Расширенный разбор по контакту — каждое сообщение считается как ×2 запроса. */
+  contactExtendedMode?: boolean;
   createdAt: string;
   contactName?: string | null;
   contactRelation?: string | null;
@@ -83,17 +85,23 @@ export interface CreateOpenaiConversationBody {
 }
 
 export interface UpdateOpenaiConversationBody {
-  title: string;
+  title?: string;
+  contactExtendedMode?: boolean;
 }
 
 export interface SendOpenaiMessageBody {
   content: string;
   sessionId: string;
+  contactId?: number | null;
+  contactExtendedMode?: boolean;
 }
 
 export interface OpenaiConversationWithMessages {
   id: number;
+  sessionId?: string;
   title: string;
+  contactId?: number | null;
+  contactExtendedMode?: boolean;
   createdAt: string;
   messages: OpenaiMessage[];
 }

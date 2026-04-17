@@ -142,7 +142,8 @@ export const UpdateOpenaiConversationParams = zod.object({
 });
 
 export const UpdateOpenaiConversationBody = zod.object({
-  title: zod.string(),
+  title: zod.string().optional(),
+  contactExtendedMode: zod.boolean().optional(),
 });
 
 export const UpdateOpenaiConversationResponse = zod.object({
@@ -150,6 +151,7 @@ export const UpdateOpenaiConversationResponse = zod.object({
   sessionId: zod.string().optional(),
   title: zod.string(),
   contactId: zod.number().nullish(),
+  contactExtendedMode: zod.boolean().optional(),
   createdAt: zod.date(),
   contactName: zod.string().nullish(),
   contactRelation: zod.string().nullish(),
