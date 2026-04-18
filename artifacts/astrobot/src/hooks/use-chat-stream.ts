@@ -57,10 +57,14 @@ export function useChatStream(conversationId?: number) {
         queryClient.invalidateQueries({ queryKey: getListOpenaiConversationsQueryKey() });
       }
 
-      const body: Record<string, unknown> = { content, sessionId };
+      // contactExtendedMode всегда передаём boolean — иначе сервер не узнает о чекбоксе, если contactId не пришёл в этом запросе.
+      const body: Record<string, unknown> = {
+        content,
+        sessionId,
+        contactExtendedMode: Boolean(contactExtendedMode),
+      };
       if (contactId != null) {
         body.contactId = contactId;
-        body.contactExtendedMode = Boolean(contactExtendedMode);
       }
 
       const res = await fetch(`/api/openai/conversations/${targetId}/messages`, {
