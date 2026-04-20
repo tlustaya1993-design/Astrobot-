@@ -42,8 +42,9 @@ async function makeRequest(
 ): Promise<RequestResult> {
   const start = Date.now();
   try {
-    // Если Claude передал полный URL — используем как есть, иначе добавляем BASE_URL
-    const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+    // Строим корректный URL через конструктор — работает во всех версиях Node
+    const cleanPath = path.startsWith("http") ? path : (path.startsWith("/") ? path : `/${path}`);
+    const url = cleanPath.startsWith("http") ? cleanPath : new URL(cleanPath, BASE_URL).toString();
     const res = await fetch(url, {
       method,
       headers: {
