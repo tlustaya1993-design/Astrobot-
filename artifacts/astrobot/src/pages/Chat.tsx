@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { Send, Sparkles, ChevronLeft, Menu } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -29,6 +29,41 @@ const SUGGESTED_PROMPTS = [
   "Какой период сейчас в моей жизни?",
   "Разбери мою Часть Удачи"
 ];
+
+function topWithinScrollParent(el: HTMLElement, scrollParent: HTMLElement): number {
+  const pr = scrollParent.getBoundingClientRect();
+  const er = el.getBoundingClientRect();
+  return er.top - pr.top + scrollParent.scrollTop;
+}
+
+/** После отправки: целиком последнее сообщение пользователя + начало ответа ассистента; не вызывать на каждый чанк стрима. */
+function alignScrollAfterUserSend(
+  container: HTMLElement,
+  userEl: HTMLElement,
+  assistantEl: HTMLElement,
+) {
+  const margin = 10;
+  const assistantPeek = 80;
+
+  const uTop = topWithinScrollParent(userEl, container);
+  const uBottom = uTop + userEl.offsetHeight;
+  const aTop = topWithinScrollParent(assistantEl, container);
+  const ch = container.clientHeight;
+  const maxScroll = Math.max(0, container.scrollHeight - ch);
+
+  let scrollTop = uBottom - ch + assistantPeek;
+  scrollTop = Math.max(scrollTop, uBottom - ch + margin);
+  scrollTop = Math.min(scrollTop, uTop - margin);
+  scrollTop = Math.max(0, Math.min(maxScroll, scrollTop));
+
+  const bottom = scrollTop + ch;
+  if (aTop + 8 > bottom) {
+    scrollTop = Math.min(maxScroll, aTop - ch + margin + assistantPeek);
+    scrollTop = Math.max(0, scrollTop);
+  }
+
+  container.scrollTop = scrollTop;
+}
 
 export default function Chat() {
   const [match, params] = useRoute('/chat/:id');
@@ -61,6 +96,8 @@ export default function Chat() {
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const pendingScrollAfterSendRef = useRef(false);
 
   const resizeComposer = () => {
     const el = inputRef.current;
@@ -146,6 +183,28 @@ export default function Chat() {
   useEffect(() => {
     resizeComposer();
   }, [inputValue]);
+
+  useLayoutEffect(() => {
+    if (!pendingScrollAfterSendRef.current) return;
+    const container = messagesScrollRef.current;
+    if (!container) {
+      pendingScrollAfterSendRef.current = false;
+      return;
+    }
+    const rows = container.querySelectorAll('[data-chat-row]');
+    if (rows.length < 2) {
+      pendingScrollAfterSendRef.current = false;
+      return;
+    }
+    const last = rows[rows.length - 1] as HTMLElement;
+    const prev = rows[rows.length - 2] as HTMLElement;
+    if (prev.dataset.chatRow !== 'user' || last.dataset.chatRow !== 'assistant') {
+      pendingScrollAfterSendRef.current = false;
+      return;
+    }
+    pendingScrollAfterSendRef.current = false;
+    alignScrollAfterUserSend(container, prev, last);
+  }, [localMessages.length]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -277,9 +336,14 @@ export default function Chat() {
     const text = inputValue.trim();
     setInputValue('');
     requestAnimationFrame(() => resizeComposer());
-    const newConvId = await sendMessage(text, selectedContactId, contactExtendedMode);
-    if (!conversationId && newConvId) {
-      setLocation(`/chat/${newConvId}`, { replace: true });
+    pendingScrollAfterSendRef.current = true;
+    try {
+      const newConvId = await sendMessage(text, selectedContactId, contactExtendedMode);
+      if (!conversationId && newConvId) {
+        setLocation(`/chat/${newConvId}`, { replace: true });
+      }
+    } catch {
+      pendingScrollAfterSendRef.current = false;
     }
   };
 
@@ -289,7 +353,7 @@ export default function Chat() {
     <>
       <AppLayout>
         <div
-          className="flex-1 flex flex-col min-h-0"
+          className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
@@ -344,7 +408,10 @@ export default function Chat() {
           />
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+          <div
+            ref={messagesScrollRef}
+            className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-4"
+          >
             {isLoading && (
               <div className="flex justify-center py-10">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -395,6 +462,7 @@ export default function Chat() {
             {displayMessages.map((msg, idx) => (
               <motion.div
                 key={msg.id || idx}
+                data-chat-row={msg.role}
                 initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -410,10 +478,10 @@ export default function Chat() {
                     />
                   </div>
                 )}
-                <div className={`max-w-[82%] rounded-2xl p-4 shadow-lg ${
+                <div className={`max-w-[82%] min-w-0 rounded-2xl p-4 shadow-lg ${
                   msg.role === 'user'
-                    ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm'
-                    : 'bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none'
+                    ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
+                    : 'bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
                 }`}>
                   {msg.role === 'assistant' ? (
                     msg.content?.trim() ? (
