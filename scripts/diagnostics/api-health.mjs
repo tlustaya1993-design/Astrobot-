@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Проверка GET /healthz. Короткое имя файла — удобно вводить в PowerShell в одну строку.
+ * Проверка GET /api/healthz (как в Railway и в Express: app.use("/api", router)).
  *
  *   node scripts/diagnostics/api-health.mjs
  *   node scripts/diagnostics/api-health.mjs https://astroai.site
@@ -23,7 +23,7 @@ async function main() {
   console.log("Скрипт запущен. Если «тишина» — идёт сетевой запрос (до 20 сек).\n");
 
   const base = normalizeBase(raw);
-  const healthUrl = new URL("/healthz", `${base}/`);
+  const healthUrl = new URL("/api/healthz", `${base}/`);
 
   if (/sitenode/i.test(healthUrl.hostname)) {
     console.error(
@@ -44,7 +44,7 @@ async function main() {
     console.log(`HTTP ${res.status}`);
     console.log(text.length > 300 ? `${text.slice(0, 300)}…` : text);
     if (!res.ok) {
-      console.error("\n/healthz вернул не OK — смотрите логи сервера и переменные окружения.");
+      console.error("\n/api/healthz вернул не OK — смотрите логи сервера и переменные окружения.");
       process.exit(1);
     }
     console.log("\nОк: до API достучались.");
