@@ -142,6 +142,7 @@ flowchart LR
 - **`calcUserData(user)`** — натал пользователя, эфемериды, соляр, прогрессии, лунар, солнечная дуга, даты транзитов и т.д.
 - При выбранном **контакте**: **`calcContactChartSections`**, синастрия (`calcSynastry`), тексты режимов база/расширение в `buildSystemPrompt`.
 - **Память:** последние записи из `user_memories` попадают в промпт; после ответа — фоновое извлечение фактов через **Haiku** (`ANTHROPIC_MEMORY_MODEL`).
+- **Финал ответа:** в `buildSystemPrompt` заданы правила «хвоста» — только астрологический мостик (планета/дом/транзит и т.д.), без коучинговых опросников («застой/смена/конфликт» и т.п.); иначе лучше закончить без вопроса.
 - **Стриминг:** `text/event-stream`, SSE chunks.
 - **Модели:**
   - Если задан ключ Anthropic (`ANTHROPIC_API_KEY` или `AI_INTEGRATIONS_ANTHROPIC_API_KEY`) — чат идёт в **Claude** (`ANTHROPIC_CHAT_MODEL`, по умолчанию `claude-sonnet-4-6`).
