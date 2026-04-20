@@ -50,6 +50,9 @@ async function makeRequest(
       headers: {
         "content-type": "application/json",
         "x-session-id": sessionId,
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "origin": BASE_URL,
+        "referer": BASE_URL + "/",
       },
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -210,6 +213,16 @@ async function runAgent(): Promise<void> {
 
   console.log(`🤖 QA Simulator Agent запущен`);
   console.log(`🎯 Цель: ${BASE_URL}`);
+
+  // Проверка связи перед запуском агента
+  process.stdout.write("🔌 Проверяю связь с сервером... ");
+  const probe = await makeRequest("probe", "GET", "/healthz");
+  if (probe.error || probe.status === 0) {
+    console.log(`\n❌ Сервер недоступен: ${probe.error || "нет ответа"}`);
+    console.log(`   URL: ${new URL("/healthz", BASE_URL).toString()}`);
+    process.exit(1);
+  }
+  console.log(`✅ ${probe.status} (${probe.durationMs}ms)`);
   console.log(`⏳ Агент тестирует пути пользователей...\n`);
 
   const messages: Anthropic.MessageParam[] = [
