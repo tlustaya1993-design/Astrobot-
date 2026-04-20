@@ -12,30 +12,6 @@ type PaywallState = {
   wantsAuth?: boolean;
 };
 
-/** Браузер часто даёт «Load failed» / «Failed to fetch» без деталей — показываем человеку понятный текст. */
-function userFacingChatError(error: unknown): string {
-  const raw =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
-  const lower = raw.toLowerCase();
-  if (
-    raw === 'Load failed' ||
-    lower.includes('failed to fetch') ||
-    lower.includes('networkerror') ||
-    lower.includes('network request failed') ||
-    lower.includes('load failed')
-  ) {
-    return 'сеть: не удалось связаться с сервером. Проверьте интернет, обновите страницу и попробуйте снова. Если открываете приложение с другого домена или без бэкенда — запрос к API может быть недоступен.';
-  }
-  if (raw === 'The user aborted a request.' || lower.includes('abort')) {
-    return 'запрос прерван. Попробуйте отправить сообщение снова.';
-  }
-  return raw.trim() || 'Сервис временно недоступен. Попробуйте чуть позже.';
-}
-
 export function useChatStream(conversationId?: number) {
   const [localMessages, setLocalMessages] = useState<OpenaiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -205,7 +181,10 @@ export function useChatStream(conversationId?: number) {
 
     } catch (error) {
       console.error('Chat error:', error);
-      const message = userFacingChatError(error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Сервис временно недоступен. Попробуйте чуть позже.';
       const errorCode = typeof (error as { code?: unknown })?.code === 'number'
         ? (error as { code: number }).code
         : undefined;
