@@ -25,6 +25,13 @@ async function main() {
   const base = normalizeBase(raw);
   const healthUrl = new URL("/healthz", `${base}/`);
 
+  if (/sitenode/i.test(healthUrl.hostname)) {
+    console.error(
+      "Похоже на опечатку в домене: «…sitenode» вместо «…site». Правильно: https://astroai.site\n" +
+        "(Часто к адресу прилипает слово node из команды — вводите URL вручную или копируйте только https://astroai.site)\n",
+    );
+  }
+
   console.log(`URL: ${healthUrl.href}`);
   console.log("Запрос…\n");
 
