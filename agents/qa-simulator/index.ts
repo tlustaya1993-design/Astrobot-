@@ -9,6 +9,8 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import * as https from "node:https";
+import * as http from "node:http";
 
 const BASE_URL = process.env.BASE_URL || "http://127.0.0.1:3000";
 const API_KEY = process.env.ANTHROPIC_API_KEY || process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY || "";
@@ -34,6 +36,32 @@ type RequestResult = {
 // ─── HTTP-инструмент ─────────────────────────────────────────────────────────
 // Это тот самый "инструмент" агента — Claude вызывает его, чтобы ходить по API
 
+function httpRequest(urlStr: string, method: string, headers: Record<string, string>, bodyStr?: string): Promise<{ status: number; headers: Record<string, string>; body: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(urlStr);
+    const lib = parsed.protocol === "https:" ? https : http;
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
+      path: parsed.pathname + parsed.search,
+      method,
+      headers: { ...headers, ...(bodyStr ? { "content-length": Buffer.byteLength(bodyStr).toString() } : {}) },
+    };
+    const req = lib.request(options, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () => resolve({
+        status: res.statusCode ?? 0,
+        headers: res.headers as Record<string, string>,
+        body: Buffer.concat(chunks).toString(),
+      }));
+    });
+    req.on("error", reject);
+    if (bodyStr) req.write(bodyStr);
+    req.end();
+  });
+}
+
 async function makeRequest(
   sessionId: string,
   method: string,
@@ -42,46 +70,26 @@ async function makeRequest(
 ): Promise<RequestResult> {
   const start = Date.now();
   try {
-    // Строим корректный URL через конструктор — работает во всех версиях Node
     const cleanPath = path.startsWith("http") ? path : (path.startsWith("/") ? path : `/${path}`);
-    const url = cleanPath.startsWith("http") ? cleanPath : new URL(cleanPath, BASE_URL).toString();
-    const res = await fetch(url, {
-      method,
-      headers: {
-        "content-type": "application/json",
-        "x-session-id": sessionId,
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "origin": BASE_URL,
-        "referer": BASE_URL + "/",
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const url = cleanPath.startsWith("http") ? cleanPath : `${BASE_URL}${cleanPath}`;
+    const bodyStr = body ? JSON.stringify(body) : undefined;
+    const res = await httpRequest(url, method, {
+      "content-type": "application/json",
+      "x-session-id": sessionId,
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0",
+    }, bodyStr);
 
-    const contentType = res.headers.get("content-type") || "";
     let responseBody: unknown;
-
+    const contentType = res.headers["content-type"] ?? "";
     if (contentType.includes("text/event-stream")) {
-      // SSE — читаем первые 2000 символов потока
-      const text = await res.text();
-      responseBody = { type: "sse_stream", preview: text.slice(0, 2000), length: text.length };
-    } else if (contentType.includes("application/json")) {
-      responseBody = await res.json();
+      responseBody = { type: "sse_stream", preview: res.body.slice(0, 2000), length: res.body.length };
     } else {
-      responseBody = { type: "text", content: await res.text() };
+      try { responseBody = JSON.parse(res.body); } catch { responseBody = { type: "text", content: res.body }; }
     }
 
-    const headers: Record<string, string> = {};
-    res.headers.forEach((v, k) => { headers[k] = v; });
-
-    return { status: res.status, body: responseBody, headers, durationMs: Date.now() - start };
+    return { status: res.status, body: responseBody, headers: res.headers, durationMs: Date.now() - start };
   } catch (err) {
-    return {
-      status: 0,
-      body: null,
-      headers: {},
-      durationMs: Date.now() - start,
-      error: String(err),
-    };
+    return { status: 0, body: null, headers: {}, durationMs: Date.now() - start, error: String(err) };
   }
 }
 
