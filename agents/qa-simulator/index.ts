@@ -42,7 +42,9 @@ async function makeRequest(
 ): Promise<RequestResult> {
   const start = Date.now();
   try {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    // Если Claude передал полный URL — используем как есть, иначе добавляем BASE_URL
+    const url = path.startsWith("http") ? path : `${BASE_URL}${path}`;
+    const res = await fetch(url, {
       method,
       headers: {
         "content-type": "application/json",
