@@ -23,14 +23,20 @@ import { getToken } from '@/lib/session';
 
 const POST_PAYMENT_REGISTER_NUDGE_KEY = 'astrobot_post_payment_register_nudge';
 
-/** Короткая вибрация при отправке (Android и часть устройств); уважаем prefers-reduced-motion. */
-function tryLightHaptic() {
+const HAPTIC_COOLDOWN_MS = 140;
+
+/**
+ * Тактильный отклик при отправке: работает только там, где браузер реализует Vibration API
+ * (чаще всего Chrome на Android). iOS Safari обычно не вибрирует для веб-страниц.
+ */
+function trySendHaptic(lastAtRef: React.MutableRefObject<number>) {
   try {
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      return;
-    }
+    const now = Date.now();
+    if (now - lastAtRef.current < HAPTIC_COOLDOWN_MS) return;
+    lastAtRef.current = now;
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(12);
+      // Два коротких импульса заметнее, чем один на 12 мс.
+      navigator.vibrate([22, 45, 28]);
     }
   } catch {
     /* ignore */
@@ -198,6 +204,7 @@ export default function Chat() {
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const pendingScrollAfterSendRef = useRef(false);
   const initialOpenScrolledConversationRef = useRef<number | null>(null);
+  const lastSendHapticAtRef = useRef(0);
 
   const resizeComposer = () => {
     const el = inputRef.current;
@@ -466,7 +473,7 @@ export default function Chat() {
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputValue.trim() || isStreaming) return;
-    tryLightHaptic();
+    trySendHaptic(lastSendHapticAtRef);
     const text = inputValue.trim();
     setInputValue('');
     requestAnimationFrame(() => resizeComposer());
@@ -872,6 +879,10 @@ export default function Chat() {
               <motion.button
                 type="submit"
                 disabled={!inputValue.trim() || isStreaming}
+                onPointerDown={() => {
+                  if (isStreaming || !inputValue.trim()) return;
+                  trySendHaptic(lastSendHapticAtRef);
+                }}
                 whileTap={reduceMotion ? undefined : { scale: 0.9 }}
                 whileHover={reduceMotion ? undefined : { scale: 1.06 }}
                 transition={{ type: 'spring', stiffness: 480, damping: 22 }}
