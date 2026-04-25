@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, MessageSquare, Trash2, CalendarDays, LogIn, Pencil, Check } from 'lucide-react';
 import { format } from 'date-fns';
@@ -36,13 +36,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     request: { headers: getAuthHeaders() },
     query: { enabled: open },
   });
-  const sortedConversations = useMemo(
-    () => [...(conversations ?? [])].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    ),
-    [conversations],
-  );
-  const hasConversations = sortedConversations.length > 0;
+  const hasConversations = (conversations?.length ?? 0) > 0;
 
   const deleteMutation = useDeleteOpenaiConversation({
     request: { headers: getAuthHeaders() },
@@ -178,14 +172,14 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                     <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />
                   ))}
                 </div>
-              ) : !sortedConversations.length ? (
+              ) : !conversations?.length ? (
                 <div className="flex flex-col items-center justify-center h-48 px-4 text-center">
                   <CalendarDays className="w-8 h-8 text-muted-foreground mb-3" />
                   <p className="text-sm text-muted-foreground">Диалогов пока нет</p>
                 </div>
               ) : (
                 <div className="space-y-0.5 px-2 pt-1">
-                  {sortedConversations.map((conv) => {
+                  {conversations.map((conv) => {
                     const isEditing = editingConversationId === conv.id;
                     return (
                     <button

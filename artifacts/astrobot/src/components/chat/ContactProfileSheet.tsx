@@ -61,6 +61,11 @@ function initials(name: string): string {
     .slice(0, 2);
 }
 
+function fallbackChipGradient(id: number): string {
+  const colors = ['from-violet-500 to-purple-700', 'from-rose-500 to-pink-700', 'from-sky-500 to-blue-700', 'from-emerald-500 to-teal-700', 'from-amber-500 to-orange-700'];
+  return colors[id % colors.length];
+}
+
 interface ContactProfileSheetProps {
   open: boolean;
   contact: Contact | null;
@@ -302,7 +307,15 @@ export default function ContactProfileSheet({
                 <div className="px-5 pb-8 space-y-5 max-h-[80vh] overflow-y-auto">
                   <div className="flex items-center gap-4">
                     <div className="relative shrink-0">
-                      <IllustratedAvatar config={avatarPreview} size={80} />
+                      {contact.avatarConfig ? (
+                        <IllustratedAvatar config={avatarPreview} size={80} />
+                      ) : (
+                        <div className={`w-20 h-20 rounded-full overflow-hidden border border-primary/30 bg-gradient-to-br ${fallbackChipGradient(contact.id)}`}>
+                          <div className="w-full h-full flex items-center justify-center text-xl text-white font-bold">
+                            {initials(contact.name)}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-lg font-semibold font-display truncate">{contact.name}</p>

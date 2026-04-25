@@ -66,6 +66,7 @@ async function rollbackRequestsBalance(sessionId: string, balanceBeforeCharge: n
 router.get("/conversations", async (req, res) => {
   const sessionId = requireSessionId(req, res);
   if (!sessionId) return;
+  const lastActivityExpr = sql`coalesce(max(${messages.createdAt}), ${conversations.createdAt})`;
   const rows = await db
     .select({
       id: conversations.id,
@@ -74,14 +75,27 @@ router.get("/conversations", async (req, res) => {
       contactId: conversations.contactId,
       contactExtendedMode: conversations.contactExtendedMode,
       createdAt: conversations.createdAt,
+      lastMessageAt: lastActivityExpr,
       contactName: contactsTable.name,
       contactRelation: contactsTable.relation,
       contactAvatarJson: contactsTable.avatarJson,
     })
     .from(conversations)
+    .leftJoin(messages, eq(messages.conversationId, conversations.id))
     .leftJoin(contactsTable, eq(conversations.contactId, contactsTable.id))
     .where(eq(conversations.sessionId, sessionId))
-    .orderBy(desc(conversations.createdAt));
+    .groupBy(
+      conversations.id,
+      conversations.sessionId,
+      conversations.title,
+      conversations.contactId,
+      conversations.contactExtendedMode,
+      conversations.createdAt,
+      contactsTable.name,
+      contactsTable.relation,
+      contactsTable.avatarJson,
+    )
+    .orderBy(desc(lastActivityExpr), desc(conversations.createdAt));
   res.json(
     rows.map((r) => ({
       id: r.id,
@@ -90,6 +104,7 @@ router.get("/conversations", async (req, res) => {
       contactId: r.contactId ?? null,
       contactExtendedMode: Boolean(r.contactExtendedMode),
       createdAt: r.createdAt,
+      lastMessageAt: r.lastMessageAt ?? r.createdAt,
       contactName: r.contactName ?? null,
       contactRelation: r.contactRelation ?? null,
       contactAvatarConfig: parseAvatarJson(r.contactAvatarJson ?? null),
