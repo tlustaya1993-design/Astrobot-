@@ -45,14 +45,14 @@ export default function PeoplePanel({ selectedContactId, onSelect, contactTier =
         return;
       }
       toast({
-        title: 'Не удалось загрузить контакты',
-        description: 'Попробуйте обновить страницу.',
+        title: 'Контакты не подгрузились',
+        description: 'Обновите страницу — так мы попробуем загрузить список ещё раз.',
       });
     } catch (err) {
       console.error('fetchContacts failed', err);
       toast({
-        title: 'Проблема с сетью',
-        description: 'Не удалось загрузить контакты. Попробуйте позже.',
+        title: 'Сеть подвела',
+        description: 'Не смогли загрузить контакты. Когда связь вернётся — обновите страницу.',
       });
     }
   }, []);
@@ -69,8 +69,8 @@ export default function PeoplePanel({ selectedContactId, onSelect, contactTier =
     } catch (err) {
       console.error('delete contact failed', err);
       toast({
-        title: 'Не удалось удалить контакт',
-        description: 'Попробуйте ещё раз.',
+        title: 'Контакт не удалился',
+        description: 'Попробуйте ещё раз через пару секунд.',
       });
     }
     setDeleting(null);

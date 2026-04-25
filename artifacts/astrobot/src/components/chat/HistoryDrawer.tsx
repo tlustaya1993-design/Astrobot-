@@ -88,8 +88,8 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     } catch (err) {
       console.error('update conversation title failed', err);
       toast({
-        title: 'Не удалось переименовать чат',
-        description: 'Попробуйте ещё раз.',
+        title: 'Имя чата не сохранилось',
+        description: 'Проверьте связь и попробуйте ещё раз — иногда мешает короткий сбой сети.',
       });
       // keep edit mode so user can retry
     }
@@ -193,7 +193,10 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
               ) : !conversations?.length ? (
                 <div className="flex flex-col items-center justify-center h-48 px-4 text-center">
                   <CalendarDays className="w-8 h-8 text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground">Диалогов пока нет</p>
+                  <p className="text-sm font-medium text-foreground/90">Пока без диалогов</p>
+                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                    Начните с кнопки «Новый диалог» — первый вопрос станет названием чата.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-0.5 px-2 pt-1">

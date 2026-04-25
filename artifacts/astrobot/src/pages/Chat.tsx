@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { Send, Sparkles, ChevronLeft, Menu, Copy, CircleHelp, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import {
@@ -22,6 +22,20 @@ import { toast } from '@/hooks/use-toast';
 import { getToken } from '@/lib/session';
 
 const POST_PAYMENT_REGISTER_NUDGE_KEY = 'astrobot_post_payment_register_nudge';
+
+/** Короткая вибрация при отправке (Android и часть устройств); уважаем prefers-reduced-motion. */
+function tryLightHaptic() {
+  try {
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(12);
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 type QuickPrompt = {
   label: string;
@@ -143,6 +157,7 @@ function alignScrollAfterUserSend(
 }
 
 export default function Chat() {
+  const reduceMotion = useReducedMotion();
   const [match, params] = useRoute('/chat/:id');
   const [, setLocation] = useLocation();
   const { isLoggedIn, openAuthModal, logout } = useAuth();
@@ -451,6 +466,7 @@ export default function Chat() {
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputValue.trim() || isStreaming) return;
+    tryLightHaptic();
     const text = inputValue.trim();
     setInputValue('');
     requestAnimationFrame(() => resizeComposer());
@@ -471,7 +487,10 @@ export default function Chat() {
       await navigator.clipboard.writeText(text);
       toast({ title: 'Скопировано', description: 'Текст добавлен в буфер обмена.' });
     } catch {
-      toast({ title: 'Не удалось скопировать', description: 'Проверьте доступ к буферу обмена.' });
+      toast({
+        title: 'Не вышло скопировать',
+        description: 'Разрешите доступ к буферу обмена в браузере или скопируйте текст вручную.',
+      });
     }
   };
 
@@ -623,13 +642,17 @@ export default function Chat() {
                     ? contactPromptSet
                     : selfPrompts()
                   ).map((prompt, i) => (
-                    <button
+                    <motion.button
                       key={i}
+                      type="button"
                       onClick={() => setInputValue(prompt.prompt)}
-                      className="w-auto px-4 py-2.5 rounded-2xl text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-all text-center leading-snug"
+                      whileTap={reduceMotion ? undefined : { scale: 0.96 }}
+                      whileHover={reduceMotion ? undefined : { scale: 1.03 }}
+                      transition={{ type: 'spring', stiffness: 520, damping: 28 }}
+                      className="w-auto px-4 py-2.5 rounded-2xl text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-colors text-center leading-snug"
                     >
                       {prompt.label}
-                    </button>
+                    </motion.button>
                   ))}
                 </div>
               </motion.div>
@@ -846,13 +869,16 @@ export default function Chat() {
                 className="w-full min-h-[52px] max-h-[140px] resize-none overflow-y-auto bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-3xl py-3 pl-4 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50 leading-relaxed"
                 disabled={isStreaming}
               />
-              <button
+              <motion.button
                 type="submit"
                 disabled={!inputValue.trim() || isStreaming}
+                whileTap={reduceMotion ? undefined : { scale: 0.9 }}
+                whileHover={reduceMotion ? undefined : { scale: 1.06 }}
+                transition={{ type: 'spring', stiffness: 480, damping: 22 }}
                 className="absolute right-2 bottom-2 p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Send className="w-4 h-4 ml-0.5" />
-              </button>
+              </motion.button>
             </form>
           </div>
         </div>

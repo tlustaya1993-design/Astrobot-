@@ -28,12 +28,12 @@ function userFacingChatError(error: unknown): string {
     lower.includes('network request failed') ||
     lower.includes('load failed')
   ) {
-    return 'сеть: не удалось связаться с сервером. Проверьте интернет, обновите страницу и попробуйте снова. Если открываете приложение с другого домена или без бэкенда — запрос к API может быть недоступен.';
+    return 'похоже, не дошло до сервера: проверьте интернет и попробуйте ещё раз. Если страница открыта «в обход» бэкенда или с другого адреса — запрос тоже может не пройти.';
   }
   if (raw === 'The user aborted a request.' || lower.includes('abort')) {
-    return 'запрос прерван. Попробуйте отправить сообщение снова.';
+    return 'отправка прервалась — просто отправьте сообщение ещё раз.';
   }
-  return raw.trim() || 'Сервис временно недоступен. Попробуйте чуть позже.';
+  return raw.trim() || 'сервис сейчас отвечает медленнее обычного. Подождите минуту или обновите страницу.';
 }
 
 export function useChatStream(conversationId?: number) {
@@ -234,7 +234,7 @@ export function useChatStream(conversationId?: number) {
         if (hasStreaming) {
           return prev.map((m) =>
             m.id === streamingAssistantId
-              ? { ...m, content: `Не удалось получить ответ: ${message}` }
+              ? { ...m, content: `Сейчас не получилось ответить: ${message}` }
               : m,
           );
         }
@@ -242,7 +242,7 @@ export function useChatStream(conversationId?: number) {
           id: Date.now() + 1,
           conversationId: targetId || 0,
           role: 'assistant',
-          content: `Не удалось получить ответ: ${message}`,
+          content: `Сейчас не получилось ответить: ${message}`,
           createdAt: new Date().toISOString(),
         };
         return [...prev, tempAssistantError];

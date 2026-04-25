@@ -185,9 +185,21 @@ export default function ChatSidebar({
           ) : filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 px-4 text-center">
               <CalendarDays className="w-8 h-8 text-muted-foreground mb-3" />
-              <p className="text-sm text-muted-foreground">
-                {search.trim() ? 'Ничего не найдено' : 'Диалогов пока нет'}
-              </p>
+              {search.trim() ? (
+                <>
+                  <p className="text-sm font-medium text-foreground/90">По запросу ничего не нашлось</p>
+                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                    Сбросьте поиск или попробуйте другое слово из названия чата.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-foreground/90">Пока без диалогов</p>
+                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+                    Нажмите «Новый диалог» вверху списка — и можно сразу писать АстроБоту.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-1">
