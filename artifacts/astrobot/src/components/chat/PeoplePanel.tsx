@@ -27,23 +27,39 @@ interface PeoplePanelProps {
   onSelect: (id: number | null) => void;
   /** Показать метку режима при выбранном контакте: база или расширение. */
   contactTier?: 'base' | 'extended' | null;
+  /** После загрузки списка контактов — для одноразового онбординга в чате. */
+  onContactsLoaded?: (count: number) => void;
+  /** Подсветка кнопки «Добавить» во втором шаге онбординга. */
+  onboardingHighlightAdd?: boolean;
 }
 
-export default function PeoplePanel({ selectedContactId, onSelect, contactTier = null }: PeoplePanelProps) {
+export default function PeoplePanel({
+  selectedContactId,
+  onSelect,
+  contactTier = null,
+  onContactsLoaded,
+  onboardingHighlightAdd = false,
+}: PeoplePanelProps) {
   const { avatarConfig } = useAvatarSync();
   const [, setLocation] = useLocation();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [openedContact, setOpenedContact] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [contactsFetchDone, setContactsFetchDone] = useState(false);
 
   const fetchContacts = useCallback(async () => {
     try {
       const res = await fetch('/api/contacts', { headers: getAuthHeaders() });
       if (res.ok) {
-        setContacts(await res.json());
+        const list = (await res.json()) as Contact[];
+        setContacts(list);
+        onContactsLoaded?.(list.length);
+        setContactsFetchDone(true);
         return;
       }
+      onContactsLoaded?.(0);
+      setContactsFetchDone(true);
       toast({
         title: 'Контакты не подгрузились',
         description: 'Обновите страницу — так мы попробуем загрузить список ещё раз.',
@@ -54,8 +70,10 @@ export default function PeoplePanel({ selectedContactId, onSelect, contactTier =
         title: 'Сеть подвела',
         description: 'Не смогли загрузить контакты. Когда связь вернётся — обновите страницу.',
       });
+      onContactsLoaded?.(0);
+      setContactsFetchDone(true);
     }
-  }, []);
+  }, [onContactsLoaded]);
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
@@ -164,9 +182,13 @@ export default function PeoplePanel({ selectedContactId, onSelect, contactTier =
 
         {/* Add button */}
         <motion.button
+          type="button"
+          data-onboarding-target="add-contact"
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm text-muted-foreground border border-dashed border-border hover:border-primary/40 hover:text-primary transition-all shrink-0"
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm text-muted-foreground border border-dashed border-border hover:border-primary/40 hover:text-primary transition-all shrink-0 ${
+            onboardingHighlightAdd ? 'ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse' : ''
+          }`}
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Добавить</span>
@@ -183,6 +205,16 @@ export default function PeoplePanel({ selectedContactId, onSelect, contactTier =
           </motion.div>
         )}
       </div>
+
+      {contactsFetchDone && contacts.length === 0 && (
+        <div className="px-3 py-2 border-b border-border/50 bg-primary/[0.06]">
+          <p className="text-[11px] text-muted-foreground leading-relaxed max-w-2xl">
+            <span className="text-foreground/90 font-medium">Синастрия и пары:</span>{' '}
+            добавьте человека по дате рождения — кнопка <span className="text-primary/90">«Добавить»</span> выше. Тогда
+            АстроБот сможет смотреть вашу связь вместе с картой этого человека.
+          </p>
+        </div>
+      )}
 
       <AddContactModal
         open={showModal}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { Send, Sparkles, ChevronLeft, Menu, Copy, CircleHelp, X } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -13,6 +13,7 @@ import { getAuthHeaders } from '@/lib/session';
 import { useChatStream } from '@/hooks/use-chat-stream';
 import AstroMarkdown from '@/components/chat/AstroMarkdown';
 import PeoplePanel from '@/components/chat/PeoplePanel';
+import { ChatOnboardingOverlay, type ChatOnboardingPhase } from '@/components/chat/ChatOnboardingOverlay';
 import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
@@ -22,6 +23,7 @@ import { toast } from '@/hooks/use-toast';
 import { getToken } from '@/lib/session';
 
 const POST_PAYMENT_REGISTER_NUDGE_KEY = 'astrobot_post_payment_register_nudge';
+const CHAT_ONBOARDING_STORAGE_KEY = 'astrobot_chat_onboarding_v1';
 
 const HAPTIC_COOLDOWN_MS = 140;
 
@@ -203,6 +205,8 @@ export default function Chat() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [contextSwitchTargetId, setContextSwitchTargetId] = useState<number | null | undefined>(undefined);
   const [showContactModeHint, setShowContactModeHint] = useState(false);
+  const [contactsCount, setContactsCount] = useState<number | null>(null);
+  const [onboardingPhase, setOnboardingPhase] = useState<ChatOnboardingPhase | null>(null);
   const [contactRelationById, setContactRelationById] = useState<Record<number, string>>({});
   const [contactGenderById, setContactGenderById] = useState<Record<number, Gender>>({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -292,6 +296,48 @@ export default function Chat() {
       setShowContactModeHint(false);
     }
   }, [selectedContactId]);
+
+  useEffect(() => {
+    if (conversationId) {
+      setOnboardingPhase(null);
+    }
+  }, [conversationId]);
+
+  const finishChatOnboarding = useCallback(() => {
+    try {
+      localStorage.setItem(CHAT_ONBOARDING_STORAGE_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setOnboardingPhase(null);
+  }, []);
+
+  const handleOnboardingNext = useCallback(() => {
+    setOnboardingPhase((p) => {
+      if (p === 'step1') return 'step2';
+      try {
+        localStorage.setItem(CHAT_ONBOARDING_STORAGE_KEY, '1');
+      } catch {
+        /* ignore */
+      }
+      return null;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (conversationId) return;
+    if (contactsCount === null) return;
+    try {
+      if (localStorage.getItem(CHAT_ONBOARDING_STORAGE_KEY) === '1') return;
+    } catch {
+      return;
+    }
+    if (isLoggedIn && contactsCount > 0) return;
+    if (onboardingPhase !== null) return;
+
+    const t = window.setTimeout(() => setOnboardingPhase('step1'), 450);
+    return () => window.clearTimeout(t);
+  }, [conversationId, contactsCount, isLoggedIn, onboardingPhase]);
 
   useEffect(() => {
     const loadContacts = async () => {
@@ -577,8 +623,14 @@ export default function Chat() {
               </button>
             ) : (
               <button
+                type="button"
+                data-onboarding-target="history-menu"
                 onClick={() => setShowHistory(true)}
-                className="p-1.5 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
+                className={`p-1.5 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition ${
+                  onboardingPhase === 'step1'
+                    ? 'ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse'
+                    : ''
+                }`}
                 aria-label="Открыть историю"
               >
                 <Menu className="w-5 h-5" />
@@ -614,6 +666,8 @@ export default function Chat() {
                   : 'base'
                 : null
             }
+            onContactsLoaded={setContactsCount}
+            onboardingHighlightAdd={onboardingPhase === 'step2'}
           />
 
           {/* Messages */}
@@ -921,6 +975,15 @@ export default function Chat() {
         onClose={closePaywall}
         reason={paywallState?.message}
       />
+
+      {onboardingPhase ? (
+        <ChatOnboardingOverlay
+          phase={onboardingPhase}
+          onNext={handleOnboardingNext}
+          onSkip={finishChatOnboarding}
+          reduceMotion={reduceMotion}
+        />
+      ) : null}
 
       {typeof contextSwitchTargetId !== 'undefined' && (
         <>
