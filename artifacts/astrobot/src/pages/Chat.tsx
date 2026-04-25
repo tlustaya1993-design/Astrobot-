@@ -479,17 +479,9 @@ export default function Chat() {
                   <Sparkles className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="text-base font-display font-semibold mb-1">С чего начнем?</h3>
-                <p className="text-muted-foreground mb-3 max-w-sm text-sm">
-                  {selectedContactId
-                    ? contactExtendedMode
-                      ? 'Расширенный разбор: прогноз и сценарий отношений — обычно 2 запроса за сообщение, очень длинный текст — 3.'
-                      : 'Базовый разбор: карта человека, транзиты к его наталу и синастрия с вами. Спросите, что с ним сейчас и что между вами.'
-                    : "Спрашивайте о вашей карте, текущих транзитах или жизненных вопросах."}
-                </p>
                 {!isLoggedIn && !selectedContactId && (
                   <p className="mb-3 max-w-md text-xs text-primary/85 leading-relaxed">
-                    Для знакомства с AstroBot мы даём 5 бесплатных запросов — спокойно попробуйте и оцените формат.
-                    Если понравится, позже можно докупить пакет и продолжить в удобном темпе.
+                    Для знакомства с AstroBot мы даём 5 бесплатных запросов — спокойно пробуйте и оцените формат.
                   </p>
                 )}
                 <div className="grid grid-cols-1 gap-2 w-full max-w-md">
