@@ -28,97 +28,79 @@ type QuickPrompt = {
   prompt: string;
 };
 
-type PossessiveSet = {
-  singularFeminine: string;
-  singularMasculine: string;
-  plural: string;
-};
+type Gender = 'male' | 'female' | 'unknown';
 
-const SELF_POSSESSIVE: PossessiveSet = {
-  singularFeminine: 'моя',
-  singularMasculine: 'мой',
-  plural: 'мои',
-};
+function resolveGender(raw?: string | null): Gender {
+  const v = String(raw || '').trim().toLowerCase();
+  if (!v) return 'unknown';
+  if (/(female|woman|girl|жен|дев|f)/.test(v)) return 'female';
+  if (/(male|man|boy|муж|пар|m)/.test(v)) return 'male';
+  return 'unknown';
+}
 
-const HIS_POSSESSIVE: PossessiveSet = {
-  singularFeminine: 'его',
-  singularMasculine: 'его',
-  plural: 'его',
-};
-
-const HER_POSSESSIVE: PossessiveSet = {
-  singularFeminine: 'ее',
-  singularMasculine: 'ее',
-  plural: 'ее',
-};
-
-const THEIRS_POSSESSIVE: PossessiveSet = {
-  singularFeminine: 'его/ее',
-  singularMasculine: 'его/ее',
-  plural: 'его/ее',
-};
+function pronounsByGender(gender: Gender): {
+  subject: 'он' | 'она';
+  object: 'его' | 'её';
+  possessiveCap: 'Его' | 'Её';
+} {
+  if (gender === 'female') {
+    return { subject: 'она', object: 'её', possessiveCap: 'Её' };
+  }
+  return { subject: 'он', object: 'его', possessiveCap: 'Его' };
+}
 
 function selfPrompts(): QuickPrompt[] {
   return [
     { label: '🌙 Обо мне', prompt: 'Что звёзды могут сказать обо мне?' },
-    { label: '🌀 Что со мной', prompt: 'Какой период я сейчас переживаю?' },
-    { label: `🍀 ${SELF_POSSESSIVE.singularFeminine} удача`, prompt: 'Часть моей удачи - на что мне обратить внимание?' },
-    { label: `💼 ${SELF_POSSESSIVE.singularFeminine} карьера`, prompt: 'Куда мне двигаться в карьере?' },
-    { label: `💰 ${SELF_POSSESSIVE.plural} деньги`, prompt: 'Что у меня с финансовым потенциалом на этот период?' },
+    { label: '🌀 Мой период', prompt: 'Какой период я сейчас переживаю?' },
+    { label: '🍀 Моя удача', prompt: 'Часть моей удачи - на что мне обратить внимание?' },
+    { label: '💼 Моя Карьера', prompt: 'Куда мне двигаться в карьере?' },
+    { label: '💰 Мои Деньги', prompt: 'Что у меня с финансовым потенциалом на этот период?' },
   ];
 }
 
-function husbandPrompts(): QuickPrompt[] {
+function partnerPrompts(gender: Gender): QuickPrompt[] {
+  const p = pronounsByGender(gender);
   return [
     { label: '💞 Совместимость', prompt: 'Расскажи о нашей совместимости' },
-    { label: `🌟 ${HIS_POSSESSIVE.plural} таланты`, prompt: 'В чём его природный талант по звёздам?' },
-    { label: `💚 ${HIS_POSSESSIVE.singularFeminine} здоровье`, prompt: 'Что у него по здоровью?' },
-    { label: '🧭 Что с ним', prompt: 'Что сейчас происходит в его жизни?' },
-    { label: '🧲 Между нами', prompt: 'Какая главная динамика сейчас между нами?' },
+    { label: `🌀 Как ${p.subject} сейчас?`, prompt: 'Что сейчас происходит в его/ее жизни?' },
+    { label: '🔮 Наше будущее', prompt: 'Дай прогноз по нам на ближайшее будущее.' },
+    { label: '⚡ Наши проблемы', prompt: 'Что мешает нам в отношениях?' },
+    { label: '📅 5 лет вперёд', prompt: 'Дай прогноз по нам на ближайшие 5 лет.' },
   ];
 }
 
-function bossPrompts(possessive: PossessiveSet, gender: 'male' | 'female' | 'unknown'): QuickPrompt[] {
-  const nowLabel = gender === 'female' ? '🧭 Что с ней' : gender === 'male' ? '🧭 Что с ним' : '🧭 Что с ним/ней';
+function bossPrompts(gender: Gender): QuickPrompt[] {
+  const p = pronounsByGender(gender);
   return [
-    { label: '🗣️ Коммуникация', prompt: 'Как лучше выстроить коммуникацию?' },
-    { label: `🌟 ${possessive.plural} таланты`, prompt: 'В чём природный талант моего руководителя?' },
-    { label: `💚 ${possessive.singularFeminine} здоровье`, prompt: 'Что по здоровью у моего руководителя?' },
-    { label: nowLabel, prompt: 'Что происходит сейчас в жизни моего руководителя?' },
-    { label: '🎯 Лучший ход', prompt: 'Какой мой лучший ход в отношениях с начальником сейчас?' },
+    { label: '🤝 Как общаться?', prompt: 'Как лучше выстроить коммуникацию с начальником?' },
+    { label: '📈 Моё повышение', prompt: 'Могу ли я рассчитывать на повышение?' },
+    { label: '😬 Увольнение', prompt: 'Есть ли риск увольнения в ближайшее время?' },
+    { label: `🌀 Что ${p.subject} думает`, prompt: 'Что он/она думает обо мне в рабочем контексте?' },
+    { label: '💰 Рост дохода', prompt: 'Что поможет мне вырастить доход в работе?' },
   ];
 }
 
-function childPrompts(byGender: 'male' | 'female' | 'unknown'): QuickPrompt[] {
-  const possessive = byGender === 'male' ? HIS_POSSESSIVE : byGender === 'female' ? HER_POSSESSIVE : THEIRS_POSSESSIVE;
-  const pronoun = byGender === 'male' ? 'него' : byGender === 'female' ? 'нее' : 'него/нее';
-  const nowLabel = byGender === 'female' ? '🧭 Что с ней' : byGender === 'male' ? '🧭 Что с ним' : '🧭 Что с ним/ней';
-  const understandLabel = byGender === 'female' ? '🧩 Понять ее' : byGender === 'male' ? '🧩 Понять его' : '🧩 Понять';
+function childPrompts(gender: Gender): QuickPrompt[] {
+  const p = pronounsByGender(gender);
   return [
-    { label: understandLabel, prompt: 'Помоги мне лучше понять моего ребенка' },
-    { label: `🌟 ${possessive.plural} таланты`, prompt: 'В чём его/ее природный талант по звёздам?' },
-    { label: `💚 ${possessive.singularFeminine} здоровье`, prompt: `Что у ${pronoun} по здоровью?` },
-    { label: '🗣️ Общение', prompt: 'Что я могу улучшить в нашем общении?' },
-    { label: nowLabel, prompt: `Какой период у ${pronoun} сейчас по карте?` },
+    { label: `🧩 Лучше узнать ${p.object}`, prompt: 'Помоги мне лучше понять моего ребенка' },
+    { label: `🌟 ${p.possessiveCap} таланты`, prompt: 'В чём природный талант моего ребёнка?' },
+    { label: `💚 ${p.possessiveCap} здоровье`, prompt: 'Что у ребенка по здоровью?' },
+    { label: '🗣️ Наше общение', prompt: 'Что я могу улучшить в нашем общении?' },
+    { label: `🌀 Как ${p.subject} сейчас?`, prompt: 'Что сейчас происходит у ребёнка?' },
   ];
 }
 
 function detectContactKind(relationRaw: string): 'husband' | 'child' | 'boss' | 'other' {
   const relation = relationRaw.toLowerCase();
-  if (/(муж|супруг|партнер|партнёр|парень|любим)/.test(relation)) return 'husband';
+  if (/(муж|супруг|партнер|партнёр|парень|любим|жена|супруга|девушк|партнерш)/.test(relation)) return 'husband';
   if (/(ребен|ребён|сын|дочь|дочка|малыш)/.test(relation)) return 'child';
   if (/(началь|руковод|босс|директор|шеф)/.test(relation)) return 'boss';
   return 'other';
 }
 
-function detectChildGender(relationRaw: string): 'male' | 'female' | 'unknown' {
-  const relation = relationRaw.toLowerCase();
-  if (/(сын|мальчик)/.test(relation)) return 'male';
-  if (/(дочь|дочка|девочк)/.test(relation)) return 'female';
-  return 'unknown';
-}
-
-function detectGeneralGender(relationRaw: string): 'male' | 'female' | 'unknown' {
+function detectGenderByRelation(relationRaw: string): Gender {
   const relation = relationRaw.toLowerCase();
   if (/(муж|супруг|партнер|партнёр|парень|любим|начальник|руководитель|босс|директор|шеф|сын|мальчик)/.test(relation)) return 'male';
   if (/(жена|супруга|девушка|любимая|начальница|руководительница|директриса|шефиня|дочь|дочка|девочк)/.test(relation)) return 'female';
@@ -195,6 +177,7 @@ export default function Chat() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [contextSwitchTargetId, setContextSwitchTargetId] = useState<number | null | undefined>(undefined);
   const [contactRelationById, setContactRelationById] = useState<Record<number, string>>({});
+  const [contactGenderById, setContactGenderById] = useState<Record<number, Gender>>({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const pendingScrollAfterSendRef = useRef(false);
@@ -286,12 +269,15 @@ export default function Chat() {
       try {
         const res = await fetch('/api/contacts', { headers: getAuthHeaders() });
         if (!res.ok) return;
-        const rows = (await res.json()) as Array<{ id: number; relation?: string | null }>;
+        const rows = (await res.json()) as Array<{ id: number; relation?: string | null; gender?: string | null; sex?: string | null }>;
         const next: Record<number, string> = {};
+        const nextGender: Record<number, Gender> = {};
         for (const row of rows) {
           next[row.id] = row.relation || '';
+          nextGender[row.id] = resolveGender(row.gender ?? row.sex ?? null);
         }
         setContactRelationById(next);
+        setContactGenderById(nextGender);
       } catch {
         /* ignore */
       }
@@ -511,21 +497,21 @@ export default function Chat() {
   const isNew = !conversationId && displayMessages.length === 0;
   const selectedRelation = selectedContactId != null ? (contactRelationById[selectedContactId] || '') : '';
   const selectedKind = detectContactKind(selectedRelation);
-  const contactGender = detectGeneralGender(selectedRelation);
+  const selectedProfileGender = selectedContactId != null ? (contactGenderById[selectedContactId] || 'unknown') : 'unknown';
+  const contactGender: Gender = selectedProfileGender !== 'unknown'
+    ? selectedProfileGender
+    : detectGenderByRelation(selectedRelation);
   const contactPromptSet: QuickPrompt[] = selectedKind === 'husband'
-    ? husbandPrompts()
+    ? partnerPrompts(contactGender)
     : selectedKind === 'boss'
-      ? bossPrompts(
-        contactGender === 'female' ? HER_POSSESSIVE : contactGender === 'male' ? HIS_POSSESSIVE : THEIRS_POSSESSIVE,
-        contactGender,
-      )
+      ? bossPrompts(contactGender)
       : selectedKind === 'child'
-        ? childPrompts(detectChildGender(selectedRelation))
+        ? childPrompts(contactGender)
         : [
           { label: '💫 Синастрия', prompt: 'Расскажи о нашей синастрии' },
-          { label: `🌟 ${(contactGender === 'female' ? HER_POSSESSIVE : contactGender === 'male' ? HIS_POSSESSIVE : THEIRS_POSSESSIVE).plural} таланты`, prompt: 'Какие у этого человека сильные аспекты?' },
-          { label: `💚 ${(contactGender === 'female' ? HER_POSSESSIVE : contactGender === 'male' ? HIS_POSSESSIVE : THEIRS_POSSESSIVE).singularFeminine} здоровье`, prompt: 'Что у этого человека по здоровью?' },
-          { label: contactGender === 'female' ? '🧭 Что с ней' : contactGender === 'male' ? '🧭 Что с ним' : '🧭 Что с ним/ней', prompt: 'Какой период сейчас у этого человека?' },
+          { label: '🌟 Таланты', prompt: 'Какие у этого человека сильные аспекты?' },
+          { label: '💚 Здоровье', prompt: 'Что у этого человека по здоровью?' },
+          { label: '🌀 Что сейчас', prompt: 'Какой период сейчас у этого человека?' },
           { label: '🗣️ Общение', prompt: 'Как лучше выстроить контакт с этим человеком?' },
         ];
 
@@ -630,7 +616,7 @@ export default function Chat() {
                     {promptSubtitle}
                   </p>
                 )}
-                <div className="grid grid-cols-2 gap-2 w-full max-w-md">
+                <div className="flex flex-wrap justify-center gap-2 w-full max-w-md">
                   {(selectedContactId
                     ? contactPromptSet
                     : selfPrompts()
@@ -638,9 +624,7 @@ export default function Chat() {
                     <button
                       key={i}
                       onClick={() => setInputValue(prompt.prompt)}
-                      className={`w-full px-4 py-2.5 rounded-2xl text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-all text-center leading-snug ${
-                        i === 0 || i === 4 ? 'col-span-2' : ''
-                      }`}
+                      className="w-auto px-4 py-2.5 rounded-2xl text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-all text-center leading-snug"
                     >
                       {prompt.label}
                     </button>
