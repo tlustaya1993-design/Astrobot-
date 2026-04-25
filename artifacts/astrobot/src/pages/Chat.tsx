@@ -486,6 +486,12 @@ export default function Chat() {
                       : 'Базовый разбор: карта человека, транзиты к его наталу и синастрия с вами. Спросите, что с ним сейчас и что между вами.'
                     : "Спрашивайте о вашей карте, текущих транзитах или жизненных вопросах."}
                 </p>
+                {!isLoggedIn && !selectedContactId && (
+                  <p className="mb-3 max-w-md text-xs text-primary/85 leading-relaxed">
+                    Для знакомства с AstroBot мы даём 5 бесплатных запросов — спокойно попробуйте и оцените формат.
+                    Если понравится, позже можно докупить пакет и продолжить в удобном темпе.
+                  </p>
+                )}
                 <div className="grid grid-cols-1 gap-2 w-full max-w-md">
                   {(selectedContactId
                     ? ["Расскажи о нашей синастрии", "Какие у нас сильные аспекты?", "Есть ли напряжение в нашей карте?", "Что звёзды говорят о нас?"]
@@ -526,7 +532,7 @@ export default function Chat() {
                   <div className={`min-w-0 rounded-2xl p-4 shadow-lg ${
                     msg.role === 'user'
                       ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
-                      : 'bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
+                      : 'bg-card/90 border border-white/10 text-foreground/95 rounded-tl-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
                   }`}>
                     {msg.role === 'assistant' ? (
                       msg.content?.trim() ? (
@@ -720,9 +726,9 @@ export default function Chat() {
             onClick={() => setContextSwitchTargetId(undefined)}
           />
           <div className="fixed left-3 right-3 bottom-4 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl">
-            <p className="text-sm font-medium mb-2">Переключить контекст в этом чате?</p>
+            <p className="text-sm font-medium mb-2">Продолжаем этот же диалог в контексте карты другого человека, или начинаем новый чат?</p>
             <p className="text-xs text-muted-foreground mb-3">
-              Можно продолжить текущий диалог в новом контексте или начать новый чат.
+              Выберите удобный вариант для этого переключения.
             </p>
             <div className="flex gap-2">
               <button
@@ -730,7 +736,7 @@ export default function Chat() {
                 onClick={() => applyContextSwitch('continue')}
                 className="flex-1 px-3 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary text-sm hover:bg-primary/20 transition"
               >
-                Продолжить этот чат
+                Продолжить этот
               </button>
               <button
                 type="button"
