@@ -740,9 +740,8 @@ export default function Chat() {
                 <div className="flex items-start gap-1.5 text-xs text-primary/70">
                   <span className="text-base leading-none shrink-0">⚯</span>
                   <span>
-                    {contactExtendedMode
-                      ? 'Расширенный разбор: соляр, прогрессии и др. Обычно 2 запроса за сообщение, очень длинный текст — 3.'
-                      : 'Базовый разбор: натал контакта, транзиты к его наталу и синастрия с вами.'}
+                    По умолчанию Астробот разбирает характер человека и вашу связь прямо сейчас. За каждый вопрос спишется 1 запрос.
+                    {' '}Но АстроБот может больше - включите галочку в чате с человеком и вы получите прогноз на несколько лет, углубленный анализ, детали. Каждый вопрос = 2 или 3 запроса (в зависимости от объема).
                   </span>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
@@ -779,7 +778,7 @@ export default function Chat() {
                     }}
                   />
                   <span>
-                    Углубить разбор контакта (соляр, прогрессии, прогноз) —{' '}
+                    Углубить разбор контакта —{' '}
                     <span className="text-primary/80 font-medium">
                       2 запроса за сообщение
                     </span>
