@@ -24,11 +24,50 @@ import { getToken } from '@/lib/session';
 const POST_PAYMENT_REGISTER_NUDGE_KEY = 'astrobot_post_payment_register_nudge';
 
 const SUGGESTED_PROMPTS = [
-  "Расскажи о моей натальной карте",
-  "Что значат мои транзиты сейчас?",
-  "Какой период сейчас в моей жизни?",
-  "Разбери мою Часть Удачи"
+  "Что звёзды могут сказать обо мне?",
+  "Какой период я сейчас переживаю?",
+  "Часть моей удачи - на что мне обратить внимание?",
+  "Куда мне двигаться в карьере?"
 ];
+
+const HUSBAND_PROMPTS = [
+  "Расскажи о нашей совместимости",
+  "Что сейчас происходит в его жизни?",
+  "Что мешает нам в отношениях?",
+  "Дай прогноз по нам на ближайшие 5 лет",
+];
+
+const BOSS_PROMPTS = [
+  "Как лучше выстроить коммуникацию?",
+  "Могу ли я рассчитывать на карьерный рост в этом году?",
+  "Стабильно ли моё место в компании?",
+  "Что происходит сейчас в жизни моего руководителя?",
+];
+
+function childPrompts(byGender: 'male' | 'female' | 'unknown') {
+  const pronoun = byGender === 'male' ? 'него' : byGender === 'female' ? 'нее' : 'него/нее';
+  return [
+    "Помоги мне лучше понять моего ребенка",
+    "В чём его/ее природный талант по звёздам?",
+    `Что у ${pronoun} по здоровью?`,
+    "Что я могу улучшить в нашем общении?",
+  ];
+}
+
+function detectContactKind(relationRaw: string): 'husband' | 'child' | 'boss' | 'other' {
+  const relation = relationRaw.toLowerCase();
+  if (/(муж|супруг|партнер|партнёр|парень|любим)/.test(relation)) return 'husband';
+  if (/(ребен|ребён|сын|дочь|дочка|малыш)/.test(relation)) return 'child';
+  if (/(началь|руковод|босс|директор|шеф)/.test(relation)) return 'boss';
+  return 'other';
+}
+
+function detectChildGender(relationRaw: string): 'male' | 'female' | 'unknown' {
+  const relation = relationRaw.toLowerCase();
+  if (/(сын|мальчик)/.test(relation)) return 'male';
+  if (/(дочь|дочка|девочк)/.test(relation)) return 'female';
+  return 'unknown';
+}
 
 function topWithinScrollParent(el: HTMLElement, scrollParent: HTMLElement): number {
   const pr = scrollParent.getBoundingClientRect();
@@ -96,6 +135,7 @@ export default function Chat() {
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [contextSwitchTargetId, setContextSwitchTargetId] = useState<number | null | undefined>(undefined);
+  const [contactRelationById, setContactRelationById] = useState<Record<number, string>>({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const pendingScrollAfterSendRef = useRef(false);
@@ -181,6 +221,24 @@ export default function Chat() {
       setContactExtendedMode(false);
     }
   }, [selectedContactId]);
+
+  useEffect(() => {
+    const loadContacts = async () => {
+      try {
+        const res = await fetch('/api/contacts', { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const rows = (await res.json()) as Array<{ id: number; relation?: string | null }>;
+        const next: Record<number, string> = {};
+        for (const row of rows) {
+          next[row.id] = row.relation || '';
+        }
+        setContactRelationById(next);
+      } catch {
+        /* ignore */
+      }
+    };
+    void loadContacts();
+  }, []);
 
   useEffect(() => {
     resizeComposer();
@@ -392,6 +450,15 @@ export default function Chat() {
   };
 
   const isNew = !conversationId && displayMessages.length === 0;
+  const selectedRelation = selectedContactId != null ? (contactRelationById[selectedContactId] || '') : '';
+  const selectedKind = detectContactKind(selectedRelation);
+  const contactPromptSet = selectedKind === 'husband'
+    ? HUSBAND_PROMPTS
+    : selectedKind === 'boss'
+      ? BOSS_PROMPTS
+      : selectedKind === 'child'
+        ? childPrompts(detectChildGender(selectedRelation))
+        : ["Расскажи о нашей синастрии", "Какие у нас сильные аспекты?", "Есть ли напряжение в нашей карте?", "Что звёзды говорят о нас?"];
 
   return (
     <>
@@ -486,7 +553,7 @@ export default function Chat() {
                 )}
                 <div className="grid grid-cols-1 gap-2 w-full max-w-md">
                   {(selectedContactId
-                    ? ["Расскажи о нашей синастрии", "Какие у нас сильные аспекты?", "Есть ли напряжение в нашей карте?", "Что звёзды говорят о нас?"]
+                    ? contactPromptSet
                     : SUGGESTED_PROMPTS
                   ).map((prompt, i) => (
                     <button
