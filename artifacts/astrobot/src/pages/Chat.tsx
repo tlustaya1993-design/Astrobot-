@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Menu } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Menu, Copy } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -95,9 +95,11 @@ export default function Chat() {
   const [contactExtendedMode, setContactExtendedMode] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [contextSwitchTargetId, setContextSwitchTargetId] = useState<number | null | undefined>(undefined);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const pendingScrollAfterSendRef = useRef(false);
+  const initialOpenScrolledConversationRef = useRef<number | null>(null);
 
   const resizeComposer = () => {
     const el = inputRef.current;
@@ -205,6 +207,17 @@ export default function Chat() {
     pendingScrollAfterSendRef.current = false;
     alignScrollAfterUserSend(container, prev, last);
   }, [localMessages.length]);
+
+  useLayoutEffect(() => {
+    if (!conversationId || isLoading) return;
+    if (initialOpenScrolledConversationRef.current === conversationId) return;
+    const container = messagesScrollRef.current;
+    if (!container) return;
+    requestAnimationFrame(() => {
+      container.scrollTop = container.scrollHeight;
+      initialOpenScrolledConversationRef.current = conversationId;
+    });
+  }, [conversationId, isLoading, displayMessages.length]);
 
   useEffect(() => {
     const onVisibility = () => {
@@ -347,6 +360,37 @@ export default function Chat() {
     }
   };
 
+  const copyMessage = async (content: string) => {
+    const text = `${content}\n\nСообщение от вашего персонального АстроБота — https://astroai.site`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: 'Скопировано', description: 'Текст добавлен в буфер обмена.' });
+    } catch {
+      toast({ title: 'Не удалось скопировать', description: 'Проверьте доступ к буферу обмена.' });
+    }
+  };
+
+  const requestContextSwitch = (nextId: number | null) => {
+    if (nextId === selectedContactId) return;
+    if (!conversationId || displayMessages.length === 0) {
+      setSelectedContactId(nextId);
+      return;
+    }
+    setContextSwitchTargetId(nextId);
+  };
+
+  const applyContextSwitch = (mode: 'continue' | 'new') => {
+    const nextId = contextSwitchTargetId;
+    setContextSwitchTargetId(undefined);
+    if (typeof nextId === 'undefined') return;
+    if (mode === 'new' && conversationId) {
+      setSelectedContactId(nextId);
+      setLocation('/chat');
+      return;
+    }
+    setSelectedContactId(nextId);
+  };
+
   const isNew = !conversationId && displayMessages.length === 0;
 
   return (
@@ -397,7 +441,7 @@ export default function Chat() {
           {/* People Panel */}
           <PeoplePanel
             selectedContactId={selectedContactId}
-            onSelect={setSelectedContactId}
+            onSelect={requestContextSwitch}
             contactTier={
               selectedContactId != null
                 ? contactExtendedMode
@@ -478,22 +522,36 @@ export default function Chat() {
                     />
                   </div>
                 )}
-                <div className={`max-w-[82%] min-w-0 rounded-2xl p-4 shadow-lg ${
-                  msg.role === 'user'
-                    ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
-                    : 'bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
-                }`}>
-                  {msg.role === 'assistant' ? (
-                    msg.content?.trim() ? (
-                      <AstroMarkdown content={msg.content} />
-                    ) : (
-                      <div className="flex space-x-1 py-1 not-prose">
-                        <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
-                        <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
-                        <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
-                      </div>
-                    )
-                  ) : msg.content}
+                <div className="max-w-[82%] min-w-0 flex flex-col">
+                  <div className={`min-w-0 rounded-2xl p-4 shadow-lg ${
+                    msg.role === 'user'
+                      ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
+                      : 'bg-card border border-white/5 text-foreground rounded-tl-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
+                  }`}>
+                    {msg.role === 'assistant' ? (
+                      msg.content?.trim() ? (
+                        <AstroMarkdown content={msg.content} />
+                      ) : (
+                        <div className="flex space-x-1 py-1 not-prose">
+                          <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
+                          <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
+                          <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
+                        </div>
+                      )
+                    ) : msg.content}
+                  </div>
+                  {msg.content?.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => copyMessage(String(msg.content))}
+                      className={`mt-1.5 text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border/60 hover:border-primary/40 hover:text-primary transition ${
+                        msg.role === 'user' ? 'self-end' : 'self-start'
+                      }`}
+                    >
+                      <Copy className="w-3 h-3" />
+                      Скопировать
+                    </button>
+                  )}
                 </div>
               </motion.div>
             ))}
@@ -654,6 +712,37 @@ export default function Chat() {
         onClose={closePaywall}
         reason={paywallState?.message}
       />
+
+      {typeof contextSwitchTargetId !== 'undefined' && (
+        <>
+          <div
+            className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
+            onClick={() => setContextSwitchTargetId(undefined)}
+          />
+          <div className="fixed left-3 right-3 bottom-4 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl">
+            <p className="text-sm font-medium mb-2">Переключить контекст в этом чате?</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              Можно продолжить текущий диалог в новом контексте или начать новый чат.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => applyContextSwitch('continue')}
+                className="flex-1 px-3 py-2 rounded-xl bg-primary/10 border border-primary/30 text-primary text-sm hover:bg-primary/20 transition"
+              >
+                Продолжить этот чат
+              </button>
+              <button
+                type="button"
+                onClick={() => applyContextSwitch('new')}
+                className="flex-1 px-3 py-2 rounded-xl bg-card border border-border text-sm hover:border-primary/30 transition"
+              >
+                Новый чат
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }

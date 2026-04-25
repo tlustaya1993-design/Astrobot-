@@ -68,8 +68,11 @@ export default function ChatSidebar({
 
   const filteredConversations = useMemo(() => {
     const normalized = search.trim().toLowerCase();
-    if (!normalized) return conversations ?? [];
-    return (conversations ?? []).filter((c) =>
+    const sorted = [...(conversations ?? [])].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    if (!normalized) return sorted;
+    return sorted.filter((c) =>
       (c.title || 'Чтение').toLowerCase().includes(normalized),
     );
   }, [conversations, search]);
