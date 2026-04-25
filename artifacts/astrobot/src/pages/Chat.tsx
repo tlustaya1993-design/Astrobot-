@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Menu, Copy } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Send, Sparkles, ChevronLeft, Menu, Copy, CircleHelp, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import {
@@ -176,6 +176,7 @@ export default function Chat() {
   const [showHistory, setShowHistory] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [contextSwitchTargetId, setContextSwitchTargetId] = useState<number | null | undefined>(undefined);
+  const [showContactModeHint, setShowContactModeHint] = useState(false);
   const [contactRelationById, setContactRelationById] = useState<Record<number, string>>({});
   const [contactGenderById, setContactGenderById] = useState<Record<number, Gender>>({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -261,6 +262,7 @@ export default function Chat() {
   useEffect(() => {
     if (selectedContactId === null) {
       setContactExtendedMode(false);
+      setShowContactModeHint(false);
     }
   }, [selectedContactId]);
 
@@ -737,12 +739,44 @@ export default function Chat() {
           <div className="px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
             {selectedContactId !== null && (
               <div className="space-y-2 mb-2 px-1">
-                <div className="flex items-start gap-1.5 text-xs text-primary/70">
+                <div className="relative flex items-center gap-2 text-xs text-primary/70">
                   <span className="text-base leading-none shrink-0">⚯</span>
-                  <span>
-                    По умолчанию Астробот разбирает характер человека и вашу связь прямо сейчас. За каждый вопрос спишется 1 запрос.
-                    {' '}Но АстроБот может больше - включите галочку в чате с человеком и вы получите прогноз на несколько лет, углубленный анализ, детали. Каждый вопрос = 2 или 3 запроса (в зависимости от объема).
-                  </span>
+                  <span className="font-medium">Режим разбора</span>
+                  <button
+                    type="button"
+                    aria-label="Подсказка по режимам разбора"
+                    onClick={() => setShowContactModeHint((v) => !v)}
+                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-primary/30 text-primary/80 hover:bg-primary/10 transition"
+                  >
+                    <CircleHelp className="w-3.5 h-3.5" />
+                  </button>
+
+                  <AnimatePresence>
+                    {showContactModeHint && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute left-0 right-0 bottom-full mb-2 rounded-xl border border-primary/20 bg-card/95 backdrop-blur-sm p-3 text-xs text-foreground shadow-xl z-20"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setShowContactModeHint(false)}
+                          className="absolute right-2 top-2 p-1 rounded-md hover:bg-white/5 text-muted-foreground"
+                          aria-label="Закрыть подсказку"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                        <p className="pr-6">
+                          По умолчанию Астробот разбирает характер человека и вашу связь прямо сейчас. За каждый вопрос спишется 1 запрос.
+                        </p>
+                        <p className="mt-1.5 pr-6 text-muted-foreground">
+                          Но АстроБот может больше - включите галочку в чате с человеком и вы получите прогноз на несколько лет, углубленный анализ, детали. Каждый вопрос = 2 или 3 запроса (в зависимости от объема).
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
                   <input
