@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useRoute, useLocation } from 'wouter';
 import { Send, Sparkles, ChevronLeft, Menu, Copy, CircleHelp, X } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
@@ -27,7 +27,8 @@ const HAPTIC_COOLDOWN_MS = 140;
 
 /**
  * Тактильный отклик при отправке: работает только там, где браузер реализует Vibration API
- * (чаще всего Chrome на Android). iOS Safari обычно не вибрирует для веб-страниц.
+ * (чаще всего Chrome на Android). На iPhone любые браузеры (включая Яндекс) идут через WebKit —
+ * для обычного сайта вибромотор недоступен, это ограничение iOS, а не приложения.
  */
 function trySendHaptic(lastAtRef: React.MutableRefObject<number>) {
   try {
@@ -164,6 +165,10 @@ function alignScrollAfterUserSend(
 
 export default function Chat() {
   const reduceMotion = useReducedMotion();
+  const webVibrateAvailable = useMemo(
+    () => typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function',
+    [],
+  );
   const [match, params] = useRoute('/chat/:id');
   const [, setLocation] = useLocation();
   const { isLoggedIn, openAuthModal, logout } = useAuth();
@@ -883,10 +888,14 @@ export default function Chat() {
                   if (isStreaming || !inputValue.trim()) return;
                   trySendHaptic(lastSendHapticAtRef);
                 }}
-                whileTap={reduceMotion ? undefined : { scale: 0.9 }}
-                whileHover={reduceMotion ? undefined : { scale: 1.06 }}
-                transition={{ type: 'spring', stiffness: 480, damping: 22 }}
-                className="absolute right-2 bottom-2 p-2 bg-primary text-primary-foreground rounded-full hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                whileTap={
+                  reduceMotion
+                    ? undefined
+                    : { scale: webVibrateAvailable ? 0.9 : 0.82 }
+                }
+                whileHover={reduceMotion ? undefined : { scale: webVibrateAvailable ? 1.06 : 1.04 }}
+                transition={{ type: 'spring', stiffness: webVibrateAvailable ? 480 : 560, damping: webVibrateAvailable ? 22 : 26 }}
+                className="absolute right-2 bottom-2 p-2 bg-primary text-primary-foreground rounded-full ring-offset-2 ring-offset-background hover:bg-primary/90 active:ring-2 active:ring-primary/50 disabled:opacity-50 disabled:cursor-not-allowed transition-[box-shadow] duration-150"
               >
                 <Send className="w-4 h-4 ml-0.5" />
               </motion.button>
