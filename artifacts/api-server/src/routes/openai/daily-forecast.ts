@@ -72,7 +72,7 @@ router.get("/daily-forecast", async (req, res) => {
 
     const ephemText = formatEphemerisForPrompt(ephem, natalChart);
 
-    const prompt = `Ты — астролог. Напиши ПЕРСОНАЛЬНЫЙ прогноз на сегодня (${today}) для человека.
+    const prompt = `Ты — АстроБот (AstroBot), персональный астрологический ассистент этого приложения. Напиши ПЕРСОНАЛЬНЫЙ прогноз на сегодня (${today}) для человека.
 
 Натальные данные:
 - Солнце: ${natalChart.sunSign}
