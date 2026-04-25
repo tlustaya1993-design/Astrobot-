@@ -70,6 +70,16 @@ export function useChatStream(conversationId?: number) {
     setIsStreaming(true);
     setStreamingText('');
 
+    let requestTimeout: ReturnType<typeof setTimeout> | null = null;
+    const controller = new AbortController();
+    const clearRequestTimeout = () => {
+      if (requestTimeout) {
+        clearTimeout(requestTimeout);
+        requestTimeout = null;
+      }
+    };
+    requestTimeout = setTimeout(() => controller.abort(), 60_000);
+
     try {
       if (!targetId) {
         const normalizedTitle = content.replace(/\s+/g, ' ').trim();
@@ -101,8 +111,10 @@ export function useChatStream(conversationId?: number) {
           'Content-Type': 'application/json',
           ...getAuthHeaders()
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      clearRequestTimeout();
 
       if (!res.ok) {
         setLocalMessages(prev => prev.filter((m) => m.id !== streamingAssistantId));
@@ -208,6 +220,7 @@ export function useChatStream(conversationId?: number) {
       queryClient.invalidateQueries({ queryKey: getGetOpenaiConversationQueryKey(targetId) });
 
     } catch (error) {
+      clearRequestTimeout();
       console.error('Chat error:', error);
       const message = userFacingChatError(error);
       const errorCode = typeof (error as { code?: unknown })?.code === 'number'
@@ -235,6 +248,7 @@ export function useChatStream(conversationId?: number) {
         return [...prev, tempAssistantError];
       });
     } finally {
+      clearRequestTimeout();
       setIsStreaming(false);
       setStreamingText('');
     }

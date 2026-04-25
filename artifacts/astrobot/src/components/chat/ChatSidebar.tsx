@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Check, LogIn, MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -15,6 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
 import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
+import PaywallSheet from '@/components/billing/PaywallSheet';
 
 interface ChatSidebarProps {
   currentConversationId?: number;
@@ -35,6 +36,8 @@ export default function ChatSidebar({
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { isLoggedIn, email } = useAuth();
+  const [profileName, setProfileName] = useState<string>('');
+  const [showPaywall, setShowPaywall] = useState(false);
   const [search, setSearch] = useState('');
   const [editingConversationId, setEditingConversationId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -109,6 +112,20 @@ export default function ChatSidebar({
     }
   };
 
+  useEffect(() => {
+    const loadName = async () => {
+      try {
+        const res = await fetch('/api/users/me', { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const data = (await res.json()) as { name?: string | null };
+        setProfileName((data.name || '').trim());
+      } catch {
+        /* ignore */
+      }
+    };
+    void loadName();
+  }, []);
+
   return (
     <>
       <aside className={`h-full w-full border-r border-border/60 bg-card/40 backdrop-blur-sm flex flex-col ${className ?? ''}`}>
@@ -126,26 +143,17 @@ export default function ChatSidebar({
               <IllustratedAvatar config={avatarConfig} size={40} relaxedCrop />
             </div>
             <div className="text-left min-w-0 flex-1">
-              <p className="text-sm font-semibold leading-tight truncate">Профиль</p>
+              <p className="text-sm font-semibold leading-tight truncate">{profileName || 'Профиль'}</p>
               <p className="text-[11px] text-muted-foreground truncate">
-                {isLoggedIn ? email : 'Настройки и данные'}
+                {isLoggedIn ? email : 'Гостевой профиль'}
               </p>
               {!isLoggedIn && (
                 <p className="text-[10px] text-muted-foreground mt-0.5">
-                  После регистрации память и история сохраняются
+                  Зарегистрируйся — и AstroBot будет помнить, о чём вы говорили.
                 </p>
               )}
             </div>
           </Link>
-          {!isLoggedIn && (
-            <button
-              onClick={onLoginClick}
-              className="mt-2 w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-primary/30 text-primary text-xs font-medium hover:bg-primary/10 transition"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              Войти / Зарегистрироваться
-            </button>
-          )}
         </div>
 
         <div className="p-3 border-b border-border/40 space-y-2">
@@ -284,7 +292,25 @@ export default function ChatSidebar({
             </div>
           )}
         </div>
+        <div className="p-3 border-t border-border/50 space-y-2">
+          {!isLoggedIn && (
+            <button
+              onClick={onLoginClick}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-primary/30 text-primary text-xs font-medium hover:bg-primary/10 transition"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              Войти / Зарегистрироваться
+            </button>
+          )}
+          <button
+            onClick={() => setShowPaywall(true)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-medium hover:bg-primary/25 transition"
+          >
+            Хочу больше разборов
+          </button>
+        </div>
       </aside>
+      <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
     </>
   );
 }

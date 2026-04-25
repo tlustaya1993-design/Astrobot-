@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, MessageSquare, Trash2, CalendarDays, LogIn, Pencil, Check } from 'lucide-react';
 import { format } from 'date-fns';
@@ -17,6 +17,7 @@ import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
 import { toast } from '@/hooks/use-toast';
+import PaywallSheet from '@/components/billing/PaywallSheet';
 
 interface Props {
   open: boolean;
@@ -29,6 +30,8 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
   const queryClient = useQueryClient();
   const { isLoggedIn, email } = useAuth();
   const { avatarConfig } = useAvatarSync();
+  const [profileName, setProfileName] = useState<string>('');
+  const [showPaywall, setShowPaywall] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
@@ -92,6 +95,21 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     }
   };
 
+  useEffect(() => {
+    if (!open) return;
+    const loadName = async () => {
+      try {
+        const res = await fetch('/api/users/me', { headers: getAuthHeaders() });
+        if (!res.ok) return;
+        const data = (await res.json()) as { name?: string | null };
+        setProfileName((data.name || '').trim());
+      } catch {
+        /* ignore */
+      }
+    };
+    void loadName();
+  }, [open]);
+
   // Swipe-left to close
   const touchX = useRef(0);
   const handleTouchStart = (e: React.TouchEvent) => { touchX.current = e.touches[0].clientX; };
@@ -134,13 +152,13 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                   <IllustratedAvatar config={avatarConfig} size={40} relaxedCrop />
                 </div>
                 <div className="min-w-0 text-left">
-                  <p className="text-sm font-semibold leading-tight truncate">Профиль</p>
+                  <p className="text-sm font-semibold leading-tight truncate">{profileName || 'Профиль'}</p>
                   <p className="text-[11px] text-muted-foreground truncate">
-                    {isLoggedIn ? email : 'Настройки и данные'}
+                    {isLoggedIn ? email : 'Гостевой профиль'}
                   </p>
                   {!isLoggedIn && (
                     <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                      После регистрации память и история сохраняются
+                      Зарегистрируйся — и AstroBot будет помнить, о чём вы говорили.
                     </p>
                   )}
                 </div>
@@ -264,9 +282,9 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
               )}
             </div>
 
-            {/* Footer — login CTA for anon users */}
-            {!isLoggedIn && (
-              <div className="px-4 py-4 border-t border-border/50">
+            {/* Footer */}
+            <div className="px-4 py-4 border-t border-border/50 space-y-2">
+              {!isLoggedIn && (
                 <button
                   onClick={() => { onClose(); onLoginClick(); }}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary/30 text-primary text-sm font-medium hover:bg-primary/10 transition"
@@ -274,11 +292,18 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                   <LogIn className="w-4 h-4" />
                   Войти / Зарегистрироваться
                 </button>
-              </div>
-            )}
+              )}
+              <button
+                onClick={() => setShowPaywall(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary/15 border border-primary/30 hover:bg-primary/25 transition-all text-primary text-sm font-medium"
+              >
+                Хочу больше разборов
+              </button>
+            </div>
           </motion.div>
         </>
       )}
+      <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
     </AnimatePresence>
   );
 }
