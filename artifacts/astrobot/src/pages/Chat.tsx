@@ -747,7 +747,7 @@ export default function Chat() {
                   <div className={`min-w-0 rounded-2xl p-4 shadow-lg ${
                     msg.role === 'user'
                       ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
-                      : 'bg-gradient-to-br from-white/[0.09] to-card border border-white/20 text-foreground rounded-tl-sm shadow-[0_10px_40px_rgba(0,0,0,0.55)] ring-1 ring-white/10 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
+                      : 'bg-gradient-to-br from-white/[0.18] to-white/[0.08] border border-white/30 text-foreground rounded-tl-sm shadow-[0_8px_26px_rgba(0,0,0,0.38)] ring-1 ring-white/20 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
                   }`}>
                     {msg.role === 'assistant' ? (
                       msg.content?.trim() ? (
@@ -792,7 +792,7 @@ export default function Chat() {
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
                 </div>
-                <div className="max-w-[82%] rounded-2xl p-4 bg-gradient-to-br from-white/[0.09] to-card border border-white/20 text-foreground rounded-tl-sm shadow-[0_10px_40px_rgba(0,0,0,0.55)] ring-1 ring-white/10">
+                <div className="max-w-[82%] rounded-2xl p-4 bg-gradient-to-br from-white/[0.18] to-white/[0.08] border border-white/30 text-foreground rounded-tl-sm shadow-[0_8px_26px_rgba(0,0,0,0.38)] ring-1 ring-white/20">
                   <p className="text-sm leading-relaxed">
                     Хотел сказать: если ты пройдешь регистрацию, я смогу помнить твои чаты даже при входе с другого устройства.
                     Сейчас память и пакеты запросов привязаны только к этому браузеру и этому устройству.

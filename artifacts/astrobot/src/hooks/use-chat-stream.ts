@@ -28,7 +28,7 @@ function userFacingChatError(error: unknown): string {
     lower.includes('network request failed') ||
     lower.includes('load failed')
   ) {
-    return 'похоже, не дошло до сервера: проверьте интернет и попробуйте ещё раз. Если страница открыта «в обход» бэкенда или с другого адреса — запрос тоже может не пройти.';
+    return 'похоже, соединение прервалось. Проверьте интернет и попробуйте ещё раз.';
   }
   if (raw === 'The user aborted a request.' || lower.includes('abort')) {
     return 'отправка прервалась — просто отправьте сообщение ещё раз.';
@@ -232,6 +232,11 @@ export function useChatStream(conversationId?: number) {
       setLocalMessages((prev) => {
         const hasStreaming = prev.some((m) => m.id === streamingAssistantId);
         if (hasStreaming) {
+          const existingStreaming = prev.find((m) => m.id === streamingAssistantId);
+          // If we already got assistant text, keep it and avoid scary fallback bubble.
+          if (existingStreaming?.content?.trim()) {
+            return prev;
+          }
           return prev.map((m) =>
             m.id === streamingAssistantId
               ? { ...m, content: `Сейчас не получилось ответить: ${message}` }
