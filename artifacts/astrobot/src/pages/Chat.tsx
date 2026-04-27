@@ -543,7 +543,11 @@ export default function Chat() {
     const text = `${content}\n\nСообщение от вашего персонального АстроБота — https://astroai.site`;
     try {
       await navigator.clipboard.writeText(text);
-      toast({ title: 'Скопировано', description: 'Текст добавлен в буфер обмена.' });
+      toast({
+        title: 'Скопировано',
+        description: 'Текст добавлен в буфер обмена.',
+        duration: 1800,
+      });
     } catch {
       toast({
         title: 'Не вышло скопировать',
@@ -747,7 +751,9 @@ export default function Chat() {
                   <div className={`min-w-0 rounded-2xl p-4 shadow-lg ${
                     msg.role === 'user'
                       ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
-                      : 'bg-gradient-to-br from-white/[0.18] to-white/[0.08] border border-white/30 text-foreground rounded-tl-sm shadow-[0_8px_26px_rgba(0,0,0,0.38)] ring-1 ring-white/20 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
+                      : msg.role === 'assistant'
+                        ? 'bg-gradient-to-br from-white/[0.18] to-white/[0.08] border border-white/30 text-foreground rounded-tl-sm shadow-[0_8px_26px_rgba(0,0,0,0.38)] ring-1 ring-white/20 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
+                        : 'bg-gradient-to-br from-white/[0.16] to-white/[0.06] border border-white/25 text-foreground shadow-[0_6px_20px_rgba(0,0,0,0.32)] ring-1 ring-white/15 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
                   }`}>
                     {msg.role === 'assistant' ? (
                       msg.content?.trim() ? (
