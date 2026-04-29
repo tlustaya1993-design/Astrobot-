@@ -44,6 +44,13 @@ function userFacingChatError(error: unknown): string {
   return raw.trim() || 'сервис сейчас отвечает медленнее обычного. Подождите минуту или обновите страницу.';
 }
 
+function appendInterruptedResponseNotice(content: string, message: string): string {
+  const trimmed = content.trimEnd();
+  const notice = `Ответ оборвался и может быть неполным: ${message}`;
+  if (!trimmed) return notice;
+  return `${trimmed}\n\n${notice}`;
+}
+
 export function useChatStream(conversationId?: number) {
   const [localMessages, setLocalMessages] = useState<OpenaiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -242,9 +249,13 @@ export function useChatStream(conversationId?: number) {
         const hasStreaming = prev.some((m) => m.id === streamingAssistantId);
         if (hasStreaming) {
           const existingStreaming = prev.find((m) => m.id === streamingAssistantId);
-          // If we already got assistant text, keep it and avoid scary fallback bubble.
+          // Do not leave partial streamed text looking like a complete answer.
           if (existingStreaming?.content?.trim()) {
-            return prev;
+            return prev.map((m) =>
+              m.id === streamingAssistantId
+                ? { ...m, content: appendInterruptedResponseNotice(existingStreaming.content, message) }
+                : m,
+            );
           }
           return prev.map((m) =>
             m.id === streamingAssistantId
