@@ -22,6 +22,14 @@ function userFacingChatError(error: unknown): string {
         : '';
   const lower = raw.toLowerCase();
   if (
+    lower.includes('rate limit') ||
+    lower.includes('429') ||
+    lower.includes('too many requests') ||
+    (lower.includes('per minute') && lower.includes('limit'))
+  ) {
+    return 'Секунду, собираю инфу по крупицам звездной пыли... Похоже, лимит запросов исчерпан. Попробуйте чуть позже.';
+  }
+  if (
     raw === 'Load failed' ||
     lower.includes('failed to fetch') ||
     lower.includes('networkerror') ||
@@ -222,10 +230,11 @@ export function useChatStream(conversationId?: number) {
     } catch (error) {
       clearRequestTimeout();
       console.error('Chat error:', error);
-      const message = userFacingChatError(error);
       const errorCode = typeof (error as { code?: unknown })?.code === 'number'
         ? (error as { code: number }).code
         : undefined;
+      const message = userFacingChatError(error);
+      const isRateLimit = errorCode === 429;
       if (errorCode === 402) {
         return targetId;
       }
@@ -239,7 +248,7 @@ export function useChatStream(conversationId?: number) {
           }
           return prev.map((m) =>
             m.id === streamingAssistantId
-              ? { ...m, content: `Сейчас не получилось ответить: ${message}` }
+              ? { ...m, content: isRateLimit ? message : `Сейчас не получилось ответить: ${message}` }
               : m,
           );
         }
@@ -247,7 +256,7 @@ export function useChatStream(conversationId?: number) {
           id: Date.now() + 1,
           conversationId: targetId || 0,
           role: 'assistant',
-          content: `Сейчас не получилось ответить: ${message}`,
+          content: isRateLimit ? message : `Сейчас не получилось ответить: ${message}`,
           createdAt: new Date().toISOString(),
         };
         return [...prev, tempAssistantError];
