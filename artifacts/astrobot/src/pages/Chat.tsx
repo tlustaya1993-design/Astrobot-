@@ -759,10 +759,21 @@ export default function Chat() {
                       msg.content?.trim() ? (
                         <AstroMarkdown content={msg.content} />
                       ) : (
-                        <div className="flex space-x-1 py-1 not-prose">
-                          <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
-                          <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
-                          <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
+                        <div className="not-prose">
+                          <div className="text-sm text-foreground/90 leading-relaxed">
+                            Секунду, собираю инфу по крупицам звездной пыли...
+                          </div>
+                          <div className="flex space-x-1 py-1">
+                            <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10">
+                              <circle cx="5" cy="5" r="5" />
+                            </svg>
+                            <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10">
+                              <circle cx="5" cy="5" r="5" />
+                            </svg>
+                            <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10">
+                              <circle cx="5" cy="5" r="5" />
+                            </svg>
+                          </div>
                         </div>
                       )
                     ) : msg.content}
