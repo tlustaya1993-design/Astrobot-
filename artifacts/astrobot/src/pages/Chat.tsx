@@ -196,6 +196,7 @@ export default function Chat() {
     clearLocalMessages,
     paywallState,
     closePaywall,
+    streamingText,
   } = useChatStream(conversationId);
   const [inputValue, setInputValue] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
@@ -213,6 +214,9 @@ export default function Chat() {
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const pendingScrollAfterSendRef = useRef(false);
   const initialOpenScrolledConversationRef = useRef<number | null>(null);
+  /** Если пользователь вручную скроллит/касается во время ответа — автоследование отключаем. */
+  const autoScrollEnabledRef = useRef(true);
+  const lastAutoScrollAtRef = useRef(0);
   const lastSendHapticAtRef = useRef(0);
 
   const resizeComposer = () => {
@@ -238,6 +242,12 @@ export default function Chat() {
     if (touchStartX.current < 40 && dx > 60 && dy < 80) {
       setShowHistory(true);
     }
+  };
+
+  // Чтобы “следование за ботом” не мешало читать: если пользователь трогает область сообщений — выключаем.
+  const stopAutoScroll = () => {
+    if (!isStreaming) return;
+    autoScrollEnabledRef.current = false;
   };
 
   const isLikelySameMessage = (
@@ -366,6 +376,11 @@ export default function Chat() {
 
   useLayoutEffect(() => {
     if (!pendingScrollAfterSendRef.current) return;
+    // Если пользователь уже отключил автоследование — не принудительно скроллим.
+    if (!autoScrollEnabledRef.current) {
+      pendingScrollAfterSendRef.current = false;
+      return;
+    }
     const container = messagesScrollRef.current;
     if (!container) {
       pendingScrollAfterSendRef.current = false;
@@ -385,6 +400,38 @@ export default function Chat() {
     pendingScrollAfterSendRef.current = false;
     alignScrollAfterUserSend(container, prev, last);
   }, [localMessages.length]);
+
+  // Во время стрима автоскроллим следом за ботом, пока автоследование не отключено пользователем.
+  useLayoutEffect(() => {
+    if (!isStreaming) return;
+    if (!autoScrollEnabledRef.current) return;
+    const container = messagesScrollRef.current;
+    if (!container) return;
+
+    const now = Date.now();
+    if (now - lastAutoScrollAtRef.current < 50) return; // небольшая защита от дрожания
+    lastAutoScrollAtRef.current = now;
+
+    requestAnimationFrame(() => {
+      if (!autoScrollEnabledRef.current) return;
+      container.scrollTop = container.scrollHeight;
+    });
+  }, [isStreaming, streamingText]);
+
+  // Если пользователь прокручивает в прошлое — отключаем автоследование; если возвращается к низу — снова включаем.
+  useEffect(() => {
+    const container = messagesScrollRef.current;
+    if (!container) return;
+
+    const onScroll = () => {
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      autoScrollEnabledRef.current = distanceFromBottom < 80;
+    };
+
+    container.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
 
   useLayoutEffect(() => {
     if (!conversationId || isLoading) return;
@@ -529,6 +576,8 @@ export default function Chat() {
     setInputValue('');
     requestAnimationFrame(() => resizeComposer());
     pendingScrollAfterSendRef.current = true;
+    // При новом сообщении включаем автоследование заново.
+    autoScrollEnabledRef.current = true;
     try {
       const newConvId = await sendMessage(text, selectedContactId, contactExtendedMode);
       if (!conversationId && newConvId) {
@@ -678,6 +727,8 @@ export default function Chat() {
           <div
             ref={messagesScrollRef}
             className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-4"
+            onTouchStart={stopAutoScroll}
+            onPointerDown={stopAutoScroll}
           >
             {isLoading && (
               <div className="flex justify-center py-10">
