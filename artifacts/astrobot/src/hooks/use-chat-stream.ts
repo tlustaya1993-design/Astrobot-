@@ -85,6 +85,7 @@ export function useChatStream(conversationId?: number) {
     setIsStreaming(true);
     setStreamingText('');
 
+    let hadSendError = false;
     let requestTimeout: ReturnType<typeof setTimeout> | null = null;
     const controller = new AbortController();
     const clearRequestTimeout = () => {
@@ -243,8 +244,10 @@ export function useChatStream(conversationId?: number) {
       const message = userFacingChatError(error);
       const isRateLimit = errorCode === 429;
       if (errorCode === 402) {
-        return targetId;
+        hadSendError = true;
+        return;
       }
+      hadSendError = true;
       setLocalMessages((prev) => {
         const hasStreaming = prev.some((m) => m.id === streamingAssistantId);
         if (hasStreaming) {
@@ -278,7 +281,7 @@ export function useChatStream(conversationId?: number) {
       setStreamingText('');
     }
 
-    return targetId;
+    return hadSendError ? undefined : targetId;
   };
 
   const clearLocalMessages = () => setLocalMessages([]);
