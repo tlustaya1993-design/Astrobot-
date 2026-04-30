@@ -104,12 +104,12 @@ export class YooKassaError extends Error {
   readonly status?: number;
   readonly body?: string;
   readonly requestId?: string;
-  readonly operation: "create_payment" | "get_payment";
+  readonly operation: "create_payment" | "get_payment" | "create_refund";
 
   constructor(params: {
     message: string;
     kind: YooKassaErrorKind;
-    operation: "create_payment" | "get_payment";
+    operation: "create_payment" | "get_payment" | "create_refund";
     status?: number;
     body?: string;
     requestId?: string;
@@ -284,9 +284,64 @@ export function parseYooKassaWebhook(body: unknown): YooKassaWebhookEvent {
   return event as YooKassaWebhookEvent;
 }
 
+type YooKassaRefundResponse = {
+  id: string;
+  status: string;
+  amount: { value: string; currency: string };
+  payment_id: string;
+};
+
+export async function createYooKassaRefund(
+  paymentId: string,
+  amount: { value: string; currency: string },
+  options?: { idempotenceKey?: string },
+): Promise<YooKassaRefundResponse> {
+  const idempotenceKey = options?.idempotenceKey ?? crypto.randomUUID();
+  try {
+    const response = await fetch(`${getBaseUrl()}/refunds`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: getAuthHeader(),
+        "Idempotence-Key": idempotenceKey,
+      },
+      body: JSON.stringify({ payment_id: paymentId, amount }),
+      signal: AbortSignal.timeout(getTimeoutMs()),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      const requestId =
+        response.headers.get("x-request-id") ??
+        response.headers.get("X-Request-Id") ??
+        undefined;
+      throw new YooKassaError({
+        kind: "http",
+        operation: "create_refund",
+        status: response.status,
+        body,
+        requestId,
+        message: `YooKassa create refund failed: ${response.status}`,
+      });
+    }
+
+    return (await response.json()) as YooKassaRefundResponse;
+  } catch (error) {
+    if (error instanceof YooKassaError) throw error;
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new YooKassaError({ kind: "timeout", operation: "create_refund", message: "YooKassa refund timed out", cause: error });
+    }
+    if (error instanceof Error) {
+      throw new YooKassaError({ kind: "network", operation: "create_refund", message: error.message, cause: error });
+    }
+    throw new YooKassaError({ kind: "unknown", operation: "create_refund", message: "Unknown YooKassa refund error", cause: error });
+  }
+}
+
 // Backward-compatible aliases for variant spellings.
 export const createYookassaPayment = createYooKassaPayment;
 export const getYookassaPayment = getYooKassaPayment;
+export const createYookassaRefund = createYooKassaRefund;
 export const parseYookassaNotification = parseYooKassaWebhook;
 
 // Signature validation can be added later if/when YooKassa webhook signing is enabled.

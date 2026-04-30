@@ -22,6 +22,8 @@ export const paymentsTable = pgTable("payments", {
   description: text("description"),
   metadataJson: text("metadata_json"),
   creditsAppliedAt: timestamp("credits_applied_at", { withTimezone: true }),
+  refundedAt: timestamp("refunded_at", { withTimezone: true }),
+  providerRefundId: text("provider_refund_id"),
   webhookVerified: boolean("webhook_verified").notNull().default(false),
   metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
   createdAt: timestamp("created_at", { withTimezone: true })
