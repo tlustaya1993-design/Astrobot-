@@ -1,8 +1,9 @@
+import { randomUUID } from "crypto";
 import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, usersTable } from "@workspace/db";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
-import { getYookassaPayment } from "../lib/yookassa.js";
+import { getYookassaPayment, createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
 
 const router: IRouter = Router();
 
@@ -234,6 +235,89 @@ router.post("/users/reconcile", async (req, res) => {
     .limit(1);
 
   res.json({ ok: true, applied, user: updatedUser });
+});
+
+router.post("/payments/refund", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
+
+  const providerPaymentId = typeof req.body?.providerPaymentId === "string"
+    ? req.body.providerPaymentId.trim()
+    : "";
+  if (!providerPaymentId) {
+    res.status(400).json({ error: "providerPaymentId обязателен" });
+    return;
+  }
+
+  const [payment] = await db
+    .select()
+    .from(paymentsTable)
+    .where(and(
+      eq(paymentsTable.provider, "yookassa"),
+      eq(paymentsTable.providerPaymentId, providerPaymentId),
+    ))
+    .limit(1);
+
+  if (!payment) {
+    res.status(404).json({ error: "Платёж не найден" });
+    return;
+  }
+  if (payment.status === "refunded") {
+    res.status(409).json({ error: "Платёж уже возвращён" });
+    return;
+  }
+  if (payment.status !== "succeeded") {
+    res.status(409).json({ error: "Возврат возможен только для успешных платежей" });
+    return;
+  }
+
+  let refundId: string;
+  try {
+    const refund = await createYookassaRefund(
+      providerPaymentId,
+      { value: payment.amountRub, currency: payment.currency },
+      { idempotenceKey: randomUUID() },
+    );
+    refundId = refund.id;
+  } catch (err) {
+    const msg = err instanceof YooKassaError
+      ? `Ошибка ЮKassa: ${err.message}`
+      : "Не удалось выполнить возврат через ЮKassa";
+    res.status(502).json({ error: msg });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(paymentsTable)
+      .set({
+        status: "refunded",
+        providerRefundId: refundId,
+        refundedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(paymentsTable.id, payment.id));
+
+    // Списываем кредиты — не уходим в минус
+    await tx
+      .update(usersTable)
+      .set({
+        requestsBalance: sql`GREATEST(0, ${usersTable.requestsBalance} - ${payment.creditsGranted})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.sessionId, payment.sessionId));
+  });
+
+  const [updatedUser] = await db
+    .select({
+      id: usersTable.id,
+      email: usersTable.email,
+      requestsBalance: usersTable.requestsBalance,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.sessionId, payment.sessionId))
+    .limit(1);
+
+  res.json({ ok: true, refundId, user: updatedUser });
 });
 
 export default router;

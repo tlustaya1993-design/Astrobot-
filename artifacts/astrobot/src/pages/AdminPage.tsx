@@ -24,6 +24,7 @@ type AdminPayment = {
   creditsGranted: number;
   status: string;
   creditsAppliedAt: string | null;
+  refundedAt: string | null;
   providerPaymentId: string;
 };
 
@@ -88,6 +89,37 @@ export default function AdminPage() {
       toast({
         title: "Ошибка начисления",
         description: err instanceof Error ? err.message : "Не удалось начислить запросы",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refund = async (providerPaymentId: string) => {
+    if (!confirm('Вернуть деньги за этот платёж? Действие нельзя отменить.')) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/payments/refund", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ providerPaymentId }),
+      });
+      const payload = (await res.json()) as { error?: string; refundId?: string };
+      if (!res.ok) {
+        throw new Error(payload.error || `Ошибка (${res.status})`);
+      }
+      toast({
+        title: "Возврат выполнен",
+        description: `Деньги возвращены, запросы списаны. ID возврата: ${payload.refundId}`,
+      });
+      await fetchUser();
+    } catch (err) {
+      toast({
+        title: "Ошибка возврата",
+        description: err instanceof Error ? err.message : "Не удалось выполнить возврат",
       });
     } finally {
       setLoading(false);
@@ -208,12 +240,27 @@ export default function AdminPage() {
                 <div className="space-y-2">
                   {payments.map((p) => (
                     <div key={p.id} className="rounded-lg border border-border px-3 py-2 text-xs">
-                      <div className="flex flex-wrap gap-3">
+                      <div className="flex flex-wrap gap-3 items-center">
                         <span>{new Date(p.createdAt).toLocaleString("ru-RU")}</span>
                         <span>{p.packageCode}</span>
                         <span>+{p.creditsGranted}</span>
-                        <span>status: {p.status}</span>
+                        <span className={p.status === "refunded" ? "text-destructive" : p.status === "succeeded" ? "text-green-400" : ""}>
+                          status: {p.status}
+                        </span>
                         <span>applied: {p.creditsAppliedAt ? "yes" : "no"}</span>
+                        {p.status === "succeeded" && !p.refundedAt && (
+                          <button
+                            type="button"
+                            onClick={() => refund(p.providerPaymentId)}
+                            disabled={loading}
+                            className="ml-auto px-2 py-1 rounded-md text-xs bg-destructive/10 border border-destructive/30 text-destructive hover:bg-destructive/20 disabled:opacity-50"
+                          >
+                            Вернуть
+                          </button>
+                        )}
+                        {p.refundedAt && (
+                          <span className="ml-auto text-destructive">↩ возвращён</span>
+                        )}
                       </div>
                       <div className="text-muted-foreground mt-1 break-all">
                         {p.providerPaymentId}
