@@ -316,13 +316,16 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
     if (locked.status !== "succeeded") return 0;
     if (locked.creditsAppliedAt) return 0;
 
-    await tx
+    const updated = await tx
       .update(usersTable)
       .set({
         requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
         updatedAt: new Date(),
       })
-      .where(eq(usersTable.sessionId, locked.sessionId));
+      .where(eq(usersTable.sessionId, locked.sessionId))
+      .returning({ id: usersTable.id });
+
+    if (updated.length === 0) return 0;
 
     await tx
       .update(paymentsTable)
