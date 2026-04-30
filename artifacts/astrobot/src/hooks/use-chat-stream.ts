@@ -34,7 +34,11 @@ function userFacingChatError(error: unknown): string {
     lower.includes('failed to fetch') ||
     lower.includes('networkerror') ||
     lower.includes('network request failed') ||
-    lower.includes('load failed')
+    lower.includes('network error') ||
+    lower.includes('load failed') ||
+    lower.includes('econnreset') ||
+    lower.includes('etimedout') ||
+    lower.includes('соединение с ии прервалось')
   ) {
     return 'похоже, соединение прервалось. Проверьте интернет и попробуйте ещё раз.';
   }

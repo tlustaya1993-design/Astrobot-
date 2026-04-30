@@ -540,8 +540,28 @@ router.post("/conversations/:id/messages", async (req, res) => {
       res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
       res.end();
     } catch (err) {
-      const errorMessage =
-        err instanceof Error && err.message ? err.message : "Generation failed";
+      const raw = err instanceof Error ? err.message : "";
+      const rawLower = raw.toLowerCase();
+      let errorMessage: string;
+      if (
+        rawLower.includes("overloaded") ||
+        rawLower.includes("529") ||
+        rawLower.includes("rate limit") ||
+        rawLower.includes("too many")
+      ) {
+        errorMessage = "Секунду, собираю инфу по крупицам звёздной пыли… Сервис перегружен, попробуйте ещё раз через момент.";
+      } else if (
+        rawLower.includes("network") ||
+        rawLower.includes("fetch") ||
+        rawLower.includes("econnreset") ||
+        rawLower.includes("etimedout") ||
+        rawLower.includes("socket") ||
+        rawLower.includes("aborted")
+      ) {
+        errorMessage = "Соединение с ИИ прервалось на полуслове — попробуйте отправить снова.";
+      } else {
+        errorMessage = raw || "Не удалось получить ответ — попробуйте ещё раз.";
+      }
       logger.error({ err }, "Chat streaming error");
       await rollbackRequestsBalance(
         sessionId,
