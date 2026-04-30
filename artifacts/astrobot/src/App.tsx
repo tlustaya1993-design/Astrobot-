@@ -12,11 +12,42 @@ import ProfilePage from "@/pages/ProfilePage";
 import AuthCallback from "@/pages/AuthCallback";
 import BillingTestPage from "@/pages/BillingTestPage";
 import AdminPage from "@/pages/AdminPage";
-import { getSessionId } from "@/lib/session";
+import { getSessionId, getAuthHeaders } from "@/lib/session";
 import { AuthProvider } from "@/context/AuthContext";
 import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
+import { toast } from "@/hooks/use-toast";
 
 const billingTestEnabled = import.meta.env.VITE_ENABLE_BILLING_TEST === "true";
+
+const RECONCILE_SESSION_KEY = 'ab_rec_v1';
+
+/** Тихая проверка незачисленных платежей при старте приложения.
+ *  Срабатывает один раз за браузерную сессию. */
+function SilentReconcile() {
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(RECONCILE_SESSION_KEY) === '1') return;
+      sessionStorage.setItem(RECONCILE_SESSION_KEY, '1');
+    } catch {
+      return;
+    }
+    fetch('/api/billing/payments/reconcile', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { applied?: number } | null) => {
+        if (data?.applied && data.applied > 0) {
+          toast({
+            title: 'Баланс пополнен',
+            description: `Зачислено ${data.applied} запросов.`,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+  return null;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,6 +96,7 @@ function App() {
         <TooltipProvider>
           <WouterRouter base={viteBaseForRouter()}>
             <AvatarSyncProvider>
+              <SilentReconcile />
               <Router />
             </AvatarSyncProvider>
           </WouterRouter>
