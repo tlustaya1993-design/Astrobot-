@@ -488,37 +488,66 @@ router.post("/conversations/:id/messages", async (req, res) => {
       res.write(`data: ${JSON.stringify({ content: unknownTimePreface })}\n\n`);
     }
 
+    const MAX_AI_RETRIES = 1;
+    let aiRetry = 0;
+
     try {
-      if (hasAnthropicProvider()) {
-        const stream = anthropic.messages.stream({
-          model: ANTHROPIC_CHAT_MODEL,
-          max_tokens: 8192,
-          temperature: CHAT_RESPONSE_TEMPERATURE,
-          system: systemPrompt,
-          messages: chatMessages,
-        });
+      // Retry loop: повторяем вызов AI при сетевой ошибке, пока ничего не было отправлено клиенту.
+      streamLoop: while (true) {
+        const responseBeforeAttempt = fullResponse;
+        try {
+          if (hasAnthropicProvider()) {
+            const stream = anthropic.messages.stream({
+              model: ANTHROPIC_CHAT_MODEL,
+              max_tokens: 8192,
+              temperature: CHAT_RESPONSE_TEMPERATURE,
+              system: systemPrompt,
+              messages: chatMessages,
+            });
 
-        for await (const event of stream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            fullResponse += event.delta.text;
-            res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
-          }
-        }
-      } else {
-        const { openai } = await import("@workspace/integrations-openai-ai-server");
-        const stream = await openai.chat.completions.create({
-          model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-          temperature: CHAT_RESPONSE_TEMPERATURE,
-          stream: true,
-          messages: [{ role: "system", content: systemPrompt }, ...chatMessages],
-        });
+            for await (const event of stream) {
+              if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+                fullResponse += event.delta.text;
+                res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+              }
+            }
+          } else {
+            const { openai } = await import("@workspace/integrations-openai-ai-server");
+            const stream = await openai.chat.completions.create({
+              model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+              temperature: CHAT_RESPONSE_TEMPERATURE,
+              stream: true,
+              messages: [{ role: "system", content: systemPrompt }, ...chatMessages],
+            });
 
-        for await (const chunk of stream) {
-          const delta = chunk.choices?.[0]?.delta?.content;
-          if (typeof delta === "string" && delta.length > 0) {
-            fullResponse += delta;
-            res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+            for await (const chunk of stream) {
+              const delta = chunk.choices?.[0]?.delta?.content;
+              if (typeof delta === "string" && delta.length > 0) {
+                fullResponse += delta;
+                res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+              }
+            }
           }
+          break streamLoop; // успех
+        } catch (aiErr) {
+          const nothingSent = fullResponse === responseBeforeAttempt;
+          const msg = aiErr instanceof Error ? aiErr.message.toLowerCase() : "";
+          const isRetriable =
+            msg.includes("network") ||
+            msg.includes("fetch") ||
+            msg.includes("econnreset") ||
+            msg.includes("etimedout") ||
+            msg.includes("socket") ||
+            msg.includes("aborted") ||
+            msg.includes("overloaded") ||
+            msg.includes("529");
+          if (nothingSent && isRetriable && aiRetry < MAX_AI_RETRIES) {
+            aiRetry++;
+            logger.warn({ err: aiErr, aiRetry }, "Retrying AI stream after network error");
+            await new Promise((r) => setTimeout(r, 1500 * aiRetry));
+            continue streamLoop;
+          }
+          throw aiErr; // выходим в catch ниже
         }
       }
 
