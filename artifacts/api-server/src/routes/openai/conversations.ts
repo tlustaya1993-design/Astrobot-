@@ -503,6 +503,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     };
 
     let fullResponse = "";
+    let modelResponse = "";
     const unknownTimePreface = userProfile?.birthTimeUnknown
       ? "Важно: время рождения указано неточно (используем 12:00), поэтому вывод по домам и точным таймингам менее конкретный.\n\n"
       : "";
@@ -531,6 +532,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
             for await (const event of stream) {
               if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
                 fullResponse += event.delta.text;
+                modelResponse += event.delta.text;
                 safeWrite(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
               }
             }
@@ -547,6 +549,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
               const delta = chunk.choices?.[0]?.delta?.content;
               if (typeof delta === "string" && delta.length > 0) {
                 fullResponse += delta;
+                modelResponse += delta;
                 safeWrite(`data: ${JSON.stringify({ content: delta })}\n\n`);
               }
             }
@@ -566,17 +569,21 @@ router.post("/conversations/:id/messages", async (req, res) => {
         }
       }
 
+      if (!modelResponse.trim()) {
+        throw new Error("AI response was empty");
+      }
+
       // Save to DB and charge regardless of whether client is still connected.
-      await Promise.all([
-        db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse }),
-        db
+      await db.transaction(async (tx) => {
+        await tx.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse });
+        await tx
           .update(usersTable)
           .set({
             requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
             updatedAt: new Date(),
           })
-          .where(eq(usersTable.sessionId, sessionId)),
-      ]);
+          .where(eq(usersTable.sessionId, sessionId));
+      });
 
       if (sessionId && fullResponse) {
         extractAndSaveMemories(sessionId, normalizedContent, fullResponse).catch(() => {});
