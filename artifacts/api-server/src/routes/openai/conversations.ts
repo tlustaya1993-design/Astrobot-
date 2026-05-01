@@ -24,6 +24,17 @@ const router: IRouter = Router();
 const CHAT_RESPONSE_TEMPERATURE = 0.2;
 const MAX_CHAT_MESSAGE_CHARS = 8000;
 const AUTH_REQUIRED_ERROR = "Требуется авторизация";
+const MAX_RATE_LIMIT_RETRIES = 3;
+
+function isRateLimitError(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    msg.includes('rate limit') ||
+    msg.includes('429') ||
+    msg.includes('too many requests') ||
+    msg.includes('overloaded')
+  );
+}
 
 /** Переопредели в Railway, если аккаунт Anthropic ещё не видит новый id. */
 const ANTHROPIC_CHAT_MODEL =
@@ -501,37 +512,57 @@ router.post("/conversations/:id/messages", async (req, res) => {
       safeWrite(`data: ${JSON.stringify({ content: unknownTimePreface })}\n\n`);
     }
 
+    let aiAttempt = 0;
+    let exhaustedRetries = false;
+
     try {
-      if (hasAnthropicProvider()) {
-        const stream = anthropic.messages.stream({
-          model: ANTHROPIC_CHAT_MODEL,
-          max_tokens: 8192,
-          temperature: CHAT_RESPONSE_TEMPERATURE,
-          system: systemPrompt,
-          messages: chatMessages,
-        });
+      aiRetry: while (true) {
+        const responseBefore = fullResponse;
+        try {
+          if (hasAnthropicProvider()) {
+            const stream = anthropic.messages.stream({
+              model: ANTHROPIC_CHAT_MODEL,
+              max_tokens: 8192,
+              temperature: CHAT_RESPONSE_TEMPERATURE,
+              system: systemPrompt,
+              messages: chatMessages,
+            });
 
-        for await (const event of stream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            fullResponse += event.delta.text;
-            safeWrite(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
-          }
-        }
-      } else {
-        const { openai } = await import("@workspace/integrations-openai-ai-server");
-        const stream = await openai.chat.completions.create({
-          model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
-          temperature: CHAT_RESPONSE_TEMPERATURE,
-          stream: true,
-          messages: [{ role: "system", content: systemPrompt }, ...chatMessages],
-        });
+            for await (const event of stream) {
+              if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+                fullResponse += event.delta.text;
+                safeWrite(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+              }
+            }
+          } else {
+            const { openai } = await import("@workspace/integrations-openai-ai-server");
+            const stream = await openai.chat.completions.create({
+              model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+              temperature: CHAT_RESPONSE_TEMPERATURE,
+              stream: true,
+              messages: [{ role: "system", content: systemPrompt }, ...chatMessages],
+            });
 
-        for await (const chunk of stream) {
-          const delta = chunk.choices?.[0]?.delta?.content;
-          if (typeof delta === "string" && delta.length > 0) {
-            fullResponse += delta;
-            safeWrite(`data: ${JSON.stringify({ content: delta })}\n\n`);
+            for await (const chunk of stream) {
+              const delta = chunk.choices?.[0]?.delta?.content;
+              if (typeof delta === "string" && delta.length > 0) {
+                fullResponse += delta;
+                safeWrite(`data: ${JSON.stringify({ content: delta })}\n\n`);
+              }
+            }
           }
+
+          break aiRetry; // success
+        } catch (aiErr) {
+          const nothingSentYet = fullResponse === responseBefore;
+          if (nothingSentYet && isRateLimitError(aiErr) && aiAttempt < MAX_RATE_LIMIT_RETRIES) {
+            aiAttempt++;
+            logger.warn({ attempt: aiAttempt }, "Rate limit hit, retrying AI call");
+            await new Promise((r) => setTimeout(r, 2000 * aiAttempt));
+            continue aiRetry;
+          }
+          exhaustedRetries = isRateLimitError(aiErr) && aiAttempt >= MAX_RATE_LIMIT_RETRIES;
+          throw aiErr;
         }
       }
 
@@ -556,13 +587,18 @@ router.post("/conversations/:id/messages", async (req, res) => {
     } catch (err) {
       const errorMessage =
         err instanceof Error && err.message ? err.message : "Generation failed";
-      logger.error({ err }, "Chat streaming error");
-      sendTelegramAlert("AI streaming error", errorMessage, {
-        endpoint: `POST /conversations/${id}/messages`,
-        sessionId,
-        conversationId: id,
-        userSaw: errorMessage,
-      }).catch(() => {});
+      logger.error({ err, aiAttempt }, "Chat streaming error");
+      sendTelegramAlert(
+        exhaustedRetries ? "🚨 СРОЧНО: rate limit исчерпан после всех попыток" : "AI streaming error",
+        errorMessage,
+        {
+          endpoint: `POST /conversations/${id}/messages`,
+          sessionId,
+          conversationId: id,
+          userSaw: errorMessage,
+          extra: exhaustedRetries ? `Попыток: ${aiAttempt + 1}` : undefined,
+        },
+      ).catch(() => {});
       await rollbackRequestsBalance(
         sessionId,
         balanceBeforeCharge,
