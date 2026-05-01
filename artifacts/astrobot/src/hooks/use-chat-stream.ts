@@ -285,6 +285,10 @@ export function useChatStream(conversationId?: number) {
   };
 
   const clearLocalMessages = () => setLocalMessages([]);
+  const removeLocalMessages = (ids: number[]) => {
+    const idSet = new Set(ids);
+    setLocalMessages(prev => prev.filter(m => !idSet.has(m.id)));
+  };
   const closePaywall = () => setPaywallState(null);
 
   const addLocalSystemMessage = useCallback(
@@ -311,6 +315,7 @@ export function useChatStream(conversationId?: number) {
     closePaywall,
     sendMessage,
     clearLocalMessages,
+    removeLocalMessages,
     addLocalSystemMessage,
   };
 }
