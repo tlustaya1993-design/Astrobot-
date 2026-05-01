@@ -113,8 +113,6 @@ export async function sendTelegramAlert(
       what,
       `→ ${action}`,
       context.userSaw ? `\n💬 <b>Пользователь видел:</b> «${context.userSaw}»` : null,
-      "",
-      `<i>Лог (для разработчика):</i> <code>${rawError.slice(0, 200)}</code>`,
     ].filter((l) => l !== null);
 
     await sendToTelegram(lines.join("\n").replace(/\n{3,}/g, "\n\n"));
