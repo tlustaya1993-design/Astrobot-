@@ -548,6 +548,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
         endpoint: `POST /conversations/${id}/messages`,
         sessionId,
         conversationId: id,
+        userSaw: errorMessage,
       }).catch(() => {});
       await rollbackRequestsBalance(
         sessionId,
