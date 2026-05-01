@@ -857,7 +857,15 @@ export default function Chat() {
                   </div>
                   {msg.content?.trim() && (
                     <div className={`mt-1.5 flex gap-1.5 ${msg.role === 'user' ? 'self-end' : 'self-start'}`}>
-                      {isErrMsg && precedingUserMsg ? (
+                      <button
+                        type="button"
+                        onClick={() => copyMessage(String(msg.content))}
+                        className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border/60 hover:border-primary/40 hover:text-primary transition"
+                      >
+                        <Copy className="w-3 h-3" />
+                        Скопировать
+                      </button>
+                      {isErrMsg && precedingUserMsg && (
                         <button
                           type="button"
                           onClick={() => handleRetry(msg.id, String(precedingUserMsg.content), precedingUserMsg.id)}
@@ -866,15 +874,6 @@ export default function Chat() {
                         >
                           <RotateCcw className="w-3 h-3" />
                           Повторить
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => copyMessage(String(msg.content))}
-                          className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border/60 hover:border-primary/40 hover:text-primary transition"
-                        >
-                          <Copy className="w-3 h-3" />
-                          Скопировать
                         </button>
                       )}
                     </div>
