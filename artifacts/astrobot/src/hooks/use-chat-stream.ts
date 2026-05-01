@@ -27,7 +27,7 @@ function userFacingChatError(error: unknown): string {
     lower.includes('too many requests') ||
     (lower.includes('per minute') && lower.includes('limit'))
   ) {
-    return 'Секунду, собираю инфу по крупицам звездной пыли... Похоже, лимит запросов исчерпан. Попробуйте чуть позже.';
+    return 'Секунду собираю инфу по крупицам звездной пыли... В этот раз занимает чуть больше времени. Дай мне пару секунд…';
   }
   if (
     raw === 'Load failed' ||
@@ -36,10 +36,10 @@ function userFacingChatError(error: unknown): string {
     lower.includes('network request failed') ||
     lower.includes('load failed')
   ) {
-    return 'похоже, соединение прервалось. Проверьте интернет и попробуйте ещё раз.';
+    return 'Что-то мне не получается достучаться до небес 🤔 Проверь интернет и попробуй ещё раз.';
   }
   if (raw === 'The user aborted a request.' || lower.includes('abort')) {
-    return 'отправка прервалась — просто отправьте сообщение ещё раз.';
+    return 'Ой… споткнулся, пока шел. Повтори отправку ещё раз - я лишние запросы не спишу ❤️';
   }
   return raw.trim() || 'сервис сейчас отвечает медленнее обычного. Подождите минуту или обновите страницу.';
 }
