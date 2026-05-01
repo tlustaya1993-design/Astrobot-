@@ -3,6 +3,7 @@ import { db, conversations, messages, usersTable, contactsTable, memoriesTable }
 import { eq, desc, and, sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
+import { sendTelegramAlert } from "../../lib/telegram-alert.js";
 import {
   calcNatalChart, calcEphemeris, calcSolarReturn, calcProgressions,
   calcSynastry, calcLunarReturn, calcSolarArcDirections, calcTransitPerfections,
@@ -543,6 +544,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
       const errorMessage =
         err instanceof Error && err.message ? err.message : "Generation failed";
       logger.error({ err }, "Chat streaming error");
+      sendTelegramAlert("AI streaming error", errorMessage, {
+        endpoint: `POST /conversations/${id}/messages`,
+        sessionId,
+        conversationId: id,
+      }).catch(() => {});
       await rollbackRequestsBalance(
         sessionId,
         balanceBeforeCharge,
@@ -583,6 +589,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   } catch (handlerErr) {
     logger.error({ err: handlerErr }, "POST /conversations/:id/messages failed before or during setup");
+    const handlerErrMsg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr);
+    sendTelegramAlert("Handler error", handlerErrMsg, {
+      endpoint: `POST /conversations/${id}/messages`,
+      sessionId,
+    }).catch(() => {});
     if (insertedUserId != null) {
       try {
         await db.delete(messages).where(eq(messages.id, insertedUserId));
