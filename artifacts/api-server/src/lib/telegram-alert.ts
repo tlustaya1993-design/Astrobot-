@@ -12,11 +12,19 @@ export type AlertContext = {
   extra?: string;
 };
 
+type ParsedAlert = {
+  blocker: "да" | "нет";
+  what: string;
+  action: string;
+};
+
 function isConfigured(): boolean {
   return Boolean(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID);
 }
 
-async function explainWithHaiku(errorType: string, rawError: string, context: AlertContext): Promise<string> {
+async function explainWithHaiku(errorType: string, rawError: string, context: AlertContext): Promise<ParsedAlert> {
+  const fallback: ParsedAlert = { blocker: "да", what: rawError.slice(0, 120), action: "Посмотрите логи на Railway." };
+
   const contextLines = [
     context.endpoint && `Эндпоинт: ${context.endpoint}`,
     context.sessionId && `Session: ${context.sessionId.slice(0, 8)}...`,
@@ -25,43 +33,50 @@ async function explainWithHaiku(errorType: string, rawError: string, context: Al
     context.extra && `Детали: ${context.extra}`,
   ].filter(Boolean).join("\n");
 
-  const prompt = `Ты — ассистент технической поддержки сервиса AstroBot (астрологический чат-бот).
-Получена техническая ошибка. Объясни её по-человечески на русском языке для владельца бизнеса (не программиста).
+  const prompt = `Ты — помощник, который объясняет технические ошибки владелице чат-бота AstroBot. Она не программист.
 
 Тип ошибки: ${errorType}
-Сырой текст ошибки: ${rawError}
+Текст ошибки: ${rawError}
 ${contextLines ? `Контекст:\n${contextLines}` : ""}
 
-Ответь строго в таком формате (без лишних слов вокруг):
-Блокер: да / нет
-<1 предложение — что случилось>
-<1 предложение — что делать>`;
+Ответь строго в таком формате (3 строки, без лишнего):
+Блокер: да
+Что случилось: <одно предложение простыми словами — что сломалось у пользователя>
+Что делать: <одно предложение — конкретное действие без технического жаргона; если ничего делать не надо — так и напиши>
+
+Правила для "Блокер": "да" если пользователь прямо сейчас не может отправить сообщение или завершить оплату; "нет" если это фоновая ошибка.
+Правила для "Что делать": не пиши "проверьте API" или "обратитесь в поддержку" — пиши конкретно: "подождите 5 минут", "скорее всего само прошло", "откройте Railway и посмотрите логи за последние 10 минут" и т.п.`;
 
   try {
     const client = getAnthropic();
     const resp = await client.messages.create({
       model: HAIKU_MODEL,
-      max_tokens: 300,
+      max_tokens: 200,
       messages: [{ role: "user", content: prompt }],
     });
     const text = resp.content[0]?.type === "text" ? resp.content[0].text.trim() : "";
-    return text || rawError;
+    if (!text) return fallback;
+
+    const blockerMatch = text.match(/Блокер:\s*(да|нет)/i);
+    const whatMatch = text.match(/Что случилось:\s*(.+)/i);
+    const actionMatch = text.match(/Что делать:\s*(.+)/i);
+
+    return {
+      blocker: (blockerMatch?.[1]?.toLowerCase() === "да" ? "да" : "нет"),
+      what: whatMatch?.[1]?.trim() || fallback.what,
+      action: actionMatch?.[1]?.trim() || fallback.action,
+    };
   } catch {
-    return rawError;
+    return fallback;
   }
 }
 
 async function sendToTelegram(text: string): Promise<void> {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-  const body = JSON.stringify({
-    chat_id: TELEGRAM_CHAT_ID,
-    text,
-    parse_mode: "HTML",
-  });
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body,
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: "HTML" }),
   });
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
@@ -77,8 +92,9 @@ export async function sendTelegramAlert(
   if (!isConfigured()) return;
 
   try {
-    const explanation = await explainWithHaiku(errorType, rawError, context);
+    const { blocker, what, action } = await explainWithHaiku(errorType, rawError, context);
     const now = new Date().toLocaleString("ru-RU", { timeZone: "Europe/Moscow" });
+    const blockerLine = blocker === "да" ? "🔴 <b>Блокер: да</b>" : "🟡 <b>Блокер: нет</b>";
 
     const contextParts = [
       context.endpoint && `🔗 ${context.endpoint}`,
@@ -88,14 +104,16 @@ export async function sendTelegramAlert(
     ].filter(Boolean);
 
     const lines = [
+      blockerLine,
       `🚨 <b>Ошибка AstroBot</b> [${now} МСК]`,
       `<b>Тип:</b> ${errorType}`,
-      contextParts.length ? contextParts.join("  ") : "",
+      contextParts.length ? contextParts.join("  ") : null,
       "",
-      explanation,
+      what,
+      `→ ${action}`,
       "",
-      `<code>${rawError.slice(0, 300)}</code>`,
-    ].filter((l) => l !== undefined);
+      `<code>${rawError.slice(0, 200)}</code>`,
+    ].filter((l) => l !== null);
 
     await sendToTelegram(lines.join("\n").replace(/\n{3,}/g, "\n\n"));
   } catch {
