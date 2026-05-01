@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Menu, Copy, CircleHelp, X } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Menu, Copy, CircleHelp, X, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -130,6 +130,19 @@ function detectGenderByRelation(relationRaw: string): Gender {
   return 'unknown';
 }
 
+function isErrorMessage(content: string): boolean {
+  const c = content.trimStart();
+  return (
+    c.startsWith('Сейчас не получилось ответить:') ||
+    c.startsWith('Ответ оборвался и может быть неполным:') ||
+    c.includes('похоже, соединение прервалось') ||
+    c.includes('отправка прервалась') ||
+    c.includes('сервис сейчас отвечает медленнее обычного') ||
+    c.startsWith('Сервер временно недоступен') ||
+    c.includes('Секунду, собираю инфу по крупицам звездной пыли')
+  );
+}
+
 function topWithinScrollParent(el: HTMLElement, scrollParent: HTMLElement): number {
   const pr = scrollParent.getBoundingClientRect();
   const er = el.getBoundingClientRect();
@@ -194,6 +207,7 @@ export default function Chat() {
     isStreaming,
     sendMessage,
     clearLocalMessages,
+    removeLocalMessages,
     paywallState,
     closePaywall,
     streamingText,
@@ -568,6 +582,24 @@ export default function Chat() {
     setShowPostPaymentRegisterNudge(false);
   };
 
+  const handleRetry = async (errorMsgId: number, userContent: string, userMsgId?: number) => {
+    if (isStreaming) return;
+    const toRemove = [errorMsgId];
+    if (userMsgId != null) toRemove.push(userMsgId);
+    removeLocalMessages(toRemove);
+    pendingScrollAfterSendRef.current = true;
+    autoScrollEnabledRef.current = true;
+    trySendHaptic(lastSendHapticAtRef);
+    try {
+      const newConvId = await sendMessage(userContent, selectedContactId, contactExtendedMode);
+      if (!conversationId && newConvId) {
+        setLocation(`/chat/${newConvId}`, { replace: true });
+      }
+    } catch {
+      pendingScrollAfterSendRef.current = false;
+    }
+  };
+
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputValue.trim() || isStreaming) return;
@@ -779,7 +811,12 @@ export default function Chat() {
               </motion.div>
             )}
 
-            {displayMessages.map((msg, idx) => (
+            {displayMessages.map((msg, idx) => {
+              const isErrMsg = msg.role === 'assistant' && !!msg.content?.trim() && isErrorMessage(msg.content);
+              const precedingUserMsg = isErrMsg
+                ? displayMessages.slice(0, idx).reverse().find(m => m.role === 'user') ?? null
+                : null;
+              return (
               <motion.div
                 key={msg.id || idx}
                 data-chat-row={msg.role}
@@ -819,20 +856,32 @@ export default function Chat() {
                     ) : msg.content}
                   </div>
                   {msg.content?.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => copyMessage(String(msg.content))}
-                      className={`mt-1.5 text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border/60 hover:border-primary/40 hover:text-primary transition ${
-                        msg.role === 'user' ? 'self-end' : 'self-start'
-                      }`}
-                    >
-                      <Copy className="w-3 h-3" />
-                      Скопировать
-                    </button>
+                    <div className={`mt-1.5 flex gap-1.5 ${msg.role === 'user' ? 'self-end' : 'self-start'}`}>
+                      <button
+                        type="button"
+                        onClick={() => copyMessage(String(msg.content))}
+                        className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border/60 hover:border-primary/40 hover:text-primary transition"
+                      >
+                        <Copy className="w-3 h-3" />
+                        Скопировать
+                      </button>
+                      {isErrMsg && precedingUserMsg && (
+                        <button
+                          type="button"
+                          onClick={() => handleRetry(msg.id, String(precedingUserMsg.content), precedingUserMsg.id)}
+                          disabled={isStreaming}
+                          className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 text-primary hover:bg-primary/10 transition disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Повторить
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </motion.div>
-            ))}
+              );
+            })}
 
             {showPostPaymentRegisterNudge && !isLoggedIn && (
               <motion.div
