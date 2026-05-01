@@ -471,13 +471,25 @@ router.post("/conversations/:id/messages", async (req, res) => {
       res.flushHeaders();
     }
 
+    let clientDisconnected = false;
+    res.on("close", () => { clientDisconnected = true; });
+
     heartbeat = setInterval(() => {
       try {
         res.write(": ping\n\n");
       } catch {
-        /* ignore */
+        clientDisconnected = true;
       }
     }, 20_000);
+
+    const safeWrite = (data: string) => {
+      if (clientDisconnected) return;
+      try {
+        res.write(data);
+      } catch {
+        clientDisconnected = true;
+      }
+    };
 
     let fullResponse = "";
     const unknownTimePreface = userProfile?.birthTimeUnknown
@@ -486,7 +498,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
     if (unknownTimePreface) {
       fullResponse += unknownTimePreface;
-      res.write(`data: ${JSON.stringify({ content: unknownTimePreface })}\n\n`);
+      safeWrite(`data: ${JSON.stringify({ content: unknownTimePreface })}\n\n`);
     }
 
     try {
@@ -502,7 +514,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
         for await (const event of stream) {
           if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
             fullResponse += event.delta.text;
-            res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+            safeWrite(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
           }
         }
       } else {
@@ -518,11 +530,12 @@ router.post("/conversations/:id/messages", async (req, res) => {
           const delta = chunk.choices?.[0]?.delta?.content;
           if (typeof delta === "string" && delta.length > 0) {
             fullResponse += delta;
-            res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
+            safeWrite(`data: ${JSON.stringify({ content: delta })}\n\n`);
           }
         }
       }
 
+      // Save to DB and charge regardless of whether client is still connected.
       await Promise.all([
         db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse }),
         db
@@ -538,8 +551,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
         extractAndSaveMemories(sessionId, normalizedContent, fullResponse).catch(() => {});
       }
 
-      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-      res.end();
+      safeWrite(`data: ${JSON.stringify({ done: true })}\n\n`);
+      if (!res.writableEnded) res.end();
     } catch (err) {
       const errorMessage =
         err instanceof Error && err.message ? err.message : "Generation failed";
@@ -555,13 +568,9 @@ router.post("/conversations/:id/messages", async (req, res) => {
         balanceBeforeCharge,
         "Failed to rollback requestsBalance after stream error",
       );
-      try {
-        if (!res.writableEnded) {
-          res.write(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
-          res.end();
-        }
-      } catch {
-        /* ignore */
+      safeWrite(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
+      if (!res.writableEnded) {
+        try { res.end(); } catch { /* ignore */ }
       }
     } finally {
       if (heartbeat) clearInterval(heartbeat);
