@@ -7,9 +7,13 @@ import { toast } from "@/hooks/use-toast";
 
 type AdminMetrics = {
   registered: number;
+  onboardedGuests: number;
   activeGuests: number;
   emptySessions: number;
   testSessions: number;
+  onboardingTotal: number;
+  onboardingRegistered: number;
+  onboardingConversion: number;
   dau: number;
   wau: number;
   dauShare: number;
@@ -122,9 +126,13 @@ export default function AdminPage() {
       if (!res.ok || !payload.ok) throw new Error(payload.error || `Ошибка (${res.status})`);
       setMetrics({
         registered: payload.registered ?? 0,
+        onboardedGuests: payload.onboardedGuests ?? 0,
         activeGuests: payload.activeGuests ?? 0,
         emptySessions: payload.emptySessions ?? 0,
         testSessions: payload.testSessions ?? 0,
+        onboardingTotal: payload.onboardingTotal ?? 0,
+        onboardingRegistered: payload.onboardingRegistered ?? 0,
+        onboardingConversion: payload.onboardingConversion ?? 0,
         dau: payload.dau ?? 0,
         wau: payload.wau ?? 0,
         dauShare: payload.dauShare ?? 0,
@@ -477,16 +485,22 @@ export default function AdminPage() {
             <p className="text-sm text-muted-foreground">Загрузка...</p>
           ) : metrics ? (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {/* Segments */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg bg-background border border-border px-3 py-2">
                   <p className="text-xs text-muted-foreground">Зарегистрированных</p>
                   <p className="text-lg font-semibold">{metrics.registered.toLocaleString("ru-RU")}</p>
-                  <p className="text-xs text-muted-foreground">с email-аккаунтом</p>
+                  <p className="text-xs text-muted-foreground">создали аккаунт с email</p>
+                </div>
+                <div className="rounded-lg bg-background border border-border px-3 py-2">
+                  <p className="text-xs text-muted-foreground">Прошли онбординг</p>
+                  <p className="text-lg font-semibold">{metrics.onboardedGuests.toLocaleString("ru-RU")}</p>
+                  <p className="text-xs text-muted-foreground">заполнили профиль, не зарегистрировались</p>
                 </div>
                 <div className="rounded-lg bg-background border border-border px-3 py-2">
                   <p className="text-xs text-muted-foreground">Активных гостей</p>
                   <p className="text-lg font-semibold">{metrics.activeGuests.toLocaleString("ru-RU")}</p>
-                  <p className="text-xs text-muted-foreground">анонимы, пользовались чатом</p>
+                  <p className="text-xs text-muted-foreground">пользовались чатом без регистрации</p>
                 </div>
                 <div className="rounded-lg bg-background border border-border px-3 py-2">
                   <p className="text-xs text-muted-foreground">Пустых сессий</p>
@@ -495,6 +509,30 @@ export default function AdminPage() {
                 </div>
               </div>
 
+              {/* Onboarding → Registration conversion */}
+              <div className="rounded-lg bg-background border border-border px-3 py-2.5 space-y-2">
+                <p className="text-xs font-medium">Воронка: онбординг → регистрация</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 text-center">
+                    <p className="text-base font-semibold">{metrics.onboardingTotal.toLocaleString("ru-RU")}</p>
+                    <p className="text-xs text-muted-foreground">прошли онбординг</p>
+                  </div>
+                  <span className="text-muted-foreground">→</span>
+                  <div className="flex-1 text-center">
+                    <p className="text-base font-semibold">{metrics.onboardingRegistered.toLocaleString("ru-RU")}</p>
+                    <p className="text-xs text-muted-foreground">зарегистрировались</p>
+                  </div>
+                  <span className="text-muted-foreground">=</span>
+                  <div className="flex-1 text-center">
+                    <p className={`text-base font-semibold ${metrics.onboardingConversion >= 0.5 ? "text-green-400" : metrics.onboardingConversion >= 0.2 ? "text-amber-400" : "text-destructive"}`}>
+                      {(metrics.onboardingConversion * 100).toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-muted-foreground">конверсия</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* DAU / WAU */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg bg-background border border-border px-3 py-2">
                   <p className="text-xs text-muted-foreground">DAU (сегодня)</p>
@@ -515,7 +553,7 @@ export default function AdminPage() {
               {metrics.testSessions > 0 && (
                 <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 px-3 py-2">
                   <p className="text-xs text-amber-400">
-                    {metrics.testSessions.toLocaleString("ru-RU")} тестовых сессий помечено флагом <code className="bg-white/10 px-1 rounded">is_test</code> — они исключены из всех метрик выше
+                    {metrics.testSessions.toLocaleString("ru-RU")} тестовых сессий помечено флагом <code className="bg-white/10 px-1 rounded">is_test</code> — исключены из всех метрик
                   </p>
                 </div>
               )}

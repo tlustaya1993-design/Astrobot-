@@ -190,27 +190,64 @@ router.get("/metrics", async (req, res) => {
     .from(usersTable)
     .where(and(sql`${usersTable.email} IS NOT NULL`, sql`${usersTable.isTest} = false`, notAdmin));
 
-  // Active guests = no email, have sent at least one message, not test
+  // Onboarded guests = completed onboarding (name + birth data) but never registered
+  // When an anonymous user registers, email is added to the same row — so this stays clean
+  const [{ onboardedGuests }] = await db
+    .select({ onboardedGuests: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(
+      sql`${usersTable.email} IS NULL`,
+      sql`${usersTable.onboardingDone} = true`,
+      sql`${usersTable.isTest} = false`,
+    ));
+
+  // Active guests = no email, used the chat, but did NOT complete onboarding
   const [{ activeGuests }] = await db
     .select({ activeGuests: sql<number>`cast(count(*) as int)` })
     .from(usersTable)
     .where(and(
       sql`${usersTable.email} IS NULL`,
+      sql`${usersTable.onboardingDone} = false`,
       sql`${usersTable.requestsUsed} > 0`,
       sql`${usersTable.isTest} = false`,
     ));
 
-  // Empty sessions = no email, zero activity — likely bots, load tests, or bounced visitors
+  // Empty sessions = no email, no onboarding, zero activity
   const [{ emptySessions }] = await db
     .select({ emptySessions: sql<number>`cast(count(*) as int)` })
     .from(usersTable)
-    .where(and(sql`${usersTable.email} IS NULL`, sql`${usersTable.requestsUsed} = 0`, sql`${usersTable.isTest} = false`));
+    .where(and(
+      sql`${usersTable.email} IS NULL`,
+      sql`${usersTable.onboardingDone} = false`,
+      sql`${usersTable.requestsUsed} = 0`,
+      sql`${usersTable.isTest} = false`,
+    ));
 
   // Explicitly marked test sessions
   const [{ testSessions }] = await db
     .select({ testSessions: sql<number>`cast(count(*) as int)` })
     .from(usersTable)
     .where(sql`${usersTable.isTest} = true`);
+
+  // Onboarding → Registration conversion
+  // Total who completed onboarding (registered or not), excluding test/admin
+  const [{ onboardingTotal }] = await db
+    .select({ onboardingTotal: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(sql`${usersTable.onboardingDone} = true`, sql`${usersTable.isTest} = false`, notAdmin));
+
+  // Of those, how many also registered (email present in same row)
+  const [{ onboardingRegistered }] = await db
+    .select({ onboardingRegistered: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(
+      sql`${usersTable.onboardingDone} = true`,
+      sql`${usersTable.email} IS NOT NULL`,
+      sql`${usersTable.isTest} = false`,
+      notAdmin,
+    ));
+
+  const onboardingConversion = onboardingTotal > 0 ? onboardingRegistered / onboardingTotal : 0;
 
   // DAU / WAU — registered real users only (most reliable signal, unaffected by anonymous noise)
   const [{ dau }] = await db
@@ -240,7 +277,21 @@ router.get("/metrics", async (req, res) => {
   const dauShare = registered > 0 ? dau / registered : 0;
   const wauShare = registered > 0 ? wau / registered : 0;
 
-  res.json({ ok: true, registered, activeGuests, emptySessions, testSessions, dau, wau, dauShare, wauShare });
+  res.json({
+    ok: true,
+    registered,
+    onboardedGuests,
+    activeGuests,
+    emptySessions,
+    testSessions,
+    onboardingTotal,
+    onboardingRegistered,
+    onboardingConversion,
+    dau,
+    wau,
+    dauShare,
+    wauShare,
+  });
 });
 
 router.get("/me", async (req, res) => {
