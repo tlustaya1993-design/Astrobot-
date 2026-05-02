@@ -8,6 +8,7 @@ import astrologyRouter from "./astrology.js";
 import contactsRouter from "./contacts.js";
 import billingRouter from "./billing.js";
 import adminRouter from "./admin.js";
+import supportRouter from "./support.js";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use("/astrology", astrologyRouter);
 router.use(contactsRouter);
 router.use("/billing", billingRouter);
 router.use("/admin", adminRouter);
+router.use("/support", supportRouter);
 
 export default router;

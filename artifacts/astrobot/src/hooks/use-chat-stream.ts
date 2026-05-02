@@ -56,6 +56,7 @@ export function useChatStream(conversationId?: number) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [paywallState, setPaywallState] = useState<PaywallState | null>(null);
+  const [failureCount, setFailureCount] = useState(0);
   const queryClient = useQueryClient();
 
   const sendMessage = async (
@@ -233,6 +234,7 @@ export function useChatStream(conversationId?: number) {
         throw new Error(streamError);
       }
 
+      setFailureCount(0);
       queryClient.invalidateQueries({ queryKey: getGetOpenaiConversationQueryKey(targetId) });
 
     } catch (error) {
@@ -248,6 +250,7 @@ export function useChatStream(conversationId?: number) {
         return;
       }
       hadSendError = true;
+      setFailureCount(prev => prev + 1);
       setLocalMessages((prev) => {
         const hasStreaming = prev.some((m) => m.id === streamingAssistantId);
         if (hasStreaming) {
@@ -312,6 +315,7 @@ export function useChatStream(conversationId?: number) {
     isStreaming,
     streamingText,
     paywallState,
+    failureCount,
     closePaywall,
     sendMessage,
     clearLocalMessages,
