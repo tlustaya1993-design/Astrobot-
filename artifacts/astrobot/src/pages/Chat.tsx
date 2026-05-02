@@ -26,6 +26,8 @@ const POST_PAYMENT_REGISTER_NUDGE_KEY = 'astrobot_post_payment_register_nudge';
 const CHAT_ONBOARDING_STORAGE_KEY = 'astrobot_chat_onboarding_v1';
 
 const HAPTIC_COOLDOWN_MS = 140;
+const MAX_CHAT_MESSAGE_CHARS = 8000;
+const CHAR_COUNTER_THRESHOLD = 3000;
 
 /**
  * Тактильный отклик при отправке: работает только там, где браузер реализует Vibration API
@@ -605,7 +607,8 @@ export default function Chat() {
     if (!inputValue.trim() || isStreaming) return;
     trySendHaptic(lastSendHapticAtRef);
     const text = inputValue.trim();
-    setInputValue('');
+    const tooLong = text.length > MAX_CHAT_MESSAGE_CHARS;
+    if (!tooLong) setInputValue('');
     requestAnimationFrame(() => resizeComposer());
     pendingScrollAfterSendRef.current = true;
     // При новом сообщении включаем автоследование заново.
@@ -1014,6 +1017,11 @@ export default function Chat() {
                     <span className="text-muted-foreground"> (очень длинное — 3)</span>
                   </span>
                 </label>
+              </div>
+            )}
+            {inputValue.length > CHAR_COUNTER_THRESHOLD && (
+              <div className={`text-right text-xs mb-1 tabular-nums ${inputValue.length > MAX_CHAT_MESSAGE_CHARS ? 'text-destructive font-medium' : inputValue.length > MAX_CHAT_MESSAGE_CHARS * 0.9 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+                {inputValue.length}/{MAX_CHAT_MESSAGE_CHARS}
               </div>
             )}
             <form onSubmit={handleSend} className="relative flex items-end">
