@@ -9,7 +9,7 @@ import {
   getGetOpenaiConversationQueryKey,
   getListOpenaiConversationsQueryKey,
 } from '@workspace/api-client-react';
-import { getAuthHeaders } from '@/lib/session';
+import { getAuthHeaders, getSessionId } from '@/lib/session';
 import { useChatStream } from '@/hooks/use-chat-stream';
 import AstroMarkdown from '@/components/chat/AstroMarkdown';
 import PeoplePanel from '@/components/chat/PeoplePanel';
@@ -141,7 +141,10 @@ function isErrorMessage(content: string): boolean {
     c.includes('отправка прервалась') ||
     c.includes('сервис сейчас отвечает медленнее обычного') ||
     c.startsWith('Сервер временно недоступен') ||
-    c.includes('Секунду, собираю инфу по крупицам звездной пыли')
+    c.includes('Секунду собираю инфу по крупицам звездной пыли') ||
+    c.includes('Звезды не всегда бывают покладистыми') ||
+    c.includes('достучаться до небес') ||
+    c.includes('споткнулся, пока шел')
   );
 }
 
@@ -213,6 +216,7 @@ export default function Chat() {
     paywallState,
     closePaywall,
     streamingText,
+    failureCount,
   } = useChatStream(conversationId);
   const [inputValue, setInputValue] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
@@ -602,6 +606,23 @@ export default function Chat() {
     }
   };
 
+  const handleUrgentSupport = async () => {
+    try {
+      await fetch('/api/support/urgent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ sessionId: getSessionId(), conversationId, failureCount }),
+      });
+    } catch {
+      /* best-effort */
+    }
+    toast({
+      title: 'Запрос отправлен',
+      description: 'Мы получили сигнал и скоро разберёмся. Спасибо за терпение ❤️',
+      duration: 4000,
+    });
+  };
+
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputValue.trim() || isStreaming) return;
@@ -877,6 +898,15 @@ export default function Chat() {
                         >
                           <RotateCcw className="w-3 h-3" />
                           Повторить
+                        </button>
+                      )}
+                      {isErrMsg && failureCount >= 3 && (
+                        <button
+                          type="button"
+                          onClick={handleUrgentSupport}
+                          className="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded-md border border-destructive/50 text-destructive hover:bg-destructive/10 transition"
+                        >
+                          🚨 В поддержку
                         </button>
                       )}
                     </div>
