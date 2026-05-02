@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Menu, Copy, CircleHelp, X, RotateCcw } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Copy, CircleHelp, X, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -18,6 +18,8 @@ import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
 import PaywallSheet from '@/components/billing/PaywallSheet';
+import BottomNav from '@/components/layout/BottomNav';
+import ProfileSheet from '@/components/profile/ProfileSheet';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { getToken } from '@/lib/session';
@@ -223,6 +225,7 @@ export default function Chat() {
   /** Расширенный разбор по контакту: каждое сообщение = 2× запроса (см. сервер). */
   const [contactExtendedMode, setContactExtendedMode] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [contextSwitchTargetId, setContextSwitchTargetId] = useState<number | null | undefined>(undefined);
   const [showContactModeHint, setShowContactModeHint] = useState(false);
@@ -731,19 +734,7 @@ export default function Chat() {
                 <ChevronLeft className="w-5 h-5" />
               </button>
             ) : (
-              <button
-                type="button"
-                data-onboarding-target="history-menu"
-                onClick={() => setShowHistory(true)}
-                className={`p-1.5 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition ${
-                  onboardingPhase === 'step1'
-                    ? 'ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse'
-                    : ''
-                }`}
-                aria-label="Открыть историю"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
+              <div className="w-8" />
             )}
 
             <div className="flex items-center gap-2">
@@ -1099,8 +1090,28 @@ export default function Chat() {
               </motion.button>
             </form>
           </div>
+          {/* Spacer so content isn't hidden behind the fixed bottom nav */}
+          <div className="shrink-0" style={{ height: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }} />
         </div>
       </AppLayout>
+
+      <BottomNav
+        activeTab={showHistory ? 'chats' : showProfile ? 'profile' : null}
+        onChatsClick={() => {
+          if (showProfile) setShowProfile(false);
+          setShowHistory((v) => !v);
+        }}
+        onProfileClick={() => {
+          if (showHistory) setShowHistory(false);
+          setShowProfile((v) => !v);
+        }}
+      />
+
+      <ProfileSheet
+        variant="sheet"
+        open={showProfile}
+        onClose={() => setShowProfile(false)}
+      />
 
       <HistoryDrawer
         open={showHistory}
