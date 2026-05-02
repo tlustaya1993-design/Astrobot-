@@ -268,7 +268,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
   }
   if (normalizedContent.length > MAX_CHAT_MESSAGE_CHARS) {
     res.status(413).json({
-      error: `Сообщение слишком длинное. Максимум ${MAX_CHAT_MESSAGE_CHARS} символов.`,
+      error: `Ты — писатель! Но мне не прочесть до конца. Можешь сократить? Максимум ${MAX_CHAT_MESSAGE_CHARS} символов. Жду! Мне очень интересно 😊`,
     });
     return;
   }
@@ -617,7 +617,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({
         error:
-          "Внутренняя ошибка сервера при отправке сообщения. Попробуйте ещё раз или обновите страницу.",
+          "Звезды не всегда бывают покладистыми. Давай я ещё раз с ними поговорю. Нажми «Повторить». Мы так просто не сдадимся 😉",
       });
     }
   }
