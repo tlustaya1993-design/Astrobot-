@@ -178,26 +178,120 @@ router.get("/metrics", async (req, res) => {
   startOfToday.setHours(0, 0, 0, 0);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [{ totalUsers }] = await db
-    .select({ totalUsers: sql<number>`cast(count(*) as int)` })
-    .from(usersTable);
+  const adminEmails = parseAdminEmails();
+  // Exclude admin accounts from all user metrics
+  const notAdmin = adminEmails.length > 0
+    ? sql`(${usersTable.email} IS NULL OR lower(${usersTable.email}) NOT IN (${sql.join(adminEmails.map((e) => sql`${e}`), sql`, `)}))`
+    : sql`true`;
 
+  // Registered = has email, not test, not an admin account
+  const [{ registered }] = await db
+    .select({ registered: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(sql`${usersTable.email} IS NOT NULL`, sql`${usersTable.isTest} = false`, notAdmin));
+
+  // Onboarded guests = completed onboarding (name + birth data) but never registered
+  // When an anonymous user registers, email is added to the same row — so this stays clean
+  const [{ onboardedGuests }] = await db
+    .select({ onboardedGuests: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(
+      sql`${usersTable.email} IS NULL`,
+      sql`${usersTable.onboardingDone} = true`,
+      sql`${usersTable.isTest} = false`,
+    ));
+
+  // Active guests = no email, used the chat, but did NOT complete onboarding
+  const [{ activeGuests }] = await db
+    .select({ activeGuests: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(
+      sql`${usersTable.email} IS NULL`,
+      sql`${usersTable.onboardingDone} = false`,
+      sql`${usersTable.requestsUsed} > 0`,
+      sql`${usersTable.isTest} = false`,
+    ));
+
+  // Empty sessions = no email, no onboarding, zero activity
+  const [{ emptySessions }] = await db
+    .select({ emptySessions: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(
+      sql`${usersTable.email} IS NULL`,
+      sql`${usersTable.onboardingDone} = false`,
+      sql`${usersTable.requestsUsed} = 0`,
+      sql`${usersTable.isTest} = false`,
+    ));
+
+  // Explicitly marked test sessions
+  const [{ testSessions }] = await db
+    .select({ testSessions: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(sql`${usersTable.isTest} = true`);
+
+  // Onboarding → Registration conversion
+  // Total who completed onboarding (registered or not), excluding test/admin
+  const [{ onboardingTotal }] = await db
+    .select({ onboardingTotal: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(sql`${usersTable.onboardingDone} = true`, sql`${usersTable.isTest} = false`, notAdmin));
+
+  // Of those, how many also registered (email present in same row)
+  const [{ onboardingRegistered }] = await db
+    .select({ onboardingRegistered: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(
+      sql`${usersTable.onboardingDone} = true`,
+      sql`${usersTable.email} IS NOT NULL`,
+      sql`${usersTable.isTest} = false`,
+      notAdmin,
+    ));
+
+  const onboardingConversion = onboardingTotal > 0 ? onboardingRegistered / onboardingTotal : 0;
+
+  // DAU / WAU — registered real users only (most reliable signal, unaffected by anonymous noise)
   const [{ dau }] = await db
     .select({ dau: sql<number>`cast(count(distinct ${conversations.sessionId}) as int)` })
     .from(messages)
     .innerJoin(conversations, eq(messages.conversationId, conversations.id))
-    .where(sql`${messages.createdAt} >= ${startOfToday}`);
+    .innerJoin(usersTable, eq(usersTable.sessionId, conversations.sessionId))
+    .where(and(
+      sql`${messages.createdAt} >= ${startOfToday}`,
+      sql`${usersTable.email} IS NOT NULL`,
+      sql`${usersTable.isTest} = false`,
+      notAdmin,
+    ));
 
   const [{ wau }] = await db
     .select({ wau: sql<number>`cast(count(distinct ${conversations.sessionId}) as int)` })
     .from(messages)
     .innerJoin(conversations, eq(messages.conversationId, conversations.id))
-    .where(sql`${messages.createdAt} >= ${sevenDaysAgo}`);
+    .innerJoin(usersTable, eq(usersTable.sessionId, conversations.sessionId))
+    .where(and(
+      sql`${messages.createdAt} >= ${sevenDaysAgo}`,
+      sql`${usersTable.email} IS NOT NULL`,
+      sql`${usersTable.isTest} = false`,
+      notAdmin,
+    ));
 
-  const dauShare = totalUsers > 0 ? dau / totalUsers : 0;
-  const wauShare = totalUsers > 0 ? wau / totalUsers : 0;
+  const dauShare = registered > 0 ? dau / registered : 0;
+  const wauShare = registered > 0 ? wau / registered : 0;
 
-  res.json({ ok: true, totalUsers, dau, wau, dauShare, wauShare });
+  res.json({
+    ok: true,
+    registered,
+    onboardedGuests,
+    activeGuests,
+    emptySessions,
+    testSessions,
+    onboardingTotal,
+    onboardingRegistered,
+    onboardingConversion,
+    dau,
+    wau,
+    dauShare,
+    wauShare,
+  });
 });
 
 router.get("/me", async (req, res) => {
