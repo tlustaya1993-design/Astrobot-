@@ -38,12 +38,9 @@ export function ChatOnboardingOverlay({ phase, onNext, onSkip, reduceMotion }: P
   const body =
     phase === 'step1' ? (
       <>
-        <p className="md:hidden text-sm text-foreground/95 leading-relaxed">
-          Нажмите иконку <span className="font-semibold text-primary">☰</span> вверху слева — откроется список ваших чатов. С телефона можно ещё{' '}
+        <p className="text-sm text-foreground/95 leading-relaxed">
+          Нажмите <span className="font-semibold text-primary">«Чаты»</span> внизу экрана — откроется список ваших диалогов. С телефона можно ещё{' '}
           <span className="font-medium">провести от левого края экрана вправо</span>.
-        </p>
-        <p className="hidden md:block text-sm text-foreground/95 leading-relaxed">
-          Нажмите <span className="font-semibold text-primary">☰</span> в шапке — откроется список диалогов (на широком экране список может быть вынесен в боковую колонку, если так настроен макет).
         </p>
       </>
     ) : (
