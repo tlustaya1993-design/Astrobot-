@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
-import { db, paymentsTable, usersTable } from "@workspace/db";
+import { db, paymentsTable, usersTable, conversations, messages } from "@workspace/db";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
 import { getYookassaPayment, createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
 
@@ -73,6 +73,36 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
     return locked.creditsGranted;
   });
 }
+
+router.get("/metrics", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
+
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const [{ totalUsers }] = await db
+    .select({ totalUsers: sql<number>`cast(count(*) as int)` })
+    .from(usersTable);
+
+  const [{ dau }] = await db
+    .select({ dau: sql<number>`cast(count(distinct ${conversations.sessionId}) as int)` })
+    .from(messages)
+    .innerJoin(conversations, eq(messages.conversationId, conversations.id))
+    .where(sql`${messages.createdAt} >= ${startOfToday}`);
+
+  const [{ wau }] = await db
+    .select({ wau: sql<number>`cast(count(distinct ${conversations.sessionId}) as int)` })
+    .from(messages)
+    .innerJoin(conversations, eq(messages.conversationId, conversations.id))
+    .where(sql`${messages.createdAt} >= ${sevenDaysAgo}`);
+
+  const dauShare = totalUsers > 0 ? dau / totalUsers : 0;
+  const wauShare = totalUsers > 0 ? wau / totalUsers : 0;
+
+  res.json({ ok: true, totalUsers, dau, wau, dauShare, wauShare });
+});
 
 router.get("/me", async (req, res) => {
   if (!(await requireAdmin(req, res))) return;

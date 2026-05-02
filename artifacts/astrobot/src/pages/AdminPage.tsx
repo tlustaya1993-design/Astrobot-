@@ -1,9 +1,17 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { getAuthHeaders } from "@/lib/session";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "@/hooks/use-toast";
+
+type AdminMetrics = {
+  totalUsers: number;
+  dau: number;
+  wau: number;
+  dauShare: number;
+  wauShare: number;
+};
 
 type AdminUser = {
   id: number;
@@ -34,8 +42,35 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [user, setUser] = useState<AdminUser | null>(null);
   const [payments, setPayments] = useState<AdminPayment[]>([]);
+  const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
 
   const canSearch = useMemo(() => queryEmail.trim().length > 4, [queryEmail]);
+
+  const fetchMetrics = async () => {
+    setMetricsLoading(true);
+    try {
+      const res = await fetch("/api/admin/metrics", { headers: getAuthHeaders() });
+      const payload = (await res.json()) as { ok?: boolean; error?: string } & Partial<AdminMetrics>;
+      if (!res.ok || !payload.ok) throw new Error(payload.error || `Ошибка (${res.status})`);
+      setMetrics({
+        totalUsers: payload.totalUsers ?? 0,
+        dau: payload.dau ?? 0,
+        wau: payload.wau ?? 0,
+        dauShare: payload.dauShare ?? 0,
+        wauShare: payload.wauShare ?? 0,
+      });
+    } catch {
+      // metrics are best-effort, skip toast noise
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) fetchMetrics();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn]);
 
   const fetchUser = async () => {
     if (!canSearch) return;
@@ -174,6 +209,34 @@ export default function AdminPage() {
             Нужно войти в аккаунт администратора.
           </div>
         ) : null}
+
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Пользователи</p>
+          {metricsLoading ? (
+            <p className="text-sm text-muted-foreground">Загрузка...</p>
+          ) : metrics ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="rounded-lg bg-background border border-border px-3 py-2">
+                <p className="text-xs text-muted-foreground">Всего</p>
+                <p className="text-lg font-semibold">{metrics.totalUsers.toLocaleString("ru-RU")}</p>
+              </div>
+              <div className="rounded-lg bg-background border border-border px-3 py-2">
+                <p className="text-xs text-muted-foreground">DAU (сегодня)</p>
+                <p className="text-lg font-semibold">{metrics.dau.toLocaleString("ru-RU")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(metrics.dauShare * 100).toFixed(1)}% от всех
+                </p>
+              </div>
+              <div className="rounded-lg bg-background border border-border px-3 py-2">
+                <p className="text-xs text-muted-foreground">WAU (7 дней)</p>
+                <p className="text-lg font-semibold">{metrics.wau.toLocaleString("ru-RU")}</p>
+                <p className="text-xs text-muted-foreground">
+                  {(metrics.wauShare * 100).toFixed(1)}% от всех
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
           <p className="text-xs text-muted-foreground">
