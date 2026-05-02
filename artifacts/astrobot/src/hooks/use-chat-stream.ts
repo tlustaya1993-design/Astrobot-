@@ -122,65 +122,91 @@ export function useChatStream(conversationId?: number) {
         body.contactId = contactId;
       }
 
-      const res = await fetch(`/api/openai/conversations/${targetId}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-      clearRequestTimeout();
+      let res!: Response;
+      let htmlRetryCount = 0;
+      const MAX_HTML_RETRIES = 2;
 
-      if (!res.ok) {
-        setLocalMessages(prev => prev.filter((m) => m.id !== streamingAssistantId));
-        let message = `Ошибка сервера (${res.status})`;
-        let payloadMeta: { freeRemaining?: number; required?: number; balance?: number } = {};
-        const raw = await res.clone().text();
-        const openPaywall = (msg: string, meta: typeof payloadMeta) => {
-          setPaywallState({
-            open: true,
-            message: msg,
-            ...meta,
-          });
-        };
-        try {
-          const payload = JSON.parse(raw) as {
-            error?: string;
-            freeRemaining?: number;
-            required?: number;
-            balance?: number;
+      fetchRetry: while (true) {
+        res = await fetch(`/api/openai/conversations/${targetId}/messages`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        clearRequestTimeout();
+
+        if (!res.ok) {
+          const raw = await res.text();
+          const isHtml = raw.trimStart().startsWith('<!');
+
+          if (isHtml && res.status >= 500 && htmlRetryCount < MAX_HTML_RETRIES) {
+            htmlRetryCount++;
+            const waitMsg = 'Подожди секундочку… Сервер перезагружается, сейчас попробую ещё раз 🔄';
+            setLocalMessages(prev =>
+              prev.map(m => m.id === streamingAssistantId ? { ...m, content: waitMsg } : m)
+            );
+            setStreamingText(waitMsg);
+            await new Promise(r => setTimeout(r, 4000 * htmlRetryCount));
+            setLocalMessages(prev =>
+              prev.map(m => m.id === streamingAssistantId ? { ...m, content: '' } : m)
+            );
+            setStreamingText('');
+            requestTimeout = setTimeout(() => controller.abort(), 60_000);
+            continue fetchRetry;
+          }
+
+          setLocalMessages(prev => prev.filter((m) => m.id !== streamingAssistantId));
+          let message = `Ошибка сервера (${res.status})`;
+          let payloadMeta: { freeRemaining?: number; required?: number; balance?: number } = {};
+          const openPaywall = (msg: string, meta: typeof payloadMeta) => {
+            setPaywallState({
+              open: true,
+              message: msg,
+              ...meta,
+            });
           };
-          if (payload?.error) {
-            message = payload.error;
-            if (typeof payload.freeRemaining === 'number') {
-              message += `. Бесплатно осталось: ${payload.freeRemaining}`;
+          try {
+            const payload = JSON.parse(raw) as {
+              error?: string;
+              freeRemaining?: number;
+              required?: number;
+              balance?: number;
+            };
+            if (payload?.error) {
+              message = payload.error;
+              if (typeof payload.freeRemaining === 'number') {
+                message += `. Бесплатно осталось: ${payload.freeRemaining}`;
+              }
+            }
+            payloadMeta = {
+              freeRemaining: payload?.freeRemaining,
+              required: payload?.required,
+              balance: payload?.balance,
+            };
+            if (res.status === 402) {
+              openPaywall(payload?.error || 'Лимит запросов исчерпан. Пополните пакет.', payloadMeta);
+            }
+          } catch {
+            if (isHtml) {
+              message =
+                res.status >= 500
+                  ? 'Сервер временно недоступен (внутренняя ошибка). Попробуйте позже или обновите страницу.'
+                  : `Запрос отклонён (${res.status}). Обновите страницу и войдите снова.`;
+            }
+            if (res.status === 402) {
+              openPaywall(
+                'Лимит бесплатных запросов исчерпан. Пополните пакет, чтобы продолжить.',
+                payloadMeta,
+              );
             }
           }
-          payloadMeta = {
-            freeRemaining: payload?.freeRemaining,
-            required: payload?.required,
-            balance: payload?.balance,
-          };
-          if (res.status === 402) {
-            openPaywall(payload?.error || 'Лимит запросов исчерпан. Пополните пакет.', payloadMeta);
-          }
-        } catch {
-          if (raw.trimStart().startsWith('<!')) {
-            message =
-              res.status >= 500
-                ? 'Подожди секундочку… Сервер перезагружается, попробую ещё раз.'
-                : `Запрос отклонён (${res.status}). Обновите страницу и войдите снова.`;
-          }
-          if (res.status === 402) {
-            openPaywall(
-              'Лимит бесплатных запросов исчерпан. Пополните пакет, чтобы продолжить.',
-              payloadMeta,
-            );
-          }
+          throw Object.assign(new Error(message), { code: res.status, payloadMeta });
         }
-        throw Object.assign(new Error(message), { code: res.status, payloadMeta });
+
+        break fetchRetry;
       }
 
       const reader = res.body?.getReader();
