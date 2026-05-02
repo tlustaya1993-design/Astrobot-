@@ -33,6 +33,10 @@ export async function runDbMigrations(pool: Pool): Promise<void> {
         ALTER TABLE conversations
         ADD COLUMN IF NOT EXISTS contact_extended_mode boolean NOT NULL DEFAULT false
       `);
+      await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS is_test boolean NOT NULL DEFAULT false
+      `);
     })().catch((error) => {
       migrationsReady = null;
       throw error;

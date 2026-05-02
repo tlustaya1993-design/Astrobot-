@@ -26,6 +26,7 @@ export const usersTable = pgTable("users", {
   toneFamiliarityLevel: text("tone_familiarity_level"),
   requestsBalance: integer("requests_balance").notNull().default(0),
   requestsUsed: integer("requests_used").notNull().default(0),
+  isTest: boolean("is_test").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

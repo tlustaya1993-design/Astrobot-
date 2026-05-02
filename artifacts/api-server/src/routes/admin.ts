@@ -178,26 +178,69 @@ router.get("/metrics", async (req, res) => {
   startOfToday.setHours(0, 0, 0, 0);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [{ totalUsers }] = await db
-    .select({ totalUsers: sql<number>`cast(count(*) as int)` })
-    .from(usersTable);
+  const adminEmails = parseAdminEmails();
+  // Exclude admin accounts from all user metrics
+  const notAdmin = adminEmails.length > 0
+    ? sql`(${usersTable.email} IS NULL OR lower(${usersTable.email}) NOT IN (${sql.join(adminEmails.map((e) => sql`${e}`), sql`, `)}))`
+    : sql`true`;
 
+  // Registered = has email, not test, not an admin account
+  const [{ registered }] = await db
+    .select({ registered: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(sql`${usersTable.email} IS NOT NULL`, sql`${usersTable.isTest} = false`, notAdmin));
+
+  // Active guests = no email, have sent at least one message, not test
+  const [{ activeGuests }] = await db
+    .select({ activeGuests: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(
+      sql`${usersTable.email} IS NULL`,
+      sql`${usersTable.requestsUsed} > 0`,
+      sql`${usersTable.isTest} = false`,
+    ));
+
+  // Empty sessions = no email, zero activity — likely bots, load tests, or bounced visitors
+  const [{ emptySessions }] = await db
+    .select({ emptySessions: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(and(sql`${usersTable.email} IS NULL`, sql`${usersTable.requestsUsed} = 0`, sql`${usersTable.isTest} = false`));
+
+  // Explicitly marked test sessions
+  const [{ testSessions }] = await db
+    .select({ testSessions: sql<number>`cast(count(*) as int)` })
+    .from(usersTable)
+    .where(sql`${usersTable.isTest} = true`);
+
+  // DAU / WAU — registered real users only (most reliable signal, unaffected by anonymous noise)
   const [{ dau }] = await db
     .select({ dau: sql<number>`cast(count(distinct ${conversations.sessionId}) as int)` })
     .from(messages)
     .innerJoin(conversations, eq(messages.conversationId, conversations.id))
-    .where(sql`${messages.createdAt} >= ${startOfToday}`);
+    .innerJoin(usersTable, eq(usersTable.sessionId, conversations.sessionId))
+    .where(and(
+      sql`${messages.createdAt} >= ${startOfToday}`,
+      sql`${usersTable.email} IS NOT NULL`,
+      sql`${usersTable.isTest} = false`,
+      notAdmin,
+    ));
 
   const [{ wau }] = await db
     .select({ wau: sql<number>`cast(count(distinct ${conversations.sessionId}) as int)` })
     .from(messages)
     .innerJoin(conversations, eq(messages.conversationId, conversations.id))
-    .where(sql`${messages.createdAt} >= ${sevenDaysAgo}`);
+    .innerJoin(usersTable, eq(usersTable.sessionId, conversations.sessionId))
+    .where(and(
+      sql`${messages.createdAt} >= ${sevenDaysAgo}`,
+      sql`${usersTable.email} IS NOT NULL`,
+      sql`${usersTable.isTest} = false`,
+      notAdmin,
+    ));
 
-  const dauShare = totalUsers > 0 ? dau / totalUsers : 0;
-  const wauShare = totalUsers > 0 ? wau / totalUsers : 0;
+  const dauShare = registered > 0 ? dau / registered : 0;
+  const wauShare = registered > 0 ? wau / registered : 0;
 
-  res.json({ ok: true, totalUsers, dau, wau, dauShare, wauShare });
+  res.json({ ok: true, registered, activeGuests, emptySessions, testSessions, dau, wau, dauShare, wauShare });
 });
 
 router.get("/me", async (req, res) => {
