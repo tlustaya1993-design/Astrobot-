@@ -13,6 +13,49 @@ type AdminMetrics = {
   wauShare: number;
 };
 
+type AdminFinance = {
+  revenue: number;
+  refunded: number;
+  paymentsCount: number;
+};
+
+type FinancePeriod = "today" | "7d" | "30d" | "all" | "custom";
+
+const PERIOD_LABELS: Record<FinancePeriod, string> = {
+  today: "Сегодня",
+  "7d": "7 дней",
+  "30d": "30 дней",
+  all: "Всё время",
+  custom: "Период",
+};
+
+function getPeriodDates(period: FinancePeriod, customFrom: string, customTo: string): { from: string; to: string } {
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
+  if (period === "today") {
+    return { from: todayStart.toISOString(), to: now.toISOString() };
+  }
+  if (period === "7d") {
+    const d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return { from: d.toISOString(), to: now.toISOString() };
+  }
+  if (period === "30d") {
+    const d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { from: d.toISOString(), to: now.toISOString() };
+  }
+  if (period === "custom") {
+    const to = customTo ? new Date(customTo + "T23:59:59").toISOString() : now.toISOString();
+    return { from: customFrom ? new Date(customFrom).toISOString() : "", to };
+  }
+  return { from: "", to: "" }; // all
+}
+
+function fmtRub(n: number): string {
+  return n.toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ₽";
+}
+
 type AdminUser = {
   id: number;
   email: string | null;
@@ -44,6 +87,11 @@ export default function AdminPage() {
   const [payments, setPayments] = useState<AdminPayment[]>([]);
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
+  const [finance, setFinance] = useState<AdminFinance | null>(null);
+  const [financeLoading, setFinanceLoading] = useState(false);
+  const [financePeriod, setFinancePeriod] = useState<FinancePeriod>("30d");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const canSearch = useMemo(() => queryEmail.trim().length > 4, [queryEmail]);
 
@@ -67,10 +115,40 @@ export default function AdminPage() {
     }
   };
 
+  const fetchFinance = async (period: FinancePeriod, cfrom: string, cto: string) => {
+    setFinanceLoading(true);
+    try {
+      const { from, to } = getPeriodDates(period, cfrom, cto);
+      const params = new URLSearchParams();
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
+      const res = await fetch(`/api/admin/finance?${params.toString()}`, { headers: getAuthHeaders() });
+      const payload = (await res.json()) as { ok?: boolean; error?: string } & Partial<AdminFinance>;
+      if (!res.ok || !payload.ok) throw new Error(payload.error || `Ошибка (${res.status})`);
+      setFinance({
+        revenue: payload.revenue ?? 0,
+        refunded: payload.refunded ?? 0,
+        paymentsCount: payload.paymentsCount ?? 0,
+      });
+    } catch {
+      // best-effort
+    } finally {
+      setFinanceLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (isLoggedIn) fetchMetrics();
+    if (isLoggedIn) {
+      fetchMetrics();
+      fetchFinance(financePeriod, customFrom, customTo);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn]);
+
+  const handlePeriodChange = (p: FinancePeriod) => {
+    setFinancePeriod(p);
+    if (p !== "custom") fetchFinance(p, customFrom, customTo);
+  };
 
   const fetchUser = async () => {
     if (!canSearch) return;
@@ -209,6 +287,90 @@ export default function AdminPage() {
             Нужно войти в аккаунт администратора.
           </div>
         ) : null}
+
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Доходы</p>
+            <div className="flex gap-1 flex-wrap">
+              {(["today", "7d", "30d", "all", "custom"] as FinancePeriod[]).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => handlePeriodChange(p)}
+                  className={`px-2 py-1 rounded-md text-xs border ${financePeriod === p ? "bg-primary text-primary-foreground border-primary" : "border-border bg-transparent text-muted-foreground hover:bg-white/5"}`}
+                >
+                  {PERIOD_LABELS[p]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {financePeriod === "custom" && (
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">С</label>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  className="bg-background border border-border rounded-lg px-2 py-1 text-sm outline-none focus:border-primary/50"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">По</label>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  className="bg-background border border-border rounded-lg px-2 py-1 text-sm outline-none focus:border-primary/50"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => fetchFinance("custom", customFrom, customTo)}
+                disabled={financeLoading}
+                className="px-3 py-1 rounded-lg text-sm bg-primary text-primary-foreground disabled:opacity-50"
+              >
+                Применить
+              </button>
+            </div>
+          )}
+
+          {financeLoading ? (
+            <p className="text-sm text-muted-foreground">Загрузка...</p>
+          ) : finance ? (() => {
+            const profit = finance.revenue - finance.refunded;
+            return (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="rounded-lg bg-background border border-border px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Доход (без возвратов)</p>
+                    <p className="text-lg font-semibold text-green-400">{fmtRub(finance.revenue)}</p>
+                    <p className="text-xs text-muted-foreground">{finance.paymentsCount} платежей</p>
+                  </div>
+                  <div className="rounded-lg bg-background border border-border px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Возвраты</p>
+                    <p className="text-lg font-semibold text-destructive">{fmtRub(finance.refunded)}</p>
+                  </div>
+                  <div className="rounded-lg bg-background border border-border px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Чистая прибыль</p>
+                    <p className={`text-lg font-semibold ${profit >= 0 ? "text-green-400" : "text-destructive"}`}>
+                      {fmtRub(profit)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 px-3 py-2.5 space-y-1">
+                  <p className="text-xs font-medium text-amber-400">AI расходы — не отслеживаются</p>
+                  <p className="text-xs text-muted-foreground">
+                    Маржа и реальная прибыль будут доступны после подключения учёта токенов Anthropic.
+                    Для этого нужно добавить колонки <code className="text-xs bg-white/10 px-1 rounded">input_tokens</code> и <code className="text-xs bg-white/10 px-1 rounded">output_tokens</code> в таблицу <code className="text-xs bg-white/10 px-1 rounded">messages</code> и сохранять <code className="text-xs bg-white/10 px-1 rounded">response.usage</code> после каждого вызова API.
+                  </p>
+                </div>
+              </div>
+            );
+          })() : null}
+        </div>
 
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Пользователи</p>

@@ -74,6 +74,33 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
   });
 }
 
+router.get("/finance", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
+
+  const fromRaw = typeof req.query.from === "string" ? req.query.from.trim() : "";
+  const toRaw = typeof req.query.to === "string" ? req.query.to.trim() : "";
+
+  const conditions: ReturnType<typeof eq>[] = [eq(paymentsTable.status, "succeeded")];
+  if (fromRaw) conditions.push(sql`${paymentsTable.createdAt} >= ${new Date(fromRaw)}` as unknown as ReturnType<typeof eq>);
+  if (toRaw) conditions.push(sql`${paymentsTable.createdAt} <= ${new Date(toRaw)}` as unknown as ReturnType<typeof eq>);
+
+  const [row] = await db
+    .select({
+      revenue: sql<string>`coalesce(sum(case when ${paymentsTable.refundedAt} is null then cast(${paymentsTable.amountRub} as numeric) else 0 end), 0)`,
+      refunded: sql<string>`coalesce(sum(case when ${paymentsTable.refundedAt} is not null then cast(${paymentsTable.amountRub} as numeric) else 0 end), 0)`,
+      paymentsCount: sql<number>`cast(count(*) as int)`,
+    })
+    .from(paymentsTable)
+    .where(and(...conditions));
+
+  res.json({
+    ok: true,
+    revenue: parseFloat(row.revenue),
+    refunded: parseFloat(row.refunded),
+    paymentsCount: row.paymentsCount,
+  });
+});
+
 router.get("/metrics", async (req, res) => {
   if (!(await requireAdmin(req, res))) return;
 
