@@ -346,15 +346,12 @@ export default function Chat() {
   }, []);
 
   const handleOnboardingNext = useCallback(() => {
-    setOnboardingPhase((p) => {
-      if (p === 'step1') return 'step2';
-      try {
-        localStorage.setItem(CHAT_ONBOARDING_STORAGE_KEY, '1');
-      } catch {
-        /* ignore */
-      }
-      return null;
-    });
+    try {
+      localStorage.setItem(CHAT_ONBOARDING_STORAGE_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setOnboardingPhase(null);
   }, []);
 
   useEffect(() => {
@@ -368,7 +365,7 @@ export default function Chat() {
     if (isLoggedIn && contactsCount > 0) return;
     if (onboardingPhase !== null) return;
 
-    const t = window.setTimeout(() => setOnboardingPhase('step1'), 450);
+    const t = window.setTimeout(() => setOnboardingPhase('step2'), 450);
     return () => window.clearTimeout(t);
   }, [conversationId, contactsCount, isLoggedIn, onboardingPhase]);
 
@@ -1097,7 +1094,6 @@ export default function Chat() {
 
       <BottomNav
         activeTab={showHistory ? 'chats' : showProfile ? 'profile' : null}
-        highlightChats={onboardingPhase === 'step1'}
         onChatsClick={() => {
           if (showProfile) setShowProfile(false);
           setShowHistory((v) => !v);

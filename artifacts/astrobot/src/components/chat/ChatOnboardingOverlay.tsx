@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export type ChatOnboardingPhase = 'step1' | 'step2';
+export type ChatOnboardingPhase = 'step2';
 
 type Props = {
   phase: ChatOnboardingPhase;
@@ -11,20 +11,16 @@ type Props = {
   reduceMotion: boolean | null;
 };
 
-function measureTarget(phase: ChatOnboardingPhase): DOMRect | null {
-  const sel =
-    phase === 'step1'
-      ? '[data-onboarding-target="history-menu"]'
-      : '[data-onboarding-target="add-contact"]';
-  const el = document.querySelector(sel);
+function measureTarget(): DOMRect | null {
+  const el = document.querySelector('[data-onboarding-target="add-contact"]');
   return el?.getBoundingClientRect() ?? null;
 }
 
-export function ChatOnboardingOverlay({ phase, onNext, onSkip, reduceMotion }: Props) {
+export function ChatOnboardingOverlay({ phase: _phase, onNext, onSkip, reduceMotion }: Props) {
   const [rect, setRect] = useState<DOMRect | null>(null);
 
   useLayoutEffect(() => {
-    const update = () => setRect(measureTarget(phase));
+    const update = () => setRect(measureTarget());
     update();
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
@@ -32,23 +28,7 @@ export function ChatOnboardingOverlay({ phase, onNext, onSkip, reduceMotion }: P
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [phase]);
-
-  const title = phase === 'step1' ? 'История диалогов' : 'Люди и синастрия';
-  const body =
-    phase === 'step1' ? (
-      <>
-        <p className="text-sm text-foreground/95 leading-relaxed">
-          Нажмите <span className="font-semibold text-primary">«Чаты»</span> внизу экрана — откроется список ваших диалогов. С телефона можно ещё{' '}
-          <span className="font-medium">провести от левого края экрана вправо</span>.
-        </p>
-      </>
-    ) : (
-      <p className="text-sm text-foreground/95 leading-relaxed">
-        Нажмите <span className="font-semibold text-primary">«Добавить»</span> и внесите близкого по дате рождения — так появится разбор пары и{' '}
-        <span className="font-medium">синастрия</span> с вашей картой.
-      </p>
-    );
+  }, []);
 
   const cardMaxW = 320;
   const vw =
@@ -57,29 +37,19 @@ export function ChatOnboardingOverlay({ phase, onNext, onSkip, reduceMotion }: P
   let left = 12;
   if (rect) {
     const gap = 12;
-    const estH = 200;
-    // For step1 the target is the BottomNav (bottom of screen); keep card above it.
-    // For step2 the target is in the PeoplePanel header (top area); place card below it.
-    const reservedBottom =
-      phase === 'step1'
-        ? Math.round(3.5 * 16 + 8) // nav height (56px) + small buffer
-        : 0;
-    const floorY = window.innerHeight - reservedBottom;
-
+    const estH = 160;
     left = Math.max(12, Math.min(rect.left, window.innerWidth - vw - 12));
-    if (rect.bottom + estH + gap < floorY) {
+    if (rect.bottom + estH + gap < window.innerHeight) {
       top = rect.bottom + gap;
     } else {
-      // Place card above the target, clamped so it never overlaps the nav
-      top = Math.min(floorY - estH - gap, rect.top - estH - gap);
-      top = Math.max(72, top);
+      top = Math.max(72, rect.top - estH - gap);
     }
   }
 
   const node = (
     <AnimatePresence>
       <motion.div
-        key={phase}
+        key="onboarding"
         initial={reduceMotion ? undefined : { opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={reduceMotion ? undefined : { opacity: 0 }}
@@ -105,9 +75,14 @@ export function ChatOnboardingOverlay({ phase, onNext, onSkip, reduceMotion }: P
           onClick={(e) => e.stopPropagation()}
         >
           <h3 id="chat-onboarding-title" className="text-base font-display font-semibold text-foreground mb-2">
-            {title}
+            Люди и синастрия
           </h3>
-          <div className="space-y-2 mb-4">{body}</div>
+          <div className="mb-4">
+            <p className="text-sm text-foreground/95 leading-relaxed">
+              Нажмите <span className="font-semibold text-primary">«Добавить»</span> и внесите близкого по дате рождения — так появится разбор пары и{' '}
+              <span className="font-medium">синастрия</span> с вашей картой.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2 justify-end">
             <button
               type="button"
@@ -116,23 +91,13 @@ export function ChatOnboardingOverlay({ phase, onNext, onSkip, reduceMotion }: P
             >
               Пропустить
             </button>
-            {phase === 'step1' ? (
-              <button
-                type="button"
-                onClick={onNext}
-                className="px-3 py-2 rounded-xl text-sm bg-primary/15 border border-primary/40 text-primary font-medium hover:bg-primary/25 transition"
-              >
-                Далее
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onNext}
-                className="px-3 py-2 rounded-xl text-sm bg-primary/15 border border-primary/40 text-primary font-medium hover:bg-primary/25 transition"
-              >
-                Понятно
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={onNext}
+              className="px-3 py-2 rounded-xl text-sm bg-primary/15 border border-primary/40 text-primary font-medium hover:bg-primary/25 transition"
+            >
+              Понятно
+            </button>
           </div>
         </motion.div>
       </motion.div>
