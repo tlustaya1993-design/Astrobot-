@@ -169,7 +169,7 @@ export function useChatStream(conversationId?: number) {
           if (raw.trimStart().startsWith('<!')) {
             message =
               res.status >= 500
-                ? 'Сервер временно недоступен (внутренняя ошибка). Попробуйте позже или обновите страницу.'
+                ? 'Подожди секундочку… Сервер перезагружается, попробую ещё раз.'
                 : `Запрос отклонён (${res.status}). Обновите страницу и войдите снова.`;
           }
           if (res.status === 402) {
@@ -243,6 +243,7 @@ export function useChatStream(conversationId?: number) {
         : undefined;
       const message = userFacingChatError(error);
       const isRateLimit = errorCode === 429;
+      const noPrefix = isRateLimit || errorCode === 413 || errorCode === 500;
       if (errorCode === 402) {
         hadSendError = true;
         return;
@@ -262,7 +263,7 @@ export function useChatStream(conversationId?: number) {
           }
           return prev.map((m) =>
             m.id === streamingAssistantId
-              ? { ...m, content: isRateLimit ? message : `Сейчас не получилось ответить: ${message}` }
+              ? { ...m, content: noPrefix ? message : `Сейчас не получилось ответить: ${message}` }
               : m,
           );
         }
@@ -270,7 +271,7 @@ export function useChatStream(conversationId?: number) {
           id: Date.now() + 1,
           conversationId: targetId || 0,
           role: 'assistant',
-          content: isRateLimit ? message : `Сейчас не получилось ответить: ${message}`,
+          content: noPrefix ? message : `Сейчас не получилось ответить: ${message}`,
           createdAt: new Date().toISOString(),
         };
         return [...prev, tempAssistantError];
