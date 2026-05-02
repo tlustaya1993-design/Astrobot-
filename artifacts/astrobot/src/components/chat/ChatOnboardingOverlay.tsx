@@ -58,11 +58,21 @@ export function ChatOnboardingOverlay({ phase, onNext, onSkip, reduceMotion }: P
   if (rect) {
     const gap = 12;
     const estH = 200;
+    // For step1 the target is the BottomNav (bottom of screen); keep card above it.
+    // For step2 the target is in the PeoplePanel header (top area); place card below it.
+    const reservedBottom =
+      phase === 'step1'
+        ? Math.round(3.5 * 16 + 8) // nav height (56px) + small buffer
+        : 0;
+    const floorY = window.innerHeight - reservedBottom;
+
     left = Math.max(12, Math.min(rect.left, window.innerWidth - vw - 12));
-    if (rect.bottom + estH + gap < window.innerHeight) {
+    if (rect.bottom + estH + gap < floorY) {
       top = rect.bottom + gap;
     } else {
-      top = Math.max(72, rect.top - estH - gap);
+      // Place card above the target, clamped so it never overlaps the nav
+      top = Math.min(floorY - estH - gap, rect.top - estH - gap);
+      top = Math.max(72, top);
     }
   }
 

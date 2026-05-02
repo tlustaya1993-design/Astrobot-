@@ -1097,6 +1097,7 @@ export default function Chat() {
 
       <BottomNav
         activeTab={showHistory ? 'chats' : showProfile ? 'profile' : null}
+        highlightChats={onboardingPhase === 'step1'}
         onChatsClick={() => {
           if (showProfile) setShowProfile(false);
           setShowHistory((v) => !v);
@@ -1146,7 +1147,7 @@ export default function Chat() {
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
             onClick={() => setContextSwitchTargetId(undefined)}
           />
-          <div className="fixed left-3 right-3 bottom-4 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl">
+          <div className="fixed left-3 right-3 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
             <p className="text-sm font-medium mb-2">Продолжаем этот же диалог в контексте карты другого человека, или начинаем новый чат?</p>
             <p className="text-xs text-muted-foreground mb-3">
               Выберите удобный вариант для этого переключения.
