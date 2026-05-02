@@ -13,7 +13,6 @@ export default function BottomNav({ activeTab, onChatsClick, onProfileClick }: B
       <div className="flex">
         <button
           type="button"
-          data-onboarding-target="history-menu"
           onClick={onChatsClick}
           className={`flex-1 flex flex-col items-center justify-center gap-1 pt-3 pb-3 transition-colors touch-manipulation ${
             activeTab === 'chats' ? 'text-primary' : 'text-muted-foreground'

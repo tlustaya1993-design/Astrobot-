@@ -346,15 +346,12 @@ export default function Chat() {
   }, []);
 
   const handleOnboardingNext = useCallback(() => {
-    setOnboardingPhase((p) => {
-      if (p === 'step1') return 'step2';
-      try {
-        localStorage.setItem(CHAT_ONBOARDING_STORAGE_KEY, '1');
-      } catch {
-        /* ignore */
-      }
-      return null;
-    });
+    try {
+      localStorage.setItem(CHAT_ONBOARDING_STORAGE_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    setOnboardingPhase(null);
   }, []);
 
   useEffect(() => {
@@ -368,7 +365,7 @@ export default function Chat() {
     if (isLoggedIn && contactsCount > 0) return;
     if (onboardingPhase !== null) return;
 
-    const t = window.setTimeout(() => setOnboardingPhase('step1'), 450);
+    const t = window.setTimeout(() => setOnboardingPhase('step2'), 450);
     return () => window.clearTimeout(t);
   }, [conversationId, contactsCount, isLoggedIn, onboardingPhase]);
 
@@ -1146,7 +1143,7 @@ export default function Chat() {
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
             onClick={() => setContextSwitchTargetId(undefined)}
           />
-          <div className="fixed left-3 right-3 bottom-4 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl">
+          <div className="fixed left-3 right-3 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
             <p className="text-sm font-medium mb-2">Продолжаем этот же диалог в контексте карты другого человека, или начинаем новый чат?</p>
             <p className="text-xs text-muted-foreground mb-3">
               Выберите удобный вариант для этого переключения.
