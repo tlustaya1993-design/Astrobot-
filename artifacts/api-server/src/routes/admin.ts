@@ -74,6 +74,75 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
   });
 }
 
+type ServiceStatus = "ok" | "degraded" | "error";
+
+interface ServiceCheck {
+  id: string;
+  name: string;
+  status: ServiceStatus;
+  message: string;
+}
+
+router.get("/status", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
+
+  const checks: ServiceCheck[] = [];
+
+  // 1. Database — real query
+  try {
+    await db.execute(sql`SELECT 1`);
+    checks.push({ id: "db", name: "База данных", status: "ok", message: "Работает нормально" });
+  } catch {
+    checks.push({ id: "db", name: "База данных", status: "error", message: "Нет связи — данные недоступны" });
+  }
+
+  // 2. Anthropic AI
+  const hasAnthropicKey = Boolean(
+    process.env.ANTHROPIC_API_KEY?.trim() || process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY?.trim()
+  );
+  checks.push({
+    id: "ai",
+    name: "Anthropic AI",
+    status: hasAnthropicKey ? "ok" : "error",
+    message: hasAnthropicKey ? "API-ключ настроен, чат работает" : "Ключ API не найден — чат не работает",
+  });
+
+  // 3. YooKassa payments
+  const hasYookassa = Boolean(process.env.YOOKASSA_SHOP_ID?.trim() && process.env.YOOKASSA_SECRET_KEY?.trim());
+  checks.push({
+    id: "payments",
+    name: "ЮKassa (платежи)",
+    status: hasYookassa ? "ok" : "error",
+    message: hasYookassa ? "Приём платежей работает" : "Ключи не найдены — платежи недоступны",
+  });
+
+  // 4. Redis / Upstash (optional — used for rate limiting)
+  const hasRedis = Boolean(process.env.UPSTASH_REDIS_REST_URL?.trim() && process.env.UPSTASH_REDIS_REST_TOKEN?.trim());
+  checks.push({
+    id: "redis",
+    name: "Redis (rate-limit)",
+    status: hasRedis ? "ok" : "degraded",
+    message: hasRedis ? "Подключён" : "Не настроен — защита от спама отключена",
+  });
+
+  // 5. Telegram alerts (optional)
+  const hasTelegram = Boolean(
+    process.env.TELEGRAM_ADMIN_BOT_TOKEN?.trim() && process.env.TELEGRAM_ADMIN_CHAT_ID?.trim()
+  );
+  checks.push({
+    id: "telegram",
+    name: "Telegram-уведомления",
+    status: hasTelegram ? "ok" : "degraded",
+    message: hasTelegram ? "Уведомления о сбоях приходят" : "Не настроены — сбои приходят молча",
+  });
+
+  const hasError = checks.some((c) => c.status === "error");
+  const hasDegraded = checks.some((c) => c.status === "degraded");
+  const overall: ServiceStatus = hasError ? "error" : hasDegraded ? "degraded" : "ok";
+
+  res.json({ ok: true, overall, checks });
+});
+
 router.get("/finance", async (req, res) => {
   if (!(await requireAdmin(req, res))) return;
 

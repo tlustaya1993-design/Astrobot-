@@ -13,6 +13,20 @@ type AdminMetrics = {
   wauShare: number;
 };
 
+type ServiceStatus = "ok" | "degraded" | "error";
+
+type ServiceCheck = {
+  id: string;
+  name: string;
+  status: ServiceStatus;
+  message: string;
+};
+
+type SystemStatus = {
+  overall: ServiceStatus;
+  checks: ServiceCheck[];
+};
+
 type AdminFinance = {
   revenue: number;
   refunded: number;
@@ -87,6 +101,8 @@ export default function AdminPage() {
   const [payments, setPayments] = useState<AdminPayment[]>([]);
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
   const [finance, setFinance] = useState<AdminFinance | null>(null);
   const [financeLoading, setFinanceLoading] = useState(false);
   const [financePeriod, setFinancePeriod] = useState<FinancePeriod>("30d");
@@ -115,6 +131,20 @@ export default function AdminPage() {
     }
   };
 
+  const fetchStatus = async () => {
+    setStatusLoading(true);
+    try {
+      const res = await fetch("/api/admin/status", { headers: getAuthHeaders() });
+      const payload = (await res.json()) as { ok?: boolean; overall?: ServiceStatus; checks?: ServiceCheck[] };
+      if (!res.ok || !payload.ok) throw new Error();
+      setSystemStatus({ overall: payload.overall ?? "error", checks: payload.checks ?? [] });
+    } catch {
+      // best-effort
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
   const fetchFinance = async (period: FinancePeriod, cfrom: string, cto: string) => {
     setFinanceLoading(true);
     try {
@@ -139,6 +169,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (isLoggedIn) {
+      fetchStatus();
       fetchMetrics();
       fetchFinance(financePeriod, customFrom, customTo);
     }
@@ -287,6 +318,68 @@ export default function AdminPage() {
             Нужно войти в аккаунт администратора.
           </div>
         ) : null}
+
+        {/* System status */}
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Состояние системы</p>
+            <button
+              type="button"
+              onClick={fetchStatus}
+              disabled={statusLoading}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {statusLoading ? "Проверяю..." : "Обновить"}
+            </button>
+          </div>
+
+          {statusLoading && !systemStatus ? (
+            <p className="text-sm text-muted-foreground">Проверяю...</p>
+          ) : systemStatus ? (
+            <div className="space-y-3">
+              {/* Overall banner */}
+              <div className={`flex items-center gap-2 rounded-lg px-3 py-2.5 ${
+                systemStatus.overall === "ok"
+                  ? "bg-green-500/10 border border-green-500/25"
+                  : systemStatus.overall === "degraded"
+                  ? "bg-amber-500/10 border border-amber-500/25"
+                  : "bg-destructive/10 border border-destructive/25"
+              }`}>
+                <span className="text-lg leading-none">
+                  {systemStatus.overall === "ok" ? "✅" : systemStatus.overall === "degraded" ? "⚠️" : "🔴"}
+                </span>
+                <span className={`text-sm font-medium ${
+                  systemStatus.overall === "ok"
+                    ? "text-green-400"
+                    : systemStatus.overall === "degraded"
+                    ? "text-amber-400"
+                    : "text-destructive"
+                }`}>
+                  {systemStatus.overall === "ok"
+                    ? "Всё работает нормально"
+                    : systemStatus.overall === "degraded"
+                    ? "Работает, но кое-что не настроено"
+                    : "Есть серьёзные проблемы"}
+                </span>
+              </div>
+
+              {/* Per-service list */}
+              <div className="space-y-1.5">
+                {systemStatus.checks.map((svc) => (
+                  <div key={svc.id} className="flex items-start gap-2.5 rounded-lg px-3 py-2 bg-background border border-border">
+                    <span className="mt-0.5 text-sm leading-none">
+                      {svc.status === "ok" ? "🟢" : svc.status === "degraded" ? "🟡" : "🔴"}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium leading-tight">{svc.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{svc.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
