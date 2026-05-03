@@ -473,7 +473,7 @@ export default function AdminPage() {
               title="Скачать список e-mail (CSV)"
               onClick={async () => {
                 try {
-                  const res = await fetch("/api/admin/export/emails", { headers: getAuthHeaders() });
+                  const res = await fetch("/api/admin/export/emails", { headers: getAuthHeaders(), cache: "no-store" });
                   if (!res.ok) throw new Error(`Ошибка (${res.status})`);
                   const blob = await res.blob();
                   const url = URL.createObjectURL(blob);

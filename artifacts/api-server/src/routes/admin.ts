@@ -473,9 +473,11 @@ router.get("/export/emails", async (req, res) => {
     ),
   ];
 
+  const today = new Date().toISOString().slice(0, 10);
   res
     .header("Content-Type", "text/csv; charset=utf-8")
-    .header("Content-Disposition", `attachment; filename="users-${new Date().toISOString().slice(0, 10)}.csv"`)
+    .header("Content-Disposition", `attachment; filename="users-${today}.csv"`)
+    .header("Cache-Control", "no-store")
     .send("﻿" + lines.join("\r\n")); // BOM для Excel
 });
 
