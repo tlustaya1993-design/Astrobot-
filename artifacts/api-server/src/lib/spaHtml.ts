@@ -116,6 +116,40 @@ function ogSiteUrl(origin: string): string {
 const OG_IMAGE_CACHE_KEY =
   process.env.OG_IMAGE_CACHE_KEY?.trim() || "20260404b";
 
+const ADMIN_MANIFEST_VERSION = process.env.ADMIN_MANIFEST_VERSION?.trim() || "1";
+
+/**
+ * Replaces PWA meta tags for the /admin route so iOS/Android show a separate
+ * home screen shortcut ("Админка") pointing to /admin, without touching the
+ * main app manifest at all.
+ */
+export function injectAdminMeta(html: string): string {
+  let out = html;
+
+  // Swap manifest link + add cache-bust version
+  out = out.replace(
+    /<link\s+rel="manifest"\s+href="[^"]*"\s*\/>/i,
+    `<link rel="manifest" href="/admin-manifest.json?v=${ADMIN_MANIFEST_VERSION}" />`,
+  );
+
+  // Swap apple-touch-icon to admin variant
+  out = out.replace(
+    /<link\s+rel="apple-touch-icon"\s+href="[^"]*"[^>]*\/>/i,
+    `<link rel="apple-touch-icon" href="/icons/admin-icon-192.png" sizes="180x180" />`,
+  );
+
+  // Update PWA title shown on home screen
+  out = out.replace(
+    /(<meta\s+name="apple-mobile-web-app-title"\s+content=")[^"]*(")/i,
+    `$1Админка$2`,
+  );
+
+  // Update browser tab title
+  out = out.replace(/<title>[^<]*<\/title>/i, `<title>AstroBot — Админка</title>`);
+
+  return out;
+}
+
 export function injectOpenGraphMeta(html: string, origin: string): string {
   if (!origin) return html;
 
