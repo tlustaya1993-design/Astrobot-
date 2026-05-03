@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getSessionId, getAuthHeaders } from '@/lib/session';
+import { recordAiSuccess } from '@/lib/pwa-hints';
 import { createOpenaiConversation, getListOpenaiConversationsQueryKey, getGetOpenaiConversationQueryKey, OpenaiMessage } from '@workspace/api-client-react';
 
 type PaywallState = {
@@ -261,6 +262,7 @@ export function useChatStream(conversationId?: number) {
       }
 
       setFailureCount(0);
+      recordAiSuccess();
       queryClient.invalidateQueries({ queryKey: getGetOpenaiConversationQueryKey(targetId) });
 
     } catch (error) {
