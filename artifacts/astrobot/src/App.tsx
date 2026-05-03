@@ -12,7 +12,7 @@ import ProfilePage from "@/pages/ProfilePage";
 import AuthCallback from "@/pages/AuthCallback";
 import BillingTestPage from "@/pages/BillingTestPage";
 import AdminPage from "@/pages/AdminPage";
-import { getSessionId, getAuthHeaders, activateTestMode } from "@/lib/session";
+import { getSessionId, getAuthHeaders } from "@/lib/session";
 import { AuthProvider } from "@/context/AuthContext";
 import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
 import { toast } from "@/hooks/use-toast";
@@ -86,10 +86,9 @@ function viteBaseForRouter(): string {
 
 function App() {
   useEffect(() => {
-    // Activate test mode if ?test=true is in the URL, then strip the param
+    // Strip ?test=true from URL after session.ts has already read and stored it
     const params = new URLSearchParams(window.location.search);
     if (params.get('test') === 'true') {
-      activateTestMode();
       params.delete('test');
       const newSearch = params.toString();
       const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;

@@ -5,6 +5,16 @@ const TOKEN_KEY = 'astrobot_jwt';
 const EMAIL_KEY = 'astrobot_email';
 const IS_TEST_KEY = 'is_test';
 
+// Run synchronously at module load — before any React component mounts or
+// makes API calls — so the x-is-test header is present from the very first request.
+try {
+  if (new URLSearchParams(window.location.search).get('test') === 'true') {
+    localStorage.setItem(IS_TEST_KEY, 'true');
+  }
+} catch {
+  // SSR or restricted env — skip silently
+}
+
 export function isTestMode(): boolean {
   try {
     return localStorage.getItem(IS_TEST_KEY) === 'true';
