@@ -1091,7 +1091,7 @@ export default function Chat() {
             </form>
           </div>
           {/* Spacer so content isn't hidden behind the fixed bottom nav */}
-          <div className="shrink-0" style={{ height: 'calc(3rem + env(safe-area-inset-bottom, 0px))' }} />
+          <div className="shrink-0" style={{ height: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }} />
         </div>
       </AppLayout>
 

@@ -133,7 +133,8 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
 
           {/* Drawer */}
           <motion.div
-            className="fixed top-0 left-0 bottom-0 z-50 w-[82%] max-w-sm flex flex-col bg-card border-r border-border shadow-2xl pt-safe"
+            className="fixed top-0 left-0 z-50 w-[82%] max-w-sm flex flex-col bg-card border-r border-border shadow-2xl pt-safe"
+            style={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
             initial={{ x: '-100%' }}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}

@@ -171,7 +171,7 @@ export default function PwaInstallBanner({ handle }: Props) {
 
   if (phase === 'hidden') return null;
 
-  const BOTTOM_NAV_HEIGHT = 'calc(3rem + env(safe-area-inset-bottom, 0px))';
+  const BOTTOM_NAV_HEIGHT = 'calc(2.5rem + env(safe-area-inset-bottom, 0px))';
 
   // ---- BANNER ----
   if (phase === 'banner') {
