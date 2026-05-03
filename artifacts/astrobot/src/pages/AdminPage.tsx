@@ -480,7 +480,36 @@ export default function AdminPage() {
         </div>
 
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Пользователи</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Пользователи</p>
+            <button
+              type="button"
+              title="Скачать список e-mail (CSV)"
+              onClick={async () => {
+                try {
+                  const res = await fetch("/api/admin/export/emails", { headers: getAuthHeaders(), cache: "no-store" });
+                  if (!res.ok) throw new Error(`Ошибка (${res.status})`);
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch (err) {
+                  toast({ title: "Ошибка", description: err instanceof Error ? err.message : "Не удалось скачать" });
+                }
+              }}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              CSV
+            </button>
+          </div>
           {metricsLoading ? (
             <p className="text-sm text-muted-foreground">Загрузка...</p>
           ) : metrics ? (
