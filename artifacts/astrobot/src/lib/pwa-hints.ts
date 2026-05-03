@@ -92,22 +92,43 @@ function msSince(isoOrNull: string | null): number {
 }
 
 export type PwaTutorialBlockReason =
-  | "max_shown"       // shown >= 3 times — never show again
-  | "shown_recently"  // shown < 3 days ago
-  | "dismissed_recently" // dismissed < 3 days ago
-  | null;             // null = OK to show
+  | 'max_shown'           // shown >= 3 times
+  | 'shown_recently'      // shown < 3 days ago
+  | 'dismissed_recently'  // dismissed < 3 days ago
+  | 'conditions_not_met'  // none of A/B/C conditions are true
+  | null;                 // null = OK to show
 
+/**
+ * Full gate for showing the PWA install tutorial.
+ * Standalone check (isStandalone) and is_test check must be done by the caller
+ * since they require browser APIs outside this pure-localStorage module.
+ *
+ * Positive conditions (at least one must be true):
+ *   A) first AI response received + never shown before
+ *   B) returning user (≥3 sessions) + shown < 2 times
+ *   C) active user (≥3 actions) + shown < 2 times
+ */
 export function shouldShowPwaTutorial(): { show: boolean; reason: PwaTutorialBlockReason } {
   const h = getPwaHints();
 
+  // --- Positive conditions ---
+  const conditionA = h.firstSuccessAt !== null && h.tutorialShownCount === 0;
+  const conditionB = h.sessionCount >= 3 && h.tutorialShownCount < 2;
+  const conditionC = h.actionsCount >= 3 && h.tutorialShownCount < 2;
+
+  if (!conditionA && !conditionB && !conditionC) {
+    return { show: false, reason: 'conditions_not_met' };
+  }
+
+  // --- Anti-spam gates ---
   if (h.tutorialShownCount >= 3) {
-    return { show: false, reason: "max_shown" };
+    return { show: false, reason: 'max_shown' };
   }
   if (msSince(h.tutorialLastShownAt) < THREE_DAYS_MS) {
-    return { show: false, reason: "shown_recently" };
+    return { show: false, reason: 'shown_recently' };
   }
   if (msSince(h.tutorialDismissedAt) < THREE_DAYS_MS) {
-    return { show: false, reason: "dismissed_recently" };
+    return { show: false, reason: 'dismissed_recently' };
   }
 
   return { show: true, reason: null };
