@@ -494,6 +494,7 @@ export default function AdminPage() {
                 </svg>
                 Тест
               </button>
+              <button
               type="button"
               title="Скачать список e-mail (CSV)"
               onClick={async () => {
