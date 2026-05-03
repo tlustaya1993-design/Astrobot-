@@ -482,7 +482,18 @@ export default function AdminPage() {
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Пользователи</p>
-            <button
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => window.open("/?test=true", "_blank")}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                title="Открыть сайт в тестовом режиме"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/>
+                </svg>
+                Тест
+              </button>
               type="button"
               title="Скачать список e-mail (CSV)"
               onClick={async () => {
@@ -508,7 +519,8 @@ export default function AdminPage() {
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
               CSV
-            </button>
+              </button>
+            </div>
           </div>
           {metricsLoading ? (
             <p className="text-sm text-muted-foreground">Загрузка...</p>
@@ -517,14 +529,12 @@ export default function AdminPage() {
               {/* Segments */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg bg-background border border-border px-3 py-2">
-                  <p className="text-xs text-muted-foreground">Зарегистрированных</p>
+                  <p className="text-xs text-muted-foreground">Зарегистрированные пользователи</p>
                   <p className="text-lg font-semibold">{metrics.registered.toLocaleString("ru-RU")}</p>
-                  <p className="text-xs text-muted-foreground">создали аккаунт с email</p>
                 </div>
                 <div className="rounded-lg bg-background border border-border px-3 py-2">
-                  <p className="text-xs text-muted-foreground">Прошли онбординг</p>
+                  <p className="text-xs text-muted-foreground">Не прошли регистрацию</p>
                   <p className="text-lg font-semibold">{metrics.onboardedGuests.toLocaleString("ru-RU")}</p>
-                  <p className="text-xs text-muted-foreground">заполнили профиль, не зарегистрировались</p>
                 </div>
                 <div className="rounded-lg bg-background border border-border px-3 py-2">
                   <p className="text-xs text-muted-foreground">Активных гостей</p>

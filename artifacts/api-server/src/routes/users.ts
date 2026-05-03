@@ -65,6 +65,8 @@ router.get("/me", async (req, res) => {
     return;
   }
 
+  const isTest = req.headers['x-is-test'] === 'true';
+
   let [user] = await db
     .select()
     .from(usersTable)
@@ -72,7 +74,7 @@ router.get("/me", async (req, res) => {
     .limit(1);
 
   if (!user) {
-    await db.insert(usersTable).values({ sessionId }).onConflictDoNothing();
+    await db.insert(usersTable).values({ sessionId, isTest }).onConflictDoNothing();
     [user] = await db
       .select()
       .from(usersTable)
