@@ -13,6 +13,7 @@ import AuthCallback from "@/pages/AuthCallback";
 import BillingTestPage from "@/pages/BillingTestPage";
 import AdminPage from "@/pages/AdminPage";
 import { getSessionId, getAuthHeaders } from "@/lib/session";
+import { recordSessionStart } from "@/lib/pwa-hints";
 import { AuthProvider } from "@/context/AuthContext";
 import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
 import { toast } from "@/hooks/use-toast";
@@ -95,6 +96,7 @@ function App() {
       window.history.replaceState(null, '', newUrl);
     }
     getSessionId();
+    recordSessionStart();
   }, []);
 
   return (
