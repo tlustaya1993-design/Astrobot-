@@ -446,5 +446,38 @@ router.post("/payments/refund", async (req, res) => {
   res.json({ ok: true, refundId, user: updatedUser });
 });
 
+router.get("/export/emails", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
+
+  const adminEmails = parseAdminEmails();
+  const conditions = [sql`${usersTable.email} is not null`];
+  if (adminEmails.length > 0) {
+    conditions.push(sql`lower(${usersTable.email}) not in (${sql.join(adminEmails.map(e => sql`${e}`), sql`, `)})`);
+  }
+
+  const rows = await db
+    .select({
+      email: usersTable.email,
+      createdAt: usersTable.createdAt,
+      requestsUsed: usersTable.requestsUsed,
+      requestsBalance: usersTable.requestsBalance,
+    })
+    .from(usersTable)
+    .where(and(...conditions as [ReturnType<typeof eq>]))
+    .orderBy(sql`${usersTable.createdAt} DESC`);
+
+  const lines = [
+    "email,registered_at,requests_used,requests_balance",
+    ...rows.map(r =>
+      `${r.email},${r.createdAt?.toISOString() ?? ""},${r.requestsUsed ?? 0},${r.requestsBalance ?? 0}`
+    ),
+  ];
+
+  res
+    .header("Content-Type", "text/csv; charset=utf-8")
+    .header("Content-Disposition", `attachment; filename="users-${new Date().toISOString().slice(0, 10)}.csv"`)
+    .send("﻿" + lines.join("\r\n")); // BOM для Excel
+});
+
 export default router;
 
