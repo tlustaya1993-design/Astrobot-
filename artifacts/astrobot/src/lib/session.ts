@@ -3,6 +3,25 @@ import { v4 as uuidv4 } from 'uuid';
 const SESSION_KEY = 'astrobot_session_id';
 const TOKEN_KEY = 'astrobot_jwt';
 const EMAIL_KEY = 'astrobot_email';
+const IS_TEST_KEY = 'is_test';
+
+export function isTestMode(): boolean {
+  try {
+    return localStorage.getItem(IS_TEST_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+export function activateTestMode(): void {
+  try {
+    localStorage.setItem(IS_TEST_KEY, 'true');
+    // Ensure a session ID exists so the backend can tag it as test
+    getSessionId();
+  } catch {
+    // ignore
+  }
+}
 
 export function getSessionId(): string {
   let sessionId = localStorage.getItem(SESSION_KEY);
@@ -37,8 +56,11 @@ export function clearAuth() {
 
 export function getAuthHeaders(): Record<string, string> {
   const token = getToken();
-  if (token) {
-    return { 'Authorization': `Bearer ${token}` };
+  const base = token
+    ? { 'Authorization': `Bearer ${token}` }
+    : { 'x-session-id': getSessionId() };
+  if (isTestMode()) {
+    return { ...base, 'x-is-test': 'true' };
   }
-  return { 'x-session-id': getSessionId() };
+  return base;
 }
