@@ -4,6 +4,7 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
 import { sendTelegramAlert } from "../../lib/telegram-alert.js";
+import { detectTier, checkAiThrottle, markInFlight, clearInFlight } from "../../lib/ai-rate-limit.js";
 import {
   calcNatalChart, calcEphemeris, calcSolarReturn, calcProgressions,
   calcSynastry, calcLunarReturn, calcSolarArcDirections, calcTransitPerfections,
@@ -419,6 +420,18 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
+  // Rate limit — technical safeguard against spam, bugs, and bots.
+  // Does not block paid users from using their balance; only enforces a minimum
+  // interval between requests and prevents parallel requests from the same session.
+  const tier = detectTier(owner.email, owner.requestsBalance, isUnlimited);
+  const throttle = await checkAiThrottle(sessionId, tier);
+  if (!throttle.ok) {
+    res.setHeader("Retry-After", String(throttle.waitSec));
+    res.status(429).json({ error: throttle.message, retryAfterSec: throttle.waitSec });
+    return;
+  }
+  markInFlight(sessionId);
+
   const nextBalance = getBalanceAfterCharge(
     owner.requestsUsed,
     owner.requestsBalance,
@@ -609,6 +622,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
         try { res.end(); } catch { /* ignore */ }
       }
     } finally {
+      clearInFlight(sessionId);
       if (heartbeat) clearInterval(heartbeat);
     }
   } catch (sseErr) {
@@ -634,6 +648,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
   }
 
   } catch (handlerErr) {
+    clearInFlight(sessionId); // safety: in case inner try was never entered
     logger.error({ err: handlerErr }, "POST /conversations/:id/messages failed before or during setup");
     const handlerErrMsg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr);
     sendTelegramAlert("Handler error", handlerErrMsg, {

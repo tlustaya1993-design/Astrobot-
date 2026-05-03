@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, usersTable, conversations, messages } from "@workspace/db";
+import { hasRedis, pingRedis } from "../lib/ai-rate-limit.js";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
 import { getYookassaPayment, createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
 
@@ -116,14 +117,23 @@ router.get("/status", async (req, res) => {
     message: hasYookassa ? "Приём платежей работает" : "Ключи не найдены — платежи недоступны",
   });
 
-  // 4. Redis / Upstash (optional — used for rate limiting)
-  const hasRedis = Boolean(process.env.UPSTASH_REDIS_REST_URL?.trim() && process.env.UPSTASH_REDIS_REST_TOKEN?.trim());
-  checks.push({
-    id: "redis",
-    name: "Redis (rate-limit)",
-    status: hasRedis ? "ok" : "degraded",
-    message: hasRedis ? "Подключён" : "Не настроен — защита от спама отключена",
-  });
+  // 4. Redis / Upstash (optional — used for AI rate limiting)
+  let redisStatus: ServiceStatus;
+  let redisMessage: string;
+  if (!hasRedis()) {
+    redisStatus = "degraded";
+    redisMessage = "Не настроен — rate limit работает только в памяти процесса";
+  } else {
+    const redisOk = await pingRedis();
+    if (redisOk) {
+      redisStatus = "ok";
+      redisMessage = "Подключён, rate limit работает";
+    } else {
+      redisStatus = "error";
+      redisMessage = "Ключи есть, но соединение не прошло — rate limit работает только в памяти";
+    }
+  }
+  checks.push({ id: "redis", name: "Redis (rate-limit)", status: redisStatus, message: redisMessage });
 
   // 5. Telegram alerts (optional)
   const hasTelegram = Boolean(
