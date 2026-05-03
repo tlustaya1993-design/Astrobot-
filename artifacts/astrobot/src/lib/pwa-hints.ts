@@ -79,3 +79,36 @@ export function getPwaHints(): PwaHints {
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Anti-spam gate — call before showing the tutorial
+
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
+function msSince(isoOrNull: string | null): number {
+  if (!isoOrNull) return Infinity;
+  const t = Date.parse(isoOrNull);
+  return isNaN(t) ? Infinity : Date.now() - t;
+}
+
+export type PwaTutorialBlockReason =
+  | "max_shown"       // shown >= 3 times — never show again
+  | "shown_recently"  // shown < 3 days ago
+  | "dismissed_recently" // dismissed < 3 days ago
+  | null;             // null = OK to show
+
+export function shouldShowPwaTutorial(): { show: boolean; reason: PwaTutorialBlockReason } {
+  const h = getPwaHints();
+
+  if (h.tutorialShownCount >= 3) {
+    return { show: false, reason: "max_shown" };
+  }
+  if (msSince(h.tutorialLastShownAt) < THREE_DAYS_MS) {
+    return { show: false, reason: "shown_recently" };
+  }
+  if (msSince(h.tutorialDismissedAt) < THREE_DAYS_MS) {
+    return { show: false, reason: "dismissed_recently" };
+  }
+
+  return { show: true, reason: null };
+}
