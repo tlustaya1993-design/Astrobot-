@@ -14,7 +14,7 @@ export default function BottomNav({ activeTab, onChatsClick, onProfileClick }: B
         <button
           type="button"
           onClick={onChatsClick}
-          className={`flex-1 flex flex-col items-center justify-center gap-1 pt-3 pb-3 transition-colors touch-manipulation ${
+          className={`flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-2 transition-colors touch-manipulation ${
             activeTab === 'chats' ? 'text-primary' : 'text-muted-foreground'
           }`}
         >
@@ -24,7 +24,7 @@ export default function BottomNav({ activeTab, onChatsClick, onProfileClick }: B
         <button
           type="button"
           onClick={onProfileClick}
-          className={`flex-1 flex flex-col items-center justify-center gap-1 pt-3 pb-3 transition-colors touch-manipulation ${
+          className={`flex-1 flex flex-col items-center justify-center gap-1 pt-2 pb-2 transition-colors touch-manipulation ${
             activeTab === 'profile' ? 'text-primary' : 'text-muted-foreground'
           }`}
         >
