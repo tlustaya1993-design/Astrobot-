@@ -1091,7 +1091,7 @@ export default function Chat() {
             </form>
           </div>
           {/* Spacer so content isn't hidden behind the fixed bottom nav */}
-          <div className="shrink-0" style={{ height: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }} />
+          <div className="shrink-0" style={{ height: 'calc(3rem + env(safe-area-inset-bottom, 0px))' }} />
         </div>
       </AppLayout>
 
@@ -1148,7 +1148,7 @@ export default function Chat() {
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
             onClick={() => setContextSwitchTargetId(undefined)}
           />
-          <div className="fixed left-3 right-3 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
+          <div className="fixed left-3 right-3 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(3rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
             <p className="text-sm font-medium mb-2">Продолжаем этот же диалог в контексте карты другого человека, или начинаем новый чат?</p>
             <p className="text-xs text-muted-foreground mb-3">
               Выберите удобный вариант для этого переключения.

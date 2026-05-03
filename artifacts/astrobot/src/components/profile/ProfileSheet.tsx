@@ -22,6 +22,7 @@ import AuthModal from "@/components/AuthModal";
 import AddContactModal from "@/components/chat/AddContactModal";
 import type { Contact } from "@/components/chat/PeoplePanel";
 import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
+import PaywallSheet from "@/components/billing/PaywallSheet";
 
 interface UserProfile {
   name?: string | null;
@@ -129,6 +130,7 @@ export default function ProfileSheet({
   const [contactsLoading, setContactsLoading] = useState(false);
   const [showAddContact, setShowAddContact] = useState(false);
   const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const [editName, setEditName] = useState("");
   const [editBirthDate, setEditBirthDate] = useState("");
@@ -374,7 +376,7 @@ export default function ProfileSheet({
                   className={
                     isPage
                       ? "px-5 py-4 space-y-5 flex-1 min-h-0 overflow-y-auto pb-[max(2rem,env(safe-area-inset-bottom))]"
-                      : "px-5 pb-8 space-y-5 max-h-[80vh] overflow-y-auto"
+                      : "px-5 pb-[calc(3rem+env(safe-area-inset-bottom,0px))] space-y-5 max-h-[80vh] overflow-y-auto"
                   }
                 >
                   <div className="flex items-center gap-4">
@@ -507,6 +509,14 @@ export default function ProfileSheet({
                     <span className="text-xs text-muted-foreground">→</span>
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => setShowPaywall(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary/15 border border-primary/30 hover:bg-primary/25 transition-all text-primary text-sm font-medium"
+                  >
+                    Хочу больше разборов
+                  </button>
+
                   <div className="pt-1 border-t border-border/40 space-y-2">
                     {isLoggedIn ? (
                       <>
@@ -543,6 +553,7 @@ export default function ProfileSheet({
               )}
 
               <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} initialTab="login" />
+              <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
 
               {section === "memories" && (
                 <div
