@@ -6,7 +6,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { sessionMiddleware } from "./middleware/auth.js";
-import { injectOpenGraphMeta, resolvePublicOrigin } from "./lib/spaHtml";
+import { injectOpenGraphMeta, injectAdminMeta, resolvePublicOrigin } from "./lib/spaHtml";
 
 const app: Express = express();
 
@@ -58,8 +58,18 @@ if (process.env.NODE_ENV === "production" && fs.existsSync(frontendDist)) {
 
   // index: false — иначе отдаётся сырой index.html без подстановки абсолютного og:image
   app.use(express.static(frontendDist, { index: false }));
+  function sendAdminIndex(req: express.Request, res: express.Response) {
+    const origin = resolvePublicOrigin(req);
+    let html = injectOpenGraphMeta(readIndexHtml(), origin);
+    html = injectAdminMeta(html);
+    res.type("html").send(html);
+  }
+
   app.get("/", sendSpaIndex);
   app.get("/index.html", sendSpaIndex);
+  // Admin routes get a separate manifest/icon for PWA home screen shortcut
+  app.get("/admin", sendAdminIndex);
+  app.get("/admin/{*path}", sendAdminIndex);
   // SPA fallback — Express 5 requires named wildcard (path-to-regexp v8)
   app.get("/{*path}", sendSpaIndex);
 }
