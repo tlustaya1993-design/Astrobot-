@@ -790,7 +790,7 @@ export default function ProfileSheet({
         {open && (
           <>
             <motion.div
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 z-[64] bg-black/60 backdrop-blur-sm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -798,7 +798,7 @@ export default function ProfileSheet({
             />
 
             <motion.div
-              className="fixed bottom-0 inset-x-0 z-50 flex justify-center"
+              className="fixed bottom-0 inset-x-0 z-[65] flex justify-center"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
