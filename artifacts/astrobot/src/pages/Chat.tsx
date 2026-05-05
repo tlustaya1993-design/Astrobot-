@@ -186,6 +186,40 @@ function alignScrollAfterUserSend(
   container.scrollTop = scrollTop;
 }
 
+// Reveals streaming text char-by-char via rAF for a smooth ChatGPT-like effect
+function StreamingReveal({ content }: { content: string }) {
+  const [visible, setVisible] = React.useState('');
+  const rafRef = React.useRef<number | null>(null);
+  const contentRef = React.useRef(content);
+
+  React.useEffect(() => {
+    contentRef.current = content;
+    if (rafRef.current !== null) return;
+    const tick = () => {
+      setVisible(prev => {
+        const target = contentRef.current;
+        if (prev.length >= target.length) { rafRef.current = null; return prev; }
+        rafRef.current = requestAnimationFrame(tick);
+        return target.slice(0, prev.length + 12);
+      });
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, [content]);
+
+  React.useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  return (
+    <>
+      <AstroMarkdown content={visible || '​'} />
+      {visible.length < content.length && (
+        <span className="streaming-cursor" aria-hidden />
+      )}
+    </>
+  );
+}
+
 export default function Chat() {
   const reduceMotion = useReducedMotion();
   const webVibrateAvailable = useMemo(
@@ -831,6 +865,7 @@ export default function Chat() {
               const precedingUserMsg = isErrMsg
                 ? displayMessages.slice(0, idx).reverse().find(m => m.role === 'user') ?? null
                 : null;
+              const isStreamingMsg = isStreaming && idx === displayMessages.length - 1 && msg.role === 'assistant';
               return (
               <motion.div
                 key={msg.id || idx}
@@ -839,7 +874,7 @@ export default function Chat() {
                 animate={{ opacity: 1, y: 0 }}
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                {msg.role === 'assistant' && (
+                {msg.role !== 'user' && (
                   <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden relative">
                     <Sparkles className="w-4 h-4 text-primary/50 absolute" />
                     <img
@@ -850,17 +885,17 @@ export default function Chat() {
                     />
                   </div>
                 )}
-                <div className="max-w-[82%] min-w-0 flex flex-col">
-                  <div className={`min-w-0 rounded-2xl p-4 shadow-lg ${
+                <div className={msg.role === 'user' ? 'max-w-[82%] min-w-0 flex flex-col' : 'flex-1 min-w-0 flex flex-col'}>
+                  <div className={`min-w-0 ${
                     msg.role === 'user'
-                      ? 'bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
-                      : msg.role === 'assistant'
-                        ? 'bg-gradient-to-br from-white/[0.18] to-white/[0.08] border border-white/30 text-foreground rounded-tl-sm shadow-[0_8px_26px_rgba(0,0,0,0.38)] ring-1 ring-white/20 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
-                        : 'bg-gradient-to-br from-white/[0.16] to-white/[0.06] border border-white/25 text-foreground shadow-[0_6px_20px_rgba(0,0,0,0.32)] ring-1 ring-white/15 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
+                      ? 'rounded-2xl p-4 shadow-lg bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
+                      : 'py-1 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
                   }`}>
-                    {msg.role === 'assistant' ? (
+                    {msg.role !== 'user' ? (
                       msg.content?.trim() ? (
-                        <AstroMarkdown content={msg.content} />
+                        isStreamingMsg
+                          ? <StreamingReveal content={msg.content} />
+                          : <AstroMarkdown content={msg.content} />
                       ) : (
                         <div className="flex space-x-1 py-1 not-prose">
                           <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
@@ -922,7 +957,7 @@ export default function Chat() {
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
                 </div>
-                <div className="max-w-[82%] rounded-2xl p-4 bg-gradient-to-br from-white/[0.18] to-white/[0.08] border border-white/30 text-foreground rounded-tl-sm shadow-[0_8px_26px_rgba(0,0,0,0.38)] ring-1 ring-white/20">
+                <div className="flex-1 min-w-0 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none py-1">
                   <p className="text-sm leading-relaxed">
                     Хотел сказать: если ты пройдешь регистрацию, я смогу помнить твои чаты даже при входе с другого устройства.
                     Сейчас память и пакеты запросов привязаны только к этому браузеру и этому устройству.
