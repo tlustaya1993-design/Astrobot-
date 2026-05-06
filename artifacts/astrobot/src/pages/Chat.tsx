@@ -186,37 +186,13 @@ function alignScrollAfterUserSend(
   container.scrollTop = scrollTop;
 }
 
-// Reveals streaming text char-by-char via rAF for a smooth ChatGPT-like effect
+// During streaming: plain text, no markdown parsing per chunk (avoids layout thrash)
 function StreamingReveal({ content }: { content: string }) {
-  const [visible, setVisible] = React.useState('');
-  const rafRef = React.useRef<number | null>(null);
-  const contentRef = React.useRef(content);
-
-  React.useEffect(() => {
-    contentRef.current = content;
-    if (rafRef.current !== null) return;
-    const tick = () => {
-      setVisible(prev => {
-        const target = contentRef.current;
-        if (prev.length >= target.length) { rafRef.current = null; return prev; }
-        rafRef.current = requestAnimationFrame(tick);
-        return target.slice(0, prev.length + 12);
-      });
-    };
-    rafRef.current = requestAnimationFrame(tick);
-  }, [content]);
-
-  React.useEffect(() => () => {
-    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-  }, []);
-
   return (
-    <>
-      <AstroMarkdown content={visible || '​'} />
-      {visible.length < content.length && (
-        <span className="streaming-cursor" aria-hidden />
-      )}
-    </>
+    <span className="whitespace-pre-wrap break-words leading-relaxed text-sm">
+      {content}
+      <span className="streaming-cursor" aria-hidden />
+    </span>
   );
 }
 
@@ -274,7 +250,6 @@ export default function Chat() {
   const initialOpenScrolledConversationRef = useRef<number | null>(null);
   /** Если пользователь вручную скроллит/касается во время ответа — автоследование отключаем. */
   const autoScrollEnabledRef = useRef(true);
-  const lastAutoScrollAtRef = useRef(0);
   const lastSendHapticAtRef = useRef(0);
   const pwaInstallRef = useRef<PwaInstallBannerHandle>(null);
 
@@ -457,22 +432,23 @@ export default function Chat() {
     alignScrollAfterUserSend(container, prev, last);
   }, [localMessages.length]);
 
-  // Во время стрима автоскроллим следом за ботом, пока автоследование не отключено пользователем.
+  // Во время стрима: синхронный scroll в useLayoutEffect (до paint) — без rAF и throttle.
   useLayoutEffect(() => {
-    if (!isStreaming) return;
-    if (!autoScrollEnabledRef.current) return;
+    if (!isStreaming || !autoScrollEnabledRef.current) return;
     const container = messagesScrollRef.current;
     if (!container) return;
-
-    const now = Date.now();
-    if (now - lastAutoScrollAtRef.current < 50) return; // небольшая защита от дрожания
-    lastAutoScrollAtRef.current = now;
-
-    requestAnimationFrame(() => {
-      if (!autoScrollEnabledRef.current) return;
-      container.scrollTop = container.scrollHeight;
-    });
+    container.scrollTop = container.scrollHeight;
   }, [isStreaming, streamingText]);
+
+  // После завершения стрима — одна финальная корректировка скролла (markdown может слегка изменить высоту).
+  useEffect(() => {
+    if (isStreaming) return;
+    const container = messagesScrollRef.current;
+    if (!container || !autoScrollEnabledRef.current) return;
+    requestAnimationFrame(() => {
+      if (container && autoScrollEnabledRef.current) container.scrollTop = container.scrollHeight;
+    });
+  }, [isStreaming]);
 
   // Если пользователь прокручивает в прошлое — отключаем автоследование; если возвращается к низу — снова включаем.
   useEffect(() => {
@@ -807,7 +783,7 @@ export default function Chat() {
           {/* Messages */}
           <div
             ref={messagesScrollRef}
-            className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-4"
+            className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-4 [overflow-anchor:none]"
             onTouchStart={stopAutoScroll}
             onPointerDown={stopAutoScroll}
           >
