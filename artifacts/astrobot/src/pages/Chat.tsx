@@ -884,11 +884,14 @@ export default function Chat() {
                   </div>
                 )}
                 <div className={msg.role === 'user' ? 'max-w-[82%] min-w-0 flex flex-col' : 'flex-1 min-w-0 flex flex-col'}>
-                  <div className={`min-w-0 ${
-                    msg.role === 'user'
-                      ? 'rounded-2xl p-4 shadow-lg bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden text-[17.5px] leading-[1.6] font-normal'
-                      : 'rounded-2xl px-4 py-3 bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/[0.07] shadow-sm prose prose-invert max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto streaming-message-content text-[17.5px] leading-[1.6] font-normal'
-                  }`}>
+                  <div
+                    className={`min-w-0 ${
+                      msg.role === 'user'
+                        ? 'rounded-2xl p-4 shadow-lg bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
+                        : 'rounded-2xl px-4 py-4 bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/[0.07] shadow-sm break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto streaming-message-content'
+                    }`}
+                    style={{ fontSize: '17.5px', lineHeight: 1.6, fontWeight: 400 }}
+                  >
                     {msg.role !== 'user' ? (
                       msg.content?.trim() ? (
                         <AstroMarkdown content={msg.content} isStreaming={isStreamingMsg} />
