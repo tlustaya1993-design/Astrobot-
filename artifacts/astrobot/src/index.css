@@ -62,6 +62,9 @@
     /* Dark background on html prevents white flash on Android Chrome
        when the body hasn't painted yet */
     background-color: hsl(240 25% 4%);
+    /* --vvh is set by useVisualViewport (App.tsx) to visualViewport.height.
+       The 100dvh fallback covers SSR / first paint before JS runs. */
+    --vvh: 100dvh;
   }
 
   html, body {

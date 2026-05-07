@@ -37,6 +37,25 @@ function isRateLimitError(err: unknown): boolean {
   );
 }
 
+/** Strip raw API-provider details before they reach the client. */
+function sanitizeStreamError(msg: string): string {
+  const l = msg.toLowerCase();
+  if (
+    l.includes('request_id') ||
+    l.includes('invalid_request_error') ||
+    l.includes('api_error') ||
+    l.includes('overloaded_error') ||
+    l.includes('credit balance') ||
+    l.includes('plans & billing') ||
+    l.includes('anthropic') ||
+    l.includes('openai') ||
+    /^\d{3}\s*[{\[]/.test(msg.trimStart())
+  ) {
+    return 'Астробот временно недоступен. Попробуй ещё раз через минуту.';
+  }
+  return msg;
+}
+
 /** Переопредели в Railway, если аккаунт Anthropic ещё не видит новый id. */
 const ANTHROPIC_CHAT_MODEL =
   process.env.ANTHROPIC_CHAT_MODEL?.trim() || "claude-sonnet-4-6";
@@ -598,17 +617,19 @@ router.post("/conversations/:id/messages", async (req, res) => {
       safeWrite(`data: ${JSON.stringify({ done: true })}\n\n`);
       if (!res.writableEnded) res.end();
     } catch (err) {
-      const errorMessage =
+      const rawErrMessage =
         err instanceof Error && err.message ? err.message : "Generation failed";
+      // Sanitize before sending to the client — never expose raw provider API errors
+      const userFacingMessage = sanitizeStreamError(rawErrMessage);
       logger.error({ err, aiAttempt }, "Chat streaming error");
       sendTelegramAlert(
         exhaustedRetries ? "🚨 СРОЧНО: rate limit исчерпан после всех попыток" : "AI streaming error",
-        errorMessage,
+        rawErrMessage,
         {
           endpoint: `POST /conversations/${id}/messages`,
           sessionId,
           conversationId: id,
-          userSaw: errorMessage,
+          userSaw: userFacingMessage,
           extra: exhaustedRetries ? `Попыток: ${aiAttempt + 1}` : undefined,
         },
       ).catch(() => {});
@@ -617,7 +638,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
         balanceBeforeCharge,
         "Failed to rollback requestsBalance after stream error",
       );
-      safeWrite(`data: ${JSON.stringify({ error: errorMessage })}\n\n`);
+      safeWrite(`data: ${JSON.stringify({ error: userFacingMessage })}\n\n`);
       if (!res.writableEnded) {
         try { res.end(); } catch { /* ignore */ }
       }
