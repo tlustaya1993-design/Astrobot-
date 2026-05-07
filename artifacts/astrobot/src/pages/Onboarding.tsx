@@ -125,8 +125,9 @@ export default function Onboarding() {
         </Button>
       </div>
 
-      {/* Centered content */}
-      <div className="h-full flex flex-col items-center justify-center px-6 pt-16 pb-10">
+      {/* Centered content — overflow-y-auto lets the form scroll when the
+          Android Chrome virtual keyboard shrinks the visible viewport */}
+      <div className="h-full overflow-y-auto flex flex-col items-center justify-center px-6 pt-16 pb-10">
         <div className="relative w-full max-w-sm">
           <AnimatePresence mode="wait">
 

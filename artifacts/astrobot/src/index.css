@@ -63,10 +63,13 @@
 
   html, body {
     overflow: hidden;
-    position: fixed;
-    inset: 0;
     width: 100%;
     touch-action: manipulation;
+    /* NOTE: position:fixed was removed intentionally.
+       It breaks Android Chrome's virtual keyboard: the browser can't resize
+       the visual viewport, so inputs end up hidden behind the keyboard and
+       can't be focused. overscroll-behavior:none (above) already prevents
+       rubber-band scroll on iOS/Android without needing position:fixed. */
   }
 
   body {
