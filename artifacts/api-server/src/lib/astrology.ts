@@ -14,6 +14,8 @@
  *  — Precise geocentric positions for all planets (rectangular coords)
  */
 
+import { resolveUtcBirthTime } from './timezoneUtils.js';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ZodiacSign =
@@ -79,6 +81,12 @@ export interface NatalChart {
   aspectPatterns:  AspectPattern[];
   houseRulers:     Record<number, Planet>;
   moonPhase:       MoonPhase;
+  _tzDebug?: {
+    localTime:     string;
+    utcTime:       string;
+    timezone:      string | null;
+    offsetMinutes: number | null;
+  };
 }
 
 export interface SynastryAspect {
@@ -797,11 +805,13 @@ export function calcSolarReturn(
   lat: number | null, lon: number | null,
   returnYear: number
 ): SolarReturn {
-  const [bY, bM, bD] = birthDateStr.split("-").map(Number);
+  // Convert local birth time to UTC before computing natal sun longitude
+  const birthResolved = resolveUtcBirthTime(birthDateStr, birthTimeStr, lat, lon);
+  const [bY, bM, bD]  = birthResolved.utcDateStr.split("-").map(Number);
   let bH = 12, bMin = 0;
-  if (birthTimeStr) { [bH, bMin] = birthTimeStr.split(":").map(Number); }
+  if (birthResolved.utcTimeStr) { [bH, bMin] = birthResolved.utcTimeStr.split(":").map(Number); }
 
-  const birthJD    = dateToJD(bY, bM, bD, bH, bMin);
+  const birthJD     = dateToJD(bY, bM, bD, bH, bMin);
   const natalSunLon = sunLongitude(birthJD);
 
   // Binary search: find JD in returnYear when Sun returns to natal longitude
@@ -815,9 +825,10 @@ export function calcSolarReturn(
     if (hi - lo < 0.00001) break;
   }
 
-  const returnJD   = (lo + hi) / 2;
-  const returnDate = jdToDate(returnJD);
-  const returnChart = calcNatalChart(
+  const returnJD    = (lo + hi) / 2;
+  const returnDate  = jdToDate(returnJD);
+  // Return chart time is already in UTC — bypass local→UTC conversion
+  const returnChart = calcNatalChartUtc(
     returnDate.toISOString().slice(0, 10),
     `${returnDate.getUTCHours().toString().padStart(2,"0")}:${returnDate.getUTCMinutes().toString().padStart(2,"0")}`,
     lat, lon
@@ -837,9 +848,10 @@ export function calcProgressions(
   lat: number | null, lon: number | null,
   age: number
 ): ProgressedChart {
-  const [bY, bM, bD] = birthDateStr.split("-").map(Number);
+  const birthResolved = resolveUtcBirthTime(birthDateStr, birthTimeStr, lat, lon);
+  const [bY, bM, bD]  = birthResolved.utcDateStr.split("-").map(Number);
   let bH = 12, bMin = 0;
-  if (birthTimeStr) { [bH, bMin] = birthTimeStr.split(":").map(Number); }
+  if (birthResolved.utcTimeStr) { [bH, bMin] = birthResolved.utcTimeStr.split(":").map(Number); }
 
   const birthJD   = dateToJD(bY, bM, bD, bH, bMin);
   const progJD    = birthJD + age;                // 1 day = 1 year
@@ -862,7 +874,8 @@ export function calcProgressions(
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
-export function calcNatalChart(
+/** Internal: expects UTC date+time directly. */
+function calcNatalChartUtc(
   dateStr:  string,
   timeStr:  string | null,
   lat:      number | null,
@@ -882,7 +895,7 @@ export function calcNatalChart(
   if (lat !== null && lon !== null && timeStr) {
     ascLon      = calcAscendant(jd, lat, lon);
     mcLon       = calcMidheaven(jd, lon);
-    houses      = calcPlacidusHouses(jd, lat, lon);  // Placidus (was Equal House)
+    houses      = calcPlacidusHouses(jd, lat, lon);
     houseRulers = calcHouseRulers(houses);
   }
 
@@ -905,6 +918,29 @@ export function calcNatalChart(
     houseRulers,
     moonPhase,
   };
+}
+
+/**
+ * Public entry point.
+ * dateStr/timeStr are treated as LOCAL time at the birth location.
+ * When lat/lon are provided the timezone is looked up and the time is
+ * converted to UTC before the astronomical calculation.
+ */
+export function calcNatalChart(
+  dateStr:  string,
+  timeStr:  string | null,
+  lat:      number | null,
+  lon:      number | null
+): NatalChart {
+  const resolved = resolveUtcBirthTime(dateStr, timeStr, lat, lon);
+  const chart    = calcNatalChartUtc(resolved.utcDateStr, resolved.utcTimeStr, lat, lon);
+  chart._tzDebug = {
+    localTime:     timeStr ? `${dateStr}T${timeStr}` : `${dateStr}T12:00 (no time)`,
+    utcTime:       `${resolved.utcDateStr}T${resolved.utcTimeStr ?? '12:00'}`,
+    timezone:      resolved.timezone,
+    offsetMinutes: resolved.offsetMinutes,
+  };
+  return chart;
 }
 
 export function calcEphemeris(natalChart?: NatalChart): EphemerisData {
@@ -1354,16 +1390,18 @@ export function calcSolarArcDirections(
   lat: number | null, lon: number | null,
   targetDate?: Date
 ): SolarArcChart {
-  const [bY, bM, bD] = birthDateStr.split("-").map(Number);
+  const birthResolved = resolveUtcBirthTime(birthDateStr, birthTimeStr, lat, lon);
+  const [bY, bM, bD]  = birthResolved.utcDateStr.split("-").map(Number);
   let bH = 12, bMin = 0;
-  if (birthTimeStr) { [bH, bMin] = birthTimeStr.split(":").map(Number); }
+  if (birthResolved.utcTimeStr) { [bH, bMin] = birthResolved.utcTimeStr.split(":").map(Number); }
 
-  const birthJD   = dateToJD(bY, bM, bD, bH, bMin);
+  const birthJD     = dateToJD(bY, bM, bD, bH, bMin);
   const natalSunLon = sunLongitude(birthJD);
 
-  const target = targetDate ?? new Date();
+  const target   = targetDate ?? new Date();
+  const utcBirthMs = new Date(`${birthResolved.utcDateStr}T${birthResolved.utcTimeStr ?? "12:00"}Z`).getTime();
   const ageYears =
-    (target.getTime() - new Date(`${birthDateStr}T${birthTimeStr ?? "12:00"}Z`).getTime()) /
+    (target.getTime() - utcBirthMs) /
     (365.25 * 24 * 3600 * 1000);
 
   // Progressed Sun: birthJD + age (1 day per year)
@@ -1371,7 +1409,7 @@ export function calcSolarArcDirections(
   const progSunLon = sunLongitude(progJD);
   const arc = normalizeAngle(progSunLon - natalSunLon);
 
-  const natalChart = calcNatalChart(birthDateStr, birthTimeStr, lat, lon);
+  const natalChart   = calcNatalChartUtc(birthResolved.utcDateStr, birthResolved.utcTimeStr, lat, lon);
   const natalPlanets = natalChart.planets;
 
   // Apply arc to all natal planets
