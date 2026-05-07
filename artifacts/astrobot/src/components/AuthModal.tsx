@@ -68,7 +68,7 @@ export default function AuthModal({ open, onClose, initialTab = 'login' }: AuthM
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-[400px] bg-[#0f0f1a] border-[#2a2a3d] text-white">
+      <DialogContent className="sm:max-w-[400px] bg-[#0f0f1a] border-[#2a2a3d] text-white max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-center text-xl font-semibold text-white">
             {tab === 'login' ? 'Вход в аккаунт' : 'Регистрация'}
