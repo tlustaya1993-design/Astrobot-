@@ -187,15 +187,6 @@ function alignScrollAfterUserSend(
   container.scrollTop = scrollTop;
 }
 
-// During streaming: plain text, no markdown parsing per chunk (avoids layout thrash)
-function StreamingReveal({ content }: { content: string }) {
-  return (
-    <span className="whitespace-pre-wrap break-words leading-relaxed text-sm">
-      {content}
-      <span className="streaming-cursor" aria-hidden />
-    </span>
-  );
-}
 
 export default function Chat() {
   const reduceMotion = useReducedMotion();
@@ -908,9 +899,7 @@ export default function Chat() {
                   }`}>
                     {msg.role !== 'user' ? (
                       msg.content?.trim() ? (
-                        isStreamingMsg
-                          ? <StreamingReveal content={msg.content} />
-                          : <AstroMarkdown content={msg.content} />
+                        <AstroMarkdown content={msg.content} isStreaming={isStreamingMsg} />
                       ) : (
                         <div className="flex space-x-1 py-1 not-prose">
                           <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
