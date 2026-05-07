@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Copy, CircleHelp, X, RotateCcw } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Copy, CircleHelp, X, RotateCcw, MessageSquare, User } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTutorial, isTutorialDone } from '@/context/TutorialContext';
@@ -19,7 +19,6 @@ import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
 import PaywallSheet from '@/components/billing/PaywallSheet';
-import BottomNav from '@/components/layout/BottomNav';
 import ProfileSheet from '@/components/profile/ProfileSheet';
 import PwaInstallBanner, { type PwaInstallBannerHandle } from '@/components/pwa/PwaInstallBanner';
 import { useAuth } from '@/context/AuthContext';
@@ -741,21 +740,7 @@ export default function Chat() {
 
   return (
     <>
-      <AppLayout
-        bottomNav={
-          <BottomNav
-            activeTab={showHistory ? 'chats' : showProfile ? 'profile' : null}
-            onChatsClick={() => {
-              if (showProfile) setShowProfile(false);
-              setShowHistory((v) => !v);
-            }}
-            onProfileClick={() => {
-              if (showHistory) setShowHistory(false);
-              setShowProfile((v) => !v);
-            }}
-          />
-        }
-      >
+      <AppLayout>
         <div
           className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden"
           onTouchStart={handleTouchStart}
@@ -993,8 +978,9 @@ export default function Chat() {
             <div className="h-4 shrink-0" aria-hidden />
           </div>
 
-          {/* Input */}
-          <div className="px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
+          {/* Unified bottom panel: input + nav tabs */}
+          <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border">
+          <div className="px-4 pt-2 pb-2">
             {selectedContactId !== null && (
               <div className="space-y-2 mb-2 px-1">
                 <div className="relative flex items-center gap-2 text-xs text-primary/70">
@@ -1129,6 +1115,30 @@ export default function Chat() {
               </motion.button>
             </form>
           </div>
+          {/* Nav tabs — part of the unified bottom panel */}
+          <div data-bottom-nav className="flex pb-safe">
+            <button
+              type="button"
+              onClick={() => { if (showProfile) setShowProfile(false); setShowHistory((v) => !v); }}
+              data-tutorial-id="nav-chats"
+              aria-label="Чаты"
+              className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${showHistory ? 'text-primary' : 'text-muted-foreground'}`}
+            >
+              <MessageSquare className="w-5 h-5" />
+              <span className="text-[10px] mt-0.5 leading-none">Чаты</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { if (showHistory) setShowHistory(false); setShowProfile((v) => !v); }}
+              data-tutorial-id="nav-profile"
+              aria-label="Профиль"
+              className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${showProfile ? 'text-primary' : 'text-muted-foreground'}`}
+            >
+              <User className="w-5 h-5" />
+              <span className="text-[10px] mt-0.5 leading-none">Профиль</span>
+            </button>
+          </div>
+          </div>
         </div>
       </AppLayout>
 
@@ -1173,7 +1183,7 @@ export default function Chat() {
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
             onClick={() => setContextSwitchTargetId(undefined)}
           />
-          <div className="fixed left-3 right-3 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(3rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
+          <div className="fixed left-3 right-3 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(7rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
             <p className="text-sm font-medium mb-2">Продолжаем этот же диалог в контексте карты другого человека, или начинаем новый чат?</p>
             <p className="text-xs text-muted-foreground mb-3">
               Выберите удобный вариант для этого переключения.
