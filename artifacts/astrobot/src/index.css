@@ -59,6 +59,9 @@
   html, body, #root {
     height: 100%;
     overscroll-behavior: none;
+    /* Dark background on html prevents white flash on Android Chrome
+       when the body hasn't painted yet */
+    background-color: hsl(240 25% 4%);
   }
 
   html, body {
