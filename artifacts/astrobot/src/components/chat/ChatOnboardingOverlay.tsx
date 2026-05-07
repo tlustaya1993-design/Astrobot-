@@ -75,12 +75,12 @@ export function ChatOnboardingOverlay({ phase: _phase, onNext, onSkip, reduceMot
           onClick={(e) => e.stopPropagation()}
         >
           <h3 id="chat-onboarding-title" className="text-base font-display font-semibold text-foreground mb-2">
-            Люди и синастрия
+            Люди и совместимость
           </h3>
           <div className="mb-4">
             <p className="text-sm text-foreground/95 leading-relaxed">
               Нажмите <span className="font-semibold text-primary">«Добавить»</span> и внесите близкого по дате рождения — так появится разбор пары и{' '}
-              <span className="font-medium">синастрия</span> с вашей картой.
+              <span className="font-medium">совместимость</span> с вашей картой.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 justify-end">

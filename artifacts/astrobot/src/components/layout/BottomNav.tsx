@@ -1,6 +1,7 @@
 import React from 'react';
 import { MessageSquare, User } from 'lucide-react';
 
+
 interface BottomNavProps {
   activeTab: 'chats' | 'profile' | null;
   onChatsClick: () => void;
@@ -15,6 +16,7 @@ export default function BottomNav({ activeTab, onChatsClick, onProfileClick }: B
           type="button"
           onClick={onChatsClick}
           aria-label="Чаты"
+          data-tutorial-id="nav-chats"
           className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${
             activeTab === 'chats' ? 'text-primary' : 'text-muted-foreground'
           }`}
@@ -26,6 +28,7 @@ export default function BottomNav({ activeTab, onChatsClick, onProfileClick }: B
           type="button"
           onClick={onProfileClick}
           aria-label="Профиль"
+          data-tutorial-id="nav-profile"
           className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${
             activeTab === 'profile' ? 'text-primary' : 'text-muted-foreground'
           }`}

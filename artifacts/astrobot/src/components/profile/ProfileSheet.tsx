@@ -11,7 +11,9 @@ import {
   Loader2,
   Save,
   Users,
+  GraduationCap,
 } from "lucide-react";
+import { useTutorial } from "@/context/TutorialContext";
 import { type AvatarConfig, DEFAULT_AVATAR } from "@/components/ui/AstroAvatar";
 import IllustratedAvatar, { AvatarPortraitImage } from "@/components/ui/IllustratedAvatar";
 import AvatarEditor from "@/components/ui/AvatarEditor";
@@ -116,6 +118,7 @@ export default function ProfileSheet({
   variant = "sheet",
 }: Props) {
   const { isLoggedIn, email, logout } = useAuth();
+  const { start: startTutorial } = useTutorial();
   const { avatarConfig, setAvatarConfigLocal } = useAvatarSync();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [section, setSection] = useState<Section>("view");
@@ -448,7 +451,7 @@ export default function ProfileSheet({
                         </button>
                       </div>
                       <p className="text-[11px] text-muted-foreground leading-snug">
-                        Для синастрии: сын, партнёр и др. — те же карты, что в чате в ряду рядом с «Я».
+                        Для совместимости: сын, партнёр и др. — те же карты, что в чате в ряду рядом с «Я».
                       </p>
                       {contactsLoading ? (
                         <p className="text-xs text-muted-foreground py-2">Загрузка…</p>
@@ -498,6 +501,15 @@ export default function ProfileSheet({
 
                   <button
                     type="button"
+                    onClick={() => { startTutorial(); onClose(); }}
+                    className="w-full flex items-center gap-3 py-2.5 px-4 rounded-2xl border border-border/40 hover:border-primary/30 hover:bg-white/5 transition text-muted-foreground"
+                  >
+                    <GraduationCap className="w-4 h-4 text-primary/70 shrink-0" />
+                    <span className="text-sm">Пройти обучение снова</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setSection("memories")}
                     className="w-full flex items-center gap-3 py-3 px-4 rounded-2xl border border-border/40 hover:border-primary/30 hover:bg-white/5 transition"
                   >
@@ -511,13 +523,14 @@ export default function ProfileSheet({
 
                   <button
                     type="button"
+                    data-tutorial-id="profile-buy"
                     onClick={() => setShowPaywall(true)}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary/15 border border-primary/30 hover:bg-primary/25 transition-all text-primary text-sm font-medium"
                   >
                     Хочу больше разборов
                   </button>
 
-                  <div className="pt-1 border-t border-border/40 space-y-2">
+                  <div data-tutorial-id="profile-auth" className="pt-1 border-t border-border/40 space-y-2">
                     {isLoggedIn ? (
                       <>
                         {email && <p className="text-xs text-muted-foreground truncate">{email}</p>}

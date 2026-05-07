@@ -102,7 +102,7 @@ export default function PeoplePanel({
 
   return (
     <>
-      <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto scrollbar-none bg-background/60 border-b border-border/50">
+      <div data-tutorial-id="people-panel" className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto scrollbar-none bg-background/60 border-b border-border/50">
 
         {/* "Я" chip — shows avatar, opens profile */}
         <motion.button
@@ -209,7 +209,7 @@ export default function PeoplePanel({
       {contactsFetchDone && contacts.length === 0 && (
         <div className="px-3 py-2 border-b border-border/50 bg-primary/[0.06]">
           <p className="text-[11px] text-muted-foreground leading-relaxed max-w-2xl">
-            <span className="text-foreground/90 font-medium">Синастрия и пары:</span>{' '}
+            <span className="text-foreground/90 font-medium">Совместимость и пары:</span>{' '}
             добавьте человека по дате рождения — кнопка <span className="text-primary/90">«Добавить»</span> выше. Тогда
             АстроБот сможет смотреть вашу связь вместе с картой этого человека.
           </p>
