@@ -243,6 +243,11 @@ html.keyboard-open [data-bottom-nav] {
   50% { opacity: 1; transform: translateY(-2px); }
 }
 
+/* Streaming message container: isolate layout recalcs from the rest of the page */
+.streaming-message-content {
+  contain: layout style;
+}
+
 /* Blinking cursor during AI streaming */
 .streaming-cursor {
   display: inline-block;
