@@ -750,7 +750,21 @@ export default function Chat() {
 
   return (
     <>
-      <AppLayout>
+      <AppLayout
+        bottomNav={
+          <BottomNav
+            activeTab={showHistory ? 'chats' : showProfile ? 'profile' : null}
+            onChatsClick={() => {
+              if (showProfile) setShowProfile(false);
+              setShowHistory((v) => !v);
+            }}
+            onProfileClick={() => {
+              if (showHistory) setShowHistory(false);
+              setShowProfile((v) => !v);
+            }}
+          />
+        }
+      >
         <div
           className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden"
           onTouchStart={handleTouchStart}
@@ -1127,17 +1141,6 @@ export default function Chat() {
             </form>
           </div>
         </div>
-        <BottomNav
-          activeTab={showHistory ? 'chats' : showProfile ? 'profile' : null}
-          onChatsClick={() => {
-            if (showProfile) setShowProfile(false);
-            setShowHistory((v) => !v);
-          }}
-          onProfileClick={() => {
-            if (showHistory) setShowHistory(false);
-            setShowProfile((v) => !v);
-          }}
-        />
       </AppLayout>
 
       <ProfileSheet
