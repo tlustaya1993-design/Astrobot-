@@ -10,6 +10,10 @@ import { useEffect } from 'react';
  * which creates a black gap below the bottom nav. In standalone mode we let
  * CSS `--vvh: 100dvh` (set in :root) handle it — 100dvh correctly fills the
  * screen in PWA mode — and skip the JS override entirely.
+ *
+ * Keyboard detection: when the keyboard is visible (visual viewport significantly
+ * shorter than inner height), we add `keyboard-open` class to <html>. This lets
+ * CSS hide the bottom nav so more space is available for content and the input.
  */
 
 function isStandalone(): boolean {
@@ -21,11 +25,9 @@ function isStandalone(): boolean {
 
 export function useVisualViewport(): void {
   useEffect(() => {
-    // In PWA/standalone mode, remove any previously-set inline --vvh so the
-    // CSS default (100dvh) takes over. Don't add event listeners — no keyboard
-    // resize quirks to track in standalone mode.
     if (isStandalone()) {
       document.documentElement.style.removeProperty('--vvh');
+      document.documentElement.classList.remove('keyboard-open');
       return;
     }
 
@@ -34,6 +36,11 @@ export function useVisualViewport(): void {
         ? Math.round(window.visualViewport.height)
         : window.innerHeight;
       document.documentElement.style.setProperty('--vvh', `${h}px`);
+
+      // Keyboard is considered open when the visual viewport is more than 120px
+      // shorter than the layout viewport (a keyboard is at minimum ~150px tall).
+      const keyboardVisible = window.innerHeight - h > 120;
+      document.documentElement.classList.toggle('keyboard-open', keyboardVisible);
     }
 
     sync();
@@ -46,6 +53,7 @@ export function useVisualViewport(): void {
       window.visualViewport?.removeEventListener('resize', sync);
       window.visualViewport?.removeEventListener('scroll', sync);
       window.removeEventListener('resize', sync);
+      document.documentElement.classList.remove('keyboard-open');
     };
   }, []);
 }

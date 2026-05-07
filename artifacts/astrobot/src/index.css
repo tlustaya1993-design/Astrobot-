@@ -144,6 +144,11 @@
   }
 }
 
+/* Hide bottom nav when iOS soft keyboard is open — useVisualViewport sets this class */
+html.keyboard-open [data-bottom-nav] {
+  display: none;
+}
+
 /* Safe Area utilities for iOS notch / dynamic island */
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
