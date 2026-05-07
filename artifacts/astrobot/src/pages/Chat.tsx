@@ -434,13 +434,16 @@ export default function Chat() {
     container.scrollTop = container.scrollHeight;
   }, [isStreaming, streamingText]);
 
-  // После завершения стрима — одна финальная корректировка скролла (markdown может слегка изменить высоту).
+  // После завершения стрима — мягкая финальная корректировка скролла (только если пользователь не прокрутил вверх).
   useEffect(() => {
     if (isStreaming) return;
     const container = messagesScrollRef.current;
     if (!container || !autoScrollEnabledRef.current) return;
     requestAnimationFrame(() => {
-      if (container && autoScrollEnabledRef.current) container.scrollTop = container.scrollHeight;
+      if (!container || !autoScrollEnabledRef.current) return;
+      const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      // Only snap to bottom if already very close — prevents jarring jump if user scrolled mid-stream
+      if (distFromBottom < 120) container.scrollTop = container.scrollHeight;
     });
   }, [isStreaming]);
 
@@ -707,6 +710,9 @@ export default function Chat() {
     setSelectedContactId(nextId);
   };
 
+  // IDs of messages added during this session (not loaded from DB) — they get a fade-in entry
+  const localMsgIdSet = useMemo(() => new Set(localMessages.map((m) => m.id)), [localMessages]);
+
   const isNew = !conversationId && displayMessages.length === 0;
   const selectedRelation = selectedContactId != null ? (contactRelationById[selectedContactId] || '') : '';
   const selectedKind = detectContactKind(selectedRelation);
@@ -861,8 +867,9 @@ export default function Chat() {
               <motion.div
                 key={msg.id || idx}
                 data-chat-row={msg.role}
-                initial={false}
+                initial={localMsgIdSet.has(msg.id) ? { opacity: 0, y: msg.role === 'user' ? 10 : 5 } : false}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {msg.role !== 'user' && (
@@ -879,8 +886,8 @@ export default function Chat() {
                 <div className={msg.role === 'user' ? 'max-w-[82%] min-w-0 flex flex-col' : 'flex-1 min-w-0 flex flex-col'}>
                   <div className={`min-w-0 ${
                     msg.role === 'user'
-                      ? 'rounded-2xl p-4 shadow-lg bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
-                      : 'rounded-2xl px-4 py-3 bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/[0.07] shadow-sm prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
+                      ? 'rounded-2xl p-4 shadow-lg bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden text-[17.5px] leading-[1.6] font-normal'
+                      : 'rounded-2xl px-4 py-3 bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/[0.07] shadow-sm prose prose-invert max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto streaming-message-content text-[17.5px] leading-[1.6] font-normal'
                   }`}>
                     {msg.role !== 'user' ? (
                       msg.content?.trim() ? (

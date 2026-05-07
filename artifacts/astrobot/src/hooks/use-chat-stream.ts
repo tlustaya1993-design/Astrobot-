@@ -249,15 +249,31 @@ export function useChatStream(conversationId?: number) {
       const decoder = new TextDecoder();
       let assistantMsg = '';
       let streamError: string | null = null;
-      let buffer = '';
+      let sseBuffer = '';
+
+      // Batch SSE chunks into ~30ms windows so React re-renders word groups, not single chars
+      let pendingContent = '';
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      const flushPending = () => {
+        flushTimer = null;
+        if (!pendingContent) return;
+        assistantMsg += pendingContent;
+        pendingContent = '';
+        setStreamingText(assistantMsg);
+        setLocalMessages((prev) =>
+          prev.map((m) =>
+            m.id === streamingAssistantId ? { ...m, content: assistantMsg } : m,
+          ),
+        );
+      };
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
+        sseBuffer += chunk;
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() ?? '';
 
         for (const line of lines) {
           if (line.startsWith('data: ')) {
@@ -266,13 +282,10 @@ export function useChatStream(conversationId?: number) {
             try {
               const data = JSON.parse(dataStr);
               if (data.content) {
-                assistantMsg += data.content;
-                setStreamingText(assistantMsg);
-                setLocalMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === streamingAssistantId ? { ...m, content: assistantMsg } : m,
-                  ),
-                );
+                pendingContent += data.content;
+                if (!flushTimer) {
+                  flushTimer = setTimeout(flushPending, 30);
+                }
               }
               if (data.error) {
                 streamError = typeof data.error === 'string' ? data.error : 'Generation failed';
@@ -287,6 +300,10 @@ export function useChatStream(conversationId?: number) {
 
         if (streamError) break;
       }
+
+      // Flush any content that was buffered but not yet committed
+      if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+      flushPending();
 
       if (streamError) {
         throw new Error(streamError);
