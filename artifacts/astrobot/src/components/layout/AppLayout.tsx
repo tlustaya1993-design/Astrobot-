@@ -2,10 +2,9 @@ import React from 'react';
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  bottomNav?: React.ReactNode;
 }
 
-export function AppLayout({ children, bottomNav }: AppLayoutProps) {
+export function AppLayout({ children }: AppLayoutProps) {
   return (
     // h-[100dvh] is the fallback; --vvh is set by useVisualViewport (see App.tsx)
     // and equals visualViewport.height — this correctly tracks the iOS Safari soft
@@ -18,7 +17,6 @@ export function AppLayout({ children, bottomNav }: AppLayoutProps) {
       <main className="flex-1 flex flex-col relative z-0 min-h-0">
         {children}
       </main>
-      {bottomNav}
     </div>
   );
 }
