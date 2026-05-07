@@ -1126,22 +1126,19 @@ export default function Chat() {
               </motion.button>
             </form>
           </div>
-          {/* Spacer so content isn't hidden behind the fixed bottom nav */}
-          <div className="shrink-0" style={{ height: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }} />
         </div>
+        <BottomNav
+          activeTab={showHistory ? 'chats' : showProfile ? 'profile' : null}
+          onChatsClick={() => {
+            if (showProfile) setShowProfile(false);
+            setShowHistory((v) => !v);
+          }}
+          onProfileClick={() => {
+            if (showHistory) setShowHistory(false);
+            setShowProfile((v) => !v);
+          }}
+        />
       </AppLayout>
-
-      <BottomNav
-        activeTab={showHistory ? 'chats' : showProfile ? 'profile' : null}
-        onChatsClick={() => {
-          if (showProfile) setShowProfile(false);
-          setShowHistory((v) => !v);
-        }}
-        onProfileClick={() => {
-          if (showHistory) setShowHistory(false);
-          setShowProfile((v) => !v);
-        }}
-      />
 
       <ProfileSheet
         variant="sheet"

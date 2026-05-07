@@ -362,13 +362,22 @@ export function TutorialOverlay() {
           {/* ── STEPS 2–10: Spotlight mode ── */}
           {!isWelcome && (
             <>
-              {/* Dark backdrop — tap anywhere to skip */}
-              <button
-                className="absolute inset-0 cursor-default"
-                aria-label="Пропустить обучение"
-                tabIndex={-1}
-                onClick={skip}
-              />
+              {/* Dark backdrops around the spotlight — tapping outside advances; inside passes through to real UI */}
+              {spotRect ? (
+                <>
+                  <div className="absolute left-0 right-0 cursor-default" style={{ top: 0, height: Math.max(0, spotRect.top) }} onClick={skip} />
+                  <div className="absolute left-0 right-0 cursor-default" style={{ top: spotRect.top + spotRect.height, bottom: 0 }} onClick={skip} />
+                  <div className="absolute cursor-default" style={{ top: spotRect.top, height: spotRect.height, left: 0, width: Math.max(0, spotRect.left) }} onClick={skip} />
+                  <div className="absolute cursor-default" style={{ top: spotRect.top, height: spotRect.height, left: spotRect.left + spotRect.width, right: 0 }} onClick={skip} />
+                </>
+              ) : (
+                <button
+                  className="absolute inset-0 cursor-default"
+                  aria-label="Пропустить обучение"
+                  tabIndex={-1}
+                  onClick={skip}
+                />
+              )}
 
               {/* Spotlight cutout */}
               <AnimatePresence mode="wait">
