@@ -14,6 +14,7 @@ import BillingTestPage from "@/pages/BillingTestPage";
 import AdminPage from "@/pages/AdminPage";
 import { getSessionId, getAuthHeaders } from "@/lib/session";
 import { recordSessionStart } from "@/lib/pwa-hints";
+import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { AuthProvider } from "@/context/AuthContext";
 import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
 import { TutorialProvider } from "@/context/TutorialContext";
@@ -88,6 +89,11 @@ function viteBaseForRouter(): string {
 }
 
 function App() {
+  // Tracks visualViewport.height and writes --vvh to <html>.
+  // Fixes iOS Safari: when the soft keyboard opens the visual viewport shrinks
+  // and --vvh shrinks with it, preventing the chat from collapsing or going black.
+  useVisualViewport();
+
   useEffect(() => {
     // Strip ?test=true from URL after session.ts has already read and stored it
     const params = new URLSearchParams(window.location.search);

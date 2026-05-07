@@ -13,6 +13,26 @@ type PaywallState = {
   wantsAuth?: boolean;
 };
 
+const GENERIC_TEMP_ERROR = 'Астробот сейчас временно недоступен. Попробуй повторить запрос через минуту 💫';
+
+/** Returns true if the string contains raw API-provider internals that must never reach the user. */
+function isProviderLeak(s: string): boolean {
+  const l = s.toLowerCase();
+  return (
+    l.includes('request_id') ||
+    l.includes('invalid_request_error') ||
+    l.includes('api_error') ||
+    l.includes('overloaded_error') ||
+    l.includes('credit balance') ||
+    l.includes('plans & billing') ||
+    l.includes('anthropic') ||
+    l.includes('"type":"error"') ||
+    l.includes('"type": "error"') ||
+    // raw HTTP status + JSON body: "400 {..." or "500 [..."
+    /^\d{3}\s*[{\[]/.test(s.trimStart())
+  );
+}
+
 /** Браузер часто даёт «Load failed» / «Failed to fetch» без деталей — показываем человеку понятный текст. */
 function userFacingChatError(error: unknown): string {
   const raw =
@@ -22,6 +42,10 @@ function userFacingChatError(error: unknown): string {
         ? error
         : '';
   const lower = raw.toLowerCase();
+
+  // Must be first: never expose provider/API internals
+  if (isProviderLeak(raw)) return GENERIC_TEMP_ERROR;
+
   if (
     lower.includes('rate limit') ||
     lower.includes('429') ||
@@ -171,15 +195,19 @@ export function useChatStream(conversationId?: number) {
           };
           try {
             const payload = JSON.parse(raw) as {
-              error?: string;
+              error?: unknown;
               freeRemaining?: number;
               required?: number;
               balance?: number;
             };
             if (payload?.error) {
-              message = payload.error;
-              if (typeof payload.freeRemaining === 'number') {
-                message += `. Бесплатно осталось: ${payload.freeRemaining}`;
+              const errStr = typeof payload.error === 'string' ? payload.error : '';
+              // Only expose the server error string if it doesn't contain raw provider details
+              if (errStr && !isProviderLeak(errStr)) {
+                message = errStr;
+                if (typeof payload.freeRemaining === 'number') {
+                  message += `. Бесплатно осталось: ${payload.freeRemaining}`;
+                }
               }
             }
             payloadMeta = {
@@ -188,7 +216,10 @@ export function useChatStream(conversationId?: number) {
               balance: payload?.balance,
             };
             if (res.status === 402) {
-              openPaywall(payload?.error || 'Лимит запросов исчерпан. Пополните пакет.', payloadMeta);
+              const paywallMsg = typeof payload?.error === 'string' && payload.error
+                ? payload.error
+                : 'Лимит запросов исчерпан. Пополните пакет.';
+              openPaywall(paywallMsg, payloadMeta);
             }
           } catch {
             if (isHtml) {
