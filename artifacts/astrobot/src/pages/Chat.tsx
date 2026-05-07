@@ -3,6 +3,7 @@ import { useRoute, useLocation } from 'wouter';
 import { Send, Sparkles, ChevronLeft, Copy, CircleHelp, X, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTutorial, isTutorialDone } from '@/context/TutorialContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import {
   useGetOpenaiConversation,
@@ -205,6 +206,7 @@ export default function Chat() {
   const [match, params] = useRoute('/chat/:id');
   const [, setLocation] = useLocation();
   const { isLoggedIn, openAuthModal, logout } = useAuth();
+  const { step: tutorialStep, isActive: tutorialActive, start: startTutorial } = useTutorial();
   const [showPostPaymentRegisterNudge, setShowPostPaymentRegisterNudge] = useState(false);
   const conversationId = match && params?.id ? parseInt(params.id, 10) : undefined;
   const queryClient = useQueryClient();
@@ -373,6 +375,8 @@ export default function Chat() {
     } catch {
       return;
     }
+    // New tutorial covers this content — skip old overlay until tutorial is done
+    if (!isTutorialDone()) return;
     if (isLoggedIn && contactsCount > 0) return;
     if (onboardingPhase !== null) return;
 
@@ -508,6 +512,24 @@ export default function Chat() {
       setShowPostPaymentRegisterNudge(false);
     }
   }, [isLoggedIn]);
+
+  // Auto-start tutorial for new users (no conversationId = fresh chat screen)
+  useEffect(() => {
+    if (conversationId) return;
+    if (isTutorialDone()) return;
+    const t = window.setTimeout(() => startTutorial(), 1400);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Open / close profile sheet at the right tutorial steps
+  useEffect(() => {
+    if (!tutorialActive) return;
+    if (tutorialStep === 8 && !showProfile) setShowProfile(true);
+    if (tutorialStep === 10 && showProfile) setShowProfile(false);
+  // showProfile intentionally excluded to avoid re-triggering
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tutorialStep, tutorialActive]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -709,7 +731,7 @@ export default function Chat() {
       : selectedKind === 'child'
         ? childPrompts(contactGender)
         : [
-          { label: '💫 Синастрия', prompt: 'Расскажи о нашей синастрии' },
+          { label: '💫 Совместимость', prompt: 'Расскажи о нашей совместимости' },
           { label: '🌟 Таланты', prompt: 'Какие у этого человека сильные аспекты?' },
           { label: '💚 Здоровье', prompt: 'Что у этого человека по здоровью?' },
           { label: '🌀 Что сейчас', prompt: 'Какой период сейчас у этого человека?' },
@@ -719,12 +741,12 @@ export default function Chat() {
   const promptSubtitle = selectedContactId == null
     ? (!isLoggedIn ? '5 бесплатных запросов - пробуйте и оцените формат.' : '')
     : selectedKind === 'child'
-      ? 'Базовый разбор: карта ребёнка, его период и синастрия с вами.'
+      ? 'Базовый разбор: карта ребёнка, его период и совместимость с вами.'
       : selectedKind === 'husband'
-        ? 'Базовый разбор: его карта, текущий период и синастрия с вами.'
+        ? 'Базовый разбор: его карта, текущий период и совместимость с вами.'
         : selectedKind === 'boss'
-          ? 'Базовый разбор: карта руководителя, его период и синастрия с вами.'
-          : 'Базовый разбор: карта человека, его период и синастрия с вами.';
+          ? 'Базовый разбор: карта руководителя, его период и совместимость с вами.'
+          : 'Базовый разбор: карта человека, его период и совместимость с вами.';
 
   return (
     <>
@@ -801,7 +823,7 @@ export default function Chat() {
               >
                 {/* Daily Forecast Card */}
                 {!selectedContactId && (
-                  <div className="w-full max-w-md mb-3">
+                  <div className="w-full max-w-md mb-3" data-tutorial-id="forecast-card">
                     <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
                   </div>
                 )}
@@ -811,11 +833,14 @@ export default function Chat() {
                 </div>
                 <h3 className="text-base font-display font-semibold mb-1">С чего начнем?</h3>
                 {promptSubtitle && (
-                  <p className="mb-3 max-w-md text-sm text-primary/85 leading-relaxed">
+                  <p
+                    data-tutorial-id="free-requests"
+                    className="mb-3 max-w-md text-sm text-primary/85 leading-relaxed"
+                  >
                     {promptSubtitle}
                   </p>
                 )}
-                <div className="flex flex-wrap justify-center gap-2 w-full max-w-md">
+                <div data-tutorial-id="quick-topics" className="flex flex-wrap justify-center gap-2 w-full max-w-md">
                   {(selectedContactId
                     ? contactPromptSet
                     : selfPrompts()
@@ -1056,7 +1081,7 @@ export default function Chat() {
                 {inputValue.length}/{MAX_CHAT_MESSAGE_CHARS}
               </div>
             )}
-            <form onSubmit={handleSend} className="relative flex items-end">
+            <form data-tutorial-id="chat-input" onSubmit={handleSend} className="relative flex items-end">
               <textarea
                 ref={inputRef}
                 value={inputValue}

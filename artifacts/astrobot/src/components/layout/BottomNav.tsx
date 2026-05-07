@@ -1,6 +1,7 @@
 import React from 'react';
 import { MessageSquare, User } from 'lucide-react';
 
+
 interface BottomNavProps {
   activeTab: 'chats' | 'profile' | null;
   onChatsClick: () => void;
@@ -15,21 +16,25 @@ export default function BottomNav({ activeTab, onChatsClick, onProfileClick }: B
           type="button"
           onClick={onChatsClick}
           aria-label="Чаты"
-          className={`flex-1 flex items-center justify-center py-2.5 min-h-[44px] transition-colors touch-manipulation ${
+          data-tutorial-id="nav-chats"
+          className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${
             activeTab === 'chats' ? 'text-primary' : 'text-muted-foreground'
           }`}
         >
           <MessageSquare className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5 leading-none">Чаты</span>
         </button>
         <button
           type="button"
           onClick={onProfileClick}
           aria-label="Профиль"
-          className={`flex-1 flex items-center justify-center py-2.5 min-h-[44px] transition-colors touch-manipulation ${
+          data-tutorial-id="nav-profile"
+          className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${
             activeTab === 'profile' ? 'text-primary' : 'text-muted-foreground'
           }`}
         >
           <User className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5 leading-none">Профиль</span>
         </button>
       </div>
       <div className="pb-safe" />

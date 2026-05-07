@@ -16,6 +16,8 @@ import { getSessionId, getAuthHeaders } from "@/lib/session";
 import { recordSessionStart } from "@/lib/pwa-hints";
 import { AuthProvider } from "@/context/AuthContext";
 import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
+import { TutorialProvider } from "@/context/TutorialContext";
+import { TutorialOverlay } from "@/components/tutorial/TutorialOverlay";
 import { toast } from "@/hooks/use-toast";
 
 const billingTestEnabled = import.meta.env.VITE_ENABLE_BILLING_TEST === "true";
@@ -102,15 +104,18 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <WouterRouter base={viteBaseForRouter()}>
-            <AvatarSyncProvider>
-              <SilentReconcile />
-              <Router />
-            </AvatarSyncProvider>
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
+        <TutorialProvider>
+          <TooltipProvider>
+            <WouterRouter base={viteBaseForRouter()}>
+              <AvatarSyncProvider>
+                <SilentReconcile />
+                <Router />
+              </AvatarSyncProvider>
+            </WouterRouter>
+            <Toaster />
+            <TutorialOverlay />
+          </TooltipProvider>
+        </TutorialProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
