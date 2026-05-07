@@ -810,7 +810,7 @@ export default function Chat() {
           {/* Messages */}
           <div
             ref={messagesScrollRef}
-            className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-4 [overflow-anchor:none]"
+            className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-3 space-y-4 [overflow-anchor:none]"
             onTouchStart={stopAutoScroll}
             onPointerDown={stopAutoScroll}
           >
