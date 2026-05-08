@@ -12,6 +12,7 @@ import {
   formatSolarReturnForPrompt, formatProgressionsForPrompt, formatSynastryForPrompt,
   formatLunarReturnForPrompt, formatSolarArcForPrompt, formatTransitPerfectionsForPrompt,
 } from "../../lib/astrology.js";
+import { isAstroAssistantMessage, validateHouses } from "../../lib/astroMessageFilter.js";
 import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedUser,
@@ -497,13 +498,15 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   const systemPrompt = safeBuildSystemPrompt(userProfile, contactProfile, userMemories, nextExtended);
 
-  // Astro-tagged assistant messages are excluded from LLM history: their house/planet
-  // data is always stale vs the fresh system prompt. Replaced with a neutral marker so
-  // Claude still knows an analysis happened (for conversational continuity).
+  // Astro assistant messages are stripped from LLM history: their house/planet
+  // assignments are always stale vs the fresh system prompt.  Both explicitly
+  // tagged messages (messageType === "astro") and historical messages created
+  // before the tag was introduced (messageType null/undefined) are detected via
+  // isAstroAssistantMessage, which matches on structural content markers.
   const chatMessages = history.map((m) => ({
     role: m.role as "user" | "assistant",
-    content: m.role === "assistant" && m.messageType === "astro"
-      ? "[астрологический разбор был предоставлен — актуальные данные в системном промпте]"
+    content: isAstroAssistantMessage(m)
+      ? "[астрологический разбор был предоставлен — актуальные данные находятся в текущем расчёте]"
       : m.content,
   }));
 
@@ -813,12 +816,25 @@ function calcUserData(user: UserRow) {
   let natalSection = "", ephemerisSection = "", solarRetSection = "";
   let progressSection = "", lunarRetSection = "", solarArcSection = "", transitPerfSection = "";
   let natalChart = null;
+  let houseValidationWarning: string | null = null;
 
   if (user?.birthDate) {
     try {
       const lat = user.birthLat ? Number(user.birthLat) : null;
       const lon = user.birthLng ? Number(user.birthLng) : null;
       natalChart = calcNatalChart(user.birthDate, user.birthTime || null, lat, lon);
+
+      const hv = validateHouses(natalChart, {
+        birthDate: user.birthDate,
+        birthTime: user.birthTime,
+        birthLat:  user.birthLat ? Number(user.birthLat) : null,
+        birthLng:  user.birthLng ? Number(user.birthLng) : null,
+      });
+      if (!hv.valid) {
+        logger.warn({ houseValidation: hv.logData }, `House validation failed: ${hv.reason}`);
+        houseValidationWarning = "Дома не прошли валидацию. Не используй дома и управителей домов в ответе.";
+      }
+
       natalSection = `\n${formatNatalForPrompt(natalChart)}\n`;
 
       try {
@@ -862,7 +878,7 @@ function calcUserData(user: UserRow) {
     }
   } catch { /* ephemeris fallback */ }
 
-  return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection };
+  return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, houseValidationWarning };
 }
 
 /** Натал + транзиты к наталу (база); при extended — соляр, прогрессии, лунар, солнечная дуга, даты транзитов. */
@@ -940,7 +956,7 @@ function buildSystemPrompt(
 ): string {
   const depth = user?.tonePreferredDepth || "deep";
   const style = user?.tonePreferredStyle || "mystical";
-  const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection } = calcUserData(user);
+  const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, houseValidationWarning } = calcUserData(user);
 
   let synastrySection = "";
   if (contact?.birthDate && natalChart) {
@@ -1081,7 +1097,7 @@ ${synastryModeNote}
 — Никогда не придумывай риски, которых нет в карте
 — Всегда добавляй: «Астрология указывает на предрасположенности, а не диагнозы. Для конкретных вопросов здоровья обращайся к врачу»
 
-${profileSection}
+${houseValidationWarning ? `\n⚠️ СИСТЕМНОЕ ПРЕДУПРЕЖДЕНИЕ: ${houseValidationWarning}\n` : ""}${profileSection}
 ${contactProfileSection}
 ${memoriesSection}
 ${toneInstructions}`;
