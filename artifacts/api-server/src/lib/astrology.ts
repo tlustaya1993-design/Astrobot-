@@ -491,9 +491,9 @@ function calcPlacidusHouses(jd: number, lat: number, lon: number): number[] {
   const mcAscArc  = normalizeAngle(asc - mc);
   const ascIcArc  = normalizeAngle(ic  - asc);
   if (normalizeAngle(h12 - mc) >= mcAscArc) h12 = normalizeAngle(mc + (2 / 3) * mcAscArc);
-  if (normalizeAngle(h11 - mc) >= normalizeAngle(h12 - mc)) h11 = normalizeAngle(mc + (1 / 3) * mcAscArc);
+  if (normalizeAngle(h11 - mc) >= normalizeAngle(h12 - mc)) h11 = normalizeAngle(mc + normalizeAngle(h12 - mc) / 2);
   if (normalizeAngle(h3  - asc) >= ascIcArc) h3 = normalizeAngle(asc + (2 / 3) * ascIcArc);
-  if (normalizeAngle(h2  - asc) >= normalizeAngle(h3  - asc)) h2 = normalizeAngle(asc + (1 / 3) * ascIcArc);
+  if (normalizeAngle(h2  - asc) >= normalizeAngle(h3  - asc)) h2 = normalizeAngle(asc + normalizeAngle(h3 - asc) / 2);
 
   const h4  = ic;
   const h5  = normalizeAngle(h11 + 180);
