@@ -1189,6 +1189,23 @@ export function formatNatalForPrompt(chart: NatalChart): string {
     }
   }
 
+  // Authoritative planet-to-house mapping built exclusively from the fresh chart.
+  // This block is the canonical reference — Claude must not override it with
+  // anything from conversation history.
+  if (chart.houses && chart.planets.some(p => p.house !== undefined)) {
+    const byHouse: Record<number, string[]> = {};
+    for (const p of chart.planets) {
+      if (p.house !== undefined) {
+        if (!byHouse[p.house]) byHouse[p.house] = [];
+        byHouse[p.house].push(p.planet);
+      }
+    }
+    lines.push(`\nПланеты по домам:`);
+    for (let h = 1; h <= 12; h++) {
+      lines.push(`  H${h}: ${byHouse[h]?.join(", ") ?? "—"}`);
+    }
+  }
+
   // Advanced features
   try {
     const adv = calcAdvancedFeatures(chart);
