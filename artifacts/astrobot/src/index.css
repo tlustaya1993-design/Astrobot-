@@ -57,7 +57,13 @@
 
 @layer base {
   html, body, #root {
+    /* height: 100% fallback for very old browsers, then 100dvh overrides it.
+       100dvh (dynamic viewport height) tracks the visible area including URL-bar
+       show/hide on iOS Safari, so #root always matches --vvh and there is no
+       black gap below AppLayout. */
     height: 100%;
+    height: 100dvh;
+    overflow: hidden;
     overscroll-behavior: none;
     /* Dark background on html prevents white flash on Android Chrome
        when the body hasn't painted yet */
@@ -68,7 +74,6 @@
   }
 
   html, body {
-    overflow: hidden;
     width: 100%;
     touch-action: manipulation;
     /* NOTE: position:fixed was removed intentionally.
@@ -79,8 +84,11 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased font-sans min-h-screen selection:bg-primary/30 selection:text-primary;
-    background-image: 
+    /* min-h-screen removed: it applies min-height:100vh (full screen incl. URL-bar)
+       which overrides height:100dvh and recreates the gap. Height is now fully
+       controlled by the 100dvh rule above. */
+    @apply bg-background text-foreground antialiased font-sans selection:bg-primary/30 selection:text-primary;
+    background-image:
       radial-gradient(circle at 15% 0%, hsla(270, 50%, 25%, 0.15) 0%, transparent 50%),
       radial-gradient(circle at 85% 100%, hsla(43, 74%, 66%, 0.1) 0%, transparent 50%);
   }
@@ -144,6 +152,11 @@
   }
 }
 
+/* Hide bottom nav when iOS soft keyboard is open — useVisualViewport sets this class */
+html.keyboard-open [data-bottom-nav] {
+  display: none;
+}
+
 /* Safe Area utilities for iOS notch / dynamic island */
 .pt-safe {
   padding-top: env(safe-area-inset-top, 0px);
@@ -196,6 +209,26 @@
   @apply text-primary/70;
 }
 
+/* Chat message table styles (used by AstroMarkdown custom components) */
+.prose table {
+  @apply w-full border-collapse text-xs my-3;
+}
+.prose thead {
+  @apply bg-primary/10 text-primary/90;
+}
+.prose tbody tr {
+  @apply border-t border-white/5;
+}
+.prose tbody tr:hover {
+  @apply bg-white/[0.03];
+}
+.prose th {
+  @apply px-3 py-2 text-left font-semibold whitespace-nowrap;
+}
+.prose td {
+  @apply px-3 py-2 align-top;
+}
+
 /* Typing Indicator Animation */
 .typing-dot {
   animation: typing 1.4s infinite ease-in-out;
@@ -210,19 +243,50 @@
   50% { opacity: 1; transform: translateY(-2px); }
 }
 
+/* Streaming message container: isolate layout recalcs from the rest of the page */
+.streaming-message-content {
+  contain: layout style;
+}
+
+/* New text chunk fades in smoothly during streaming */
+.stream-chunk-in {
+  animation: streamChunkIn 0.14s ease-out both;
+}
+@keyframes streamChunkIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes streamFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.stream-fade-in {
+  animation: streamFadeIn 0.4s ease-out forwards;
+}
+
+/* Markdown reveal after streaming ends */
+.stream-md-reveal {
+  animation: streamMdReveal 0.2s ease-out both;
+}
+@keyframes streamMdReveal {
+  from { opacity: 0.65; }
+  to   { opacity: 1; }
+}
+
 /* Blinking cursor during AI streaming */
 .streaming-cursor {
   display: inline-block;
   width: 2px;
   height: 1em;
   background: currentColor;
-  opacity: 0.7;
-  vertical-align: text-bottom;
   margin-left: 2px;
+  vertical-align: text-bottom;
   border-radius: 1px;
-  animation: cursorBlink 0.55s step-end infinite;
+  animation: cursorBlink 1s ease-in-out infinite;
 }
 
 @keyframes cursorBlink {
-  50% { opacity: 0; }
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 0; }
 }

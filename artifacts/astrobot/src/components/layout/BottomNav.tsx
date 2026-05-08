@@ -10,7 +10,7 @@ interface BottomNavProps {
 
 export default function BottomNav({ activeTab, onChatsClick, onProfileClick }: BottomNavProps) {
   return (
-    <div className="w-full shrink-0 bg-card/95 backdrop-blur-xl border-t border-border">
+    <div data-bottom-nav className="w-full shrink-0 bg-card/95 backdrop-blur-xl border-t border-border pb-safe">
       <div className="flex">
         <button
           type="button"
@@ -37,7 +37,6 @@ export default function BottomNav({ activeTab, onChatsClick, onProfileClick }: B
           <span className="text-[10px] mt-0.5 leading-none">Профиль</span>
         </button>
       </div>
-      <div className="pb-safe" />
     </div>
   );
 }

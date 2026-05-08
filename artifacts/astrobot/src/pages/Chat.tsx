@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Copy, CircleHelp, X, RotateCcw } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Copy, CircleHelp, X, RotateCcw, MessageSquare, User } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTutorial, isTutorialDone } from '@/context/TutorialContext';
@@ -19,7 +19,6 @@ import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
 import PaywallSheet from '@/components/billing/PaywallSheet';
-import BottomNav from '@/components/layout/BottomNav';
 import ProfileSheet from '@/components/profile/ProfileSheet';
 import PwaInstallBanner, { type PwaInstallBannerHandle } from '@/components/pwa/PwaInstallBanner';
 import { useAuth } from '@/context/AuthContext';
@@ -187,15 +186,6 @@ function alignScrollAfterUserSend(
   container.scrollTop = scrollTop;
 }
 
-// During streaming: plain text, no markdown parsing per chunk (avoids layout thrash)
-function StreamingReveal({ content }: { content: string }) {
-  return (
-    <span className="whitespace-pre-wrap break-words leading-relaxed text-sm">
-      {content}
-      <span className="streaming-cursor" aria-hidden />
-    </span>
-  );
-}
 
 export default function Chat() {
   const reduceMotion = useReducedMotion();
@@ -444,14 +434,20 @@ export default function Chat() {
     container.scrollTop = container.scrollHeight;
   }, [isStreaming, streamingText]);
 
-  // После завершения стрима — одна финальная корректировка скролла (markdown может слегка изменить высоту).
+  // После завершения стрима — мягкая финальная корректировка скролла (только если пользователь не прокрутил вверх).
   useEffect(() => {
     if (isStreaming) return;
     const container = messagesScrollRef.current;
     if (!container || !autoScrollEnabledRef.current) return;
-    requestAnimationFrame(() => {
-      if (container && autoScrollEnabledRef.current) container.scrollTop = container.scrollHeight;
-    });
+    const t = setTimeout(() => {
+      if (!container || !autoScrollEnabledRef.current) return;
+      const distFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (distFromBottom < 200) {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      }
+    }, 350);
+    return () => clearTimeout(t);
   }, [isStreaming]);
 
   // Если пользователь прокручивает в прошлое — отключаем автоследование; если возвращается к низу — снова включаем.
@@ -717,6 +713,9 @@ export default function Chat() {
     setSelectedContactId(nextId);
   };
 
+  // IDs of messages added during this session (not loaded from DB) — they get a fade-in entry
+  const localMsgIdSet = useMemo(() => new Set(localMessages.map((m) => m.id)), [localMessages]);
+
   const isNew = !conversationId && displayMessages.length === 0;
   const selectedRelation = selectedContactId != null ? (contactRelationById[selectedContactId] || '') : '';
   const selectedKind = detectContactKind(selectedRelation);
@@ -750,21 +749,7 @@ export default function Chat() {
 
   return (
     <>
-      <AppLayout
-        bottomNav={
-          <BottomNav
-            activeTab={showHistory ? 'chats' : showProfile ? 'profile' : null}
-            onChatsClick={() => {
-              if (showProfile) setShowProfile(false);
-              setShowHistory((v) => !v);
-            }}
-            onProfileClick={() => {
-              if (showHistory) setShowHistory(false);
-              setShowProfile((v) => !v);
-            }}
-          />
-        }
-      >
+      <AppLayout>
         <div
           className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden"
           onTouchStart={handleTouchStart}
@@ -819,7 +804,7 @@ export default function Chat() {
           {/* Messages */}
           <div
             ref={messagesScrollRef}
-            className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-3 py-3 space-y-4 [overflow-anchor:none]"
+            className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-3 space-y-4 [overflow-anchor:none]"
             onTouchStart={stopAutoScroll}
             onPointerDown={stopAutoScroll}
           >
@@ -885,8 +870,9 @@ export default function Chat() {
               <motion.div
                 key={msg.id || idx}
                 data-chat-row={msg.role}
-                initial={false}
+                initial={localMsgIdSet.has(msg.id) ? { opacity: 0, y: msg.role === 'user' ? 10 : 5 } : false}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {msg.role !== 'user' && (
@@ -901,16 +887,17 @@ export default function Chat() {
                   </div>
                 )}
                 <div className={msg.role === 'user' ? 'max-w-[82%] min-w-0 flex flex-col' : 'flex-1 min-w-0 flex flex-col'}>
-                  <div className={`min-w-0 ${
-                    msg.role === 'user'
-                      ? 'rounded-2xl p-4 shadow-lg bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
-                      : 'py-1 prose prose-invert prose-p:leading-relaxed prose-sm max-w-none break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto'
-                  }`}>
+                  <div
+                    className={`min-w-0 ${
+                      msg.role === 'user'
+                        ? 'rounded-2xl p-4 shadow-lg bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
+                        : 'rounded-2xl px-4 py-4 bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/[0.07] shadow-sm break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto streaming-message-content'
+                    }`}
+                    style={{ fontSize: '17.5px', lineHeight: 1.6, fontWeight: 400 }}
+                  >
                     {msg.role !== 'user' ? (
                       msg.content?.trim() ? (
-                        isStreamingMsg
-                          ? <StreamingReveal content={msg.content} />
-                          : <AstroMarkdown content={msg.content} />
+                        <AstroMarkdown content={msg.content} isStreaming={isStreamingMsg} />
                       ) : (
                         <div className="flex space-x-1 py-1 not-prose">
                           <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>
@@ -1004,8 +991,9 @@ export default function Chat() {
             <div className="h-4 shrink-0" aria-hidden />
           </div>
 
-          {/* Input */}
-          <div className="px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-xl border-t border-border shrink-0">
+          {/* Unified bottom panel: input + nav tabs */}
+          <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border">
+          <div className="px-4 pt-2 pb-2">
             {selectedContactId !== null && (
               <div className="space-y-2 mb-2 px-1">
                 <div className="relative flex items-center gap-2 text-xs text-primary/70">
@@ -1140,6 +1128,30 @@ export default function Chat() {
               </motion.button>
             </form>
           </div>
+          {/* Nav tabs — part of the unified bottom panel */}
+          <div data-bottom-nav className="flex pb-safe">
+            <button
+              type="button"
+              onClick={() => { if (showProfile) setShowProfile(false); setShowHistory((v) => !v); }}
+              data-tutorial-id="nav-chats"
+              aria-label="Чаты"
+              className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${showHistory ? 'text-primary' : 'text-muted-foreground'}`}
+            >
+              <MessageSquare className="w-5 h-5" />
+              <span className="text-[10px] mt-0.5 leading-none">Чаты</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { if (showHistory) setShowHistory(false); setShowProfile((v) => !v); }}
+              data-tutorial-id="nav-profile"
+              aria-label="Профиль"
+              className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${showProfile ? 'text-primary' : 'text-muted-foreground'}`}
+            >
+              <User className="w-5 h-5" />
+              <span className="text-[10px] mt-0.5 leading-none">Профиль</span>
+            </button>
+          </div>
+          </div>
         </div>
       </AppLayout>
 
@@ -1184,7 +1196,7 @@ export default function Chat() {
             className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
             onClick={() => setContextSwitchTargetId(undefined)}
           />
-          <div className="fixed left-3 right-3 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(3rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
+          <div className="fixed left-3 right-3 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(7rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
             <p className="text-sm font-medium mb-2">Продолжаем этот же диалог в контексте карты другого человека, или начинаем новый чат?</p>
             <p className="text-xs text-muted-foreground mb-3">
               Выберите удобный вариант для этого переключения.
