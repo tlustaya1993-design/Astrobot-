@@ -37,37 +37,9 @@ const MD_COMPONENTS: Components = {
 };
 
 /**
- * Close any unclosed inline emphasis/bold markers at the trailing edge of an
- * in-progress block so react-markdown never receives a dangling token that
- * it would render as raw * or ** characters.
- *
- * Examples:
- *   "**Заголовок"          → "**Заголовок**"   (bold rendered correctly)
- *   "**Заголовок**"        → unchanged          (already balanced)
- *   "text ending with *"   → "text ending with" (trailing stripped)
- */
-function closeUnclosedMarkers(text: string): string {
-  // Strip any bare trailing marker characters (1–3 * or _).
-  let s = text.replace(/[*_]{1,3}$/, '');
-
-  // Balance ** (bold): odd count means one is unclosed → close it.
-  const boldCount = (s.match(/\*\*/g) ?? []).length;
-  if (boldCount % 2 !== 0) s += '**';
-
-  // Balance * (italic): count after removing all ** so they don't interfere.
-  const withoutBold = s.replace(/\*\*/g, '');
-  const italicCount = (withoutBold.match(/\*/g) ?? []).length;
-  if (italicCount % 2 !== 0) s += '*';
-
-  return s;
-}
-
-/**
- * A completed markdown block.
- *
- * Memoized so it never re-renders once mounted — the key guarantee behind
- * the performance model. Each instance plays a one-shot CSS fade-in on
- * first mount, giving the block-level reveal animation.
+ * A completed markdown block — memoized so it never re-renders or
+ * re-animates after its initial mount. Stable key from the segment index
+ * guarantees React.memo always hits the cache for existing blocks.
  */
 const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) {
   return (
@@ -78,21 +50,6 @@ const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) 
     </div>
   );
 });
-
-/**
- * The in-progress (active) block at the tail of the stream.
- *
- * NOT memoized — intentionally re-renders on every content update so the
- * user sees text growing in real time. No animation since the content is
- * still changing. closeUnclosedMarkers() ensures no raw symbols appear.
- */
-function ActiveBlock({ text }: { text: string }) {
-  return (
-    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-      {text}
-    </ReactMarkdown>
-  );
-}
 
 export default function AstroMarkdown({ content, isStreaming = false }: AstroMarkdownProps) {
   // ── Non-streaming: render the entire content as a single markdown document ──
@@ -107,31 +64,18 @@ export default function AstroMarkdown({ content, isStreaming = false }: AstroMar
   }
 
   // ── Streaming path ───────────────────────────────────────────────────────────
-  //
-  // Split on "\n\n" (the markdown paragraph separator). Every segment *before*
-  // the last one is definitively complete — it already has a \n\n after it and
-  // the LLM will not go back to edit it. The last segment is the "active" block
-  // currently being written.
-  //
-  // Visual model:
-  //   complete blocks → CompletedBlock (memoized, fade-in animation, never
-  //                     re-renders once mounted — O(1) per new chunk)
-  //   active block    → ActiveBlock    (updates every SSE batch, no animation)
-  //   cursor          → thin horizontal bar after the active block
-  //
-  const segments   = content.split('\n\n');
-  // Use the original segment index as key — do NOT filter before mapping.
-  // Filtering would compact indices and reassign keys to existing CompletedBlocks,
-  // causing React.memo to miss the cache and replay the fade-in animation.
+  // Split on \n\n. Segments before the last one are "complete" — the LLM has
+  // already moved past them. The last segment is still being written and is
+  // intentionally NOT rendered: blocks appear as whole units (block-reveal UX),
+  // not word-by-word. When isStreaming flips false the full content renders.
+  const segments    = content.split('\n\n');
   const completeSegs = segments.slice(0, -1);
-  const activeText   = closeUnclosedMarkers(segments[segments.length - 1] ?? '');
 
   return (
     <div className="leading-[1.6]">
       {completeSegs.map((block, idx) =>
         block.trim() ? <CompletedBlock key={idx} text={block} /> : null
       )}
-      {activeText.trim() && <ActiveBlock text={activeText} />}
       <span className="streaming-cursor" aria-hidden />
     </div>
   );
