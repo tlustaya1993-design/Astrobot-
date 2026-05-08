@@ -1004,6 +1004,13 @@ function fmtP(p: PlanetPosition): string {
   return `${sym} ${p.planet}: ${p.sign} ${p.degree}°${p.minute}'${ret}${h}${dig}`;
 }
 
+function fmtPNoHouse(p: PlanetPosition): string {
+  const sym  = PLANET_SYMBOL[p.planet] ?? "";
+  const ret  = p.retrograde ? " ℞" : "";
+  const dig  = p.dignity ? ` [${p.dignity}]` : "";
+  return `${sym} ${p.planet}: ${p.sign} ${p.degree}°${p.minute}'${ret}${dig}`;
+}
+
 function fmtAsp(a: Aspect): string {
   const sym = ASPECT_SYMBOL[a.aspect] ?? a.aspect;
   const ex  = a.exact ? " ⚡" : "";
@@ -1139,17 +1146,18 @@ function calcAdvancedFeatures(chart: NatalChart): AdvancedFeatures {
   return { partOfFortune, elementBalance, modalBalance, mutualReceptions, criticalDegrees, finalDispositor, dispositorChain, fixedStarConj };
 }
 
-export function formatNatalForPrompt(chart: NatalChart): string {
+export function formatNatalForPrompt(chart: NatalChart, options?: { omitHouses?: boolean }): string {
+  const omitHouses = options?.omitHouses ?? false;
   const lines: string[] = ["=== НАТАЛЬНАЯ КАРТА ==="];
 
   lines.push(`\nТриада:`);
   lines.push(`  ☉ Солнце: ${chart.sunSign}`);
   lines.push(`  ☽ Луна: ${chart.moonSign}`);
-  if (chart.ascendant) lines.push(`  ☊ Асцендент: ${chart.ascendant} ${chart.ascendantDegree}°`);
-  if (chart.midheaven) lines.push(`  MC: ${chart.midheaven} ${chart.midheavenDegree}°`);
+  if (!omitHouses && chart.ascendant) lines.push(`  ☊ Асцендент: ${chart.ascendant} ${chart.ascendantDegree}°`);
+  if (!omitHouses && chart.midheaven) lines.push(`  MC: ${chart.midheaven} ${chart.midheavenDegree}°`);
 
   lines.push(`\nПланеты:`);
-  for (const p of chart.planets) lines.push(`  ${fmtP(p)}`);
+  for (const p of chart.planets) lines.push(`  ${omitHouses ? fmtPNoHouse(p) : fmtP(p)}`);
 
   const moonP = chart.moonPhase;
   lines.push(`\nФаза Луны: ${moonP.emoji} ${moonP.name} (элонгация ${moonP.elongation}°)`);
@@ -1178,7 +1186,7 @@ export function formatNatalForPrompt(chart: NatalChart): string {
     for (const a of minorA) lines.push(`  ${fmtAsp(a)}`);
   }
 
-  if (chart.houses && Object.keys(chart.houseRulers).length > 0) {
+  if (!omitHouses && chart.houses && Object.keys(chart.houseRulers).length > 0) {
     lines.push(`\nКуспиды домов (знак куспида → управитель):`);
     for (let h = 0; h < 12; h++) {
       const cusp    = chart.houses[h];
@@ -1192,7 +1200,7 @@ export function formatNatalForPrompt(chart: NatalChart): string {
   // Authoritative planet-to-house mapping built exclusively from the fresh chart.
   // This block is the canonical reference — Claude must not override it with
   // anything from conversation history.
-  if (chart.houses && chart.planets.some(p => p.house !== undefined)) {
+  if (!omitHouses && chart.houses && chart.planets.some(p => p.house !== undefined)) {
     const byHouse: Record<number, string[]> = {};
     for (const p of chart.planets) {
       if (p.house !== undefined) {

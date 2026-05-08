@@ -862,8 +862,12 @@ function buildNatalContext(profile: BirthProfile, contextLabel: string): NatalCo
 
     if (!validation.planetsValid) {
       logger.warn({ logData: validation.logData }, `[${contextLabel}] planet validation failed: ${validation.reason}`);
-    } else if (!validation.housesValid) {
+      return { chart, natalSection: "\n[Натальная карта не прошла расчёт — данные недоступны]\n", validation };
+    }
+
+    if (!validation.housesValid) {
       logger.warn({ logData: validation.logData }, `[${contextLabel}] house validation failed: ${validation.reason}`);
+      return { chart, natalSection: `\n${formatNatalForPrompt(chart, { omitHouses: true })}\n`, validation };
     }
 
     return { chart, natalSection: `\n${formatNatalForPrompt(chart)}\n`, validation };
