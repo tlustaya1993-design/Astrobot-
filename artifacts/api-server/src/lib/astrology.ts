@@ -452,7 +452,7 @@ function calcAscendant(jd: number, lat: number, lon: number): number {
 function calcMidheaven(jd: number, lon: number): number {
   const lst    = localSiderealTime(jd, lon);
   const eps    = obliquity(jd);
-  return normalizeAngle(rad2deg(Math.atan2(Math.tan(deg2rad(lst)), Math.cos(deg2rad(eps)))));
+  return normalizeAngle(rad2deg(Math.atan2(Math.sin(deg2rad(lst)), Math.cos(deg2rad(lst)) * Math.cos(deg2rad(eps)))));
 }
 
 // ─── Placidus House System ────────────────────────────────────────────────────
@@ -483,11 +483,23 @@ function calcPlacidusHouses(jd: number, lat: number, lon: number): number[] {
     return Array.from({ length: 12 }, (_, i) => normalizeAngle(asc + i * 30));
   }
 
-  const h11 = placidusIntermediate(60,  2 / 3);  // between MC and ASC
-  const h12 = placidusIntermediate(30,  1 / 3);
-  const h2  = placidusIntermediate(150, 1 / 3);  // between ASC and IC
-  const h3  = placidusIntermediate(120, 2 / 3);
-  const h4  = normalizeAngle(mc  + 180);          // IC
+  let h11 = placidusIntermediate(30,  1 / 3);  // between MC and ASC
+  let h12 = placidusIntermediate(60,  2 / 3);
+  let h2  = placidusIntermediate(120, 1 / 3);  // between ASC and IC
+  let h3  = placidusIntermediate(150, 2 / 3);
+
+  // Guard: simplified Placidus can overshoot ASC or IC near the horizon at mid/high latitudes.
+  // If an intermediate cusp is outside its bracketing arc, interpolate linearly instead.
+  const ic = normalizeAngle(mc + 180);
+  const dsc = normalizeAngle(asc + 180);
+  const mcAscArc  = normalizeAngle(asc - mc);
+  const ascIcArc  = normalizeAngle(ic  - asc);
+  if (normalizeAngle(h12 - mc) >= mcAscArc) h12 = normalizeAngle(mc + (2 / 3) * mcAscArc);
+  if (normalizeAngle(h11 - mc) >= normalizeAngle(h12 - mc)) h11 = normalizeAngle(mc + (1 / 3) * mcAscArc);
+  if (normalizeAngle(h3  - asc) >= ascIcArc) h3 = normalizeAngle(asc + (2 / 3) * ascIcArc);
+  if (normalizeAngle(h2  - asc) >= normalizeAngle(h3  - asc)) h2 = normalizeAngle(asc + (1 / 3) * ascIcArc);
+
+  const h4  = ic;          // IC
   const h5  = normalizeAngle(h11 + 180);
   const h6  = normalizeAngle(h12 + 180);
   const h7  = normalizeAngle(asc + 180);          // DSC
