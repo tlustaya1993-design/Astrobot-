@@ -257,6 +257,14 @@ html.keyboard-open [data-bottom-nav] {
   to   { opacity: 1; }
 }
 
+@keyframes streamFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.stream-fade-in {
+  animation: streamFadeIn 0.4s ease-out forwards;
+}
+
 /* Markdown reveal after streaming ends */
 .stream-md-reveal {
   animation: streamMdReveal 0.2s ease-out both;
@@ -272,13 +280,13 @@ html.keyboard-open [data-bottom-nav] {
   width: 2px;
   height: 1em;
   background: currentColor;
-  opacity: 0.7;
-  vertical-align: text-bottom;
   margin-left: 2px;
+  vertical-align: text-bottom;
   border-radius: 1px;
-  animation: cursorBlink 0.55s step-end infinite;
+  animation: cursorBlink 1s ease-in-out infinite;
 }
 
 @keyframes cursorBlink {
-  50% { opacity: 0; }
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 0; }
 }

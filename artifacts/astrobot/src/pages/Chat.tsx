@@ -439,12 +439,15 @@ export default function Chat() {
     if (isStreaming) return;
     const container = messagesScrollRef.current;
     if (!container || !autoScrollEnabledRef.current) return;
-    requestAnimationFrame(() => {
+    const t = setTimeout(() => {
       if (!container || !autoScrollEnabledRef.current) return;
-      const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      // Only snap to bottom if already very close — prevents jarring jump if user scrolled mid-stream
-      if (distFromBottom < 120) container.scrollTop = container.scrollHeight;
-    });
+      const distFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (distFromBottom < 200) {
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      }
+    }, 350);
+    return () => clearTimeout(t);
   }, [isStreaming]);
 
   // Если пользователь прокручивает в прошлое — отключаем автоследование; если возвращается к низу — снова включаем.
