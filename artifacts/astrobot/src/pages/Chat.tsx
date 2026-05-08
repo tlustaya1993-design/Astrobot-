@@ -220,7 +220,6 @@ export default function Chat() {
     removeLocalMessages,
     paywallState,
     closePaywall,
-    streamingText,
     failureCount,
   } = useChatStream(conversationId);
   const [inputValue, setInputValue] = useState('');
@@ -426,13 +425,24 @@ export default function Chat() {
     alignScrollAfterUserSend(container, prev, last);
   }, [localMessages.length]);
 
+  // Number of completed \n\n-blocks in the currently streaming assistant message.
+  // Updates only when localMessages changes (i.e. when a new block is committed),
+  // not on every 30ms SSE chunk — so the scroll effect below fires at block
+  // boundaries only, eliminating the per-chunk forced layout on mobile.
+  const streamingBlockCount = useMemo(() => {
+    if (!isStreaming) return 0;
+    const last = localMessages[localMessages.length - 1];
+    if (!last || last.role !== 'assistant') return 0;
+    return (last.content || '').split('\n\n').length - 1;
+  }, [isStreaming, localMessages]);
+
   // Во время стрима: синхронный scroll в useLayoutEffect (до paint) — без rAF и throttle.
   useLayoutEffect(() => {
     if (!isStreaming || !autoScrollEnabledRef.current) return;
     const container = messagesScrollRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
-  }, [isStreaming, streamingText]);
+  }, [isStreaming, streamingBlockCount]);
 
   // После завершения стрима — мягкая финальная корректировка скролла (только если пользователь не прокрутил вверх).
   useEffect(() => {
