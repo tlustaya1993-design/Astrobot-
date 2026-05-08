@@ -11,8 +11,11 @@ import {
   formatNatalForPrompt, formatEphemerisForPrompt,
   formatSolarReturnForPrompt, formatProgressionsForPrompt, formatSynastryForPrompt,
   formatLunarReturnForPrompt, formatSolarArcForPrompt, formatTransitPerfectionsForPrompt,
+  validateNatalChart,
+  type NatalChart,
+  type ChartValidationResult,
 } from "../../lib/astrology.js";
-import { isAstroAssistantMessage, validateHouses } from "../../lib/astroMessageFilter.js";
+import { isAstroAssistantMessage } from "../../lib/astroMessageFilter.js";
 import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedUser,
@@ -812,45 +815,158 @@ ${mem}`;
   }
 }
 
+// ─── Unified natal calculation + validation pipeline ─────────────────────────
+
+interface BirthProfile {
+  birthDate?: string | null;
+  birthTime?: string | null;
+  birthLat?: number | null;
+  birthLng?: number | null;
+  name?: string | null;
+}
+
+interface NatalContextResult {
+  chart: NatalChart | null;
+  natalSection: string;
+  validation: ChartValidationResult;
+}
+
+/**
+ * Single entry point for every natal chart that enters the LLM prompt.
+ * Calculates fresh from birth data, validates, and returns the section text
+ * together with the validation result so callers can decide which layers to use.
+ *
+ * Never throws — returns chart=null on hard failure.
+ */
+function buildNatalContext(profile: BirthProfile, contextLabel: string): NatalContextResult {
+  const empty: NatalContextResult = {
+    chart: null,
+    natalSection: "",
+    validation: { planetsValid: true, housesValid: true },
+  };
+
+  if (!profile.birthDate) return empty;
+
+  try {
+    const lat = profile.birthLat != null ? Number(profile.birthLat) : null;
+    const lon = profile.birthLng != null ? Number(profile.birthLng) : null;
+    const chart = calcNatalChart(profile.birthDate, profile.birthTime || null, lat, lon);
+
+    const meta = {
+      birthDate: profile.birthDate,
+      birthTime: profile.birthTime ?? null,
+      birthLat: lat,
+      birthLng: lon,
+    };
+    const validation = validateNatalChart(chart, meta, contextLabel);
+
+    if (!validation.planetsValid) {
+      logger.warn({ logData: validation.logData }, `[${contextLabel}] planet validation failed: ${validation.reason}`);
+      return { chart, natalSection: "\n[Натальная карта не прошла расчёт — данные недоступны]\n", validation };
+    }
+
+    if (!validation.housesValid) {
+      logger.warn({ logData: validation.logData }, `[${contextLabel}] house validation failed: ${validation.reason}`);
+      return { chart, natalSection: `\n${formatNatalForPrompt(chart, { omitHouses: true })}\n`, validation };
+    }
+
+    return { chart, natalSection: `\n${formatNatalForPrompt(chart)}\n`, validation };
+  } catch (err) {
+    logger.warn({ err, contextLabel }, `[${contextLabel}] chart calculation threw`);
+    return empty;
+  }
+}
+
+// ─── User data (natal + all extended layers) ──────────────────────────────────
+
 function calcUserData(user: UserRow) {
-  let natalSection = "", ephemerisSection = "", solarRetSection = "";
+  let ephemerisSection = "", solarRetSection = "";
   let progressSection = "", lunarRetSection = "", solarArcSection = "", transitPerfSection = "";
-  let natalChart = null;
-  let houseValidationWarning: string | null = null;
 
-  if (user?.birthDate) {
+  const { chart: natalChart, natalSection, validation } = buildNatalContext(
+    { birthDate: user?.birthDate, birthTime: user?.birthTime, birthLat: user?.birthLat, birthLng: user?.birthLng, name: user?.name },
+    "user",
+  );
+
+  if (natalChart && validation.planetsValid) {
+    const lat = user?.birthLat != null ? Number(user.birthLat) : null;
+    const lon = user?.birthLng != null ? Number(user.birthLng) : null;
+
     try {
-      const lat = user.birthLat ? Number(user.birthLat) : null;
-      const lon = user.birthLng ? Number(user.birthLng) : null;
-      natalChart = calcNatalChart(user.birthDate, user.birthTime || null, lat, lon);
+      const sr = calcSolarReturn(user!.birthDate!, user?.birthTime || null, lat, lon, new Date().getFullYear());
+      solarRetSection = `\n${formatSolarReturnForPrompt(sr)}\n`;
+    } catch { /* no SR */ }
 
-      const hv = validateHouses(natalChart, {
-        birthDate: user.birthDate,
-        birthTime: user.birthTime,
-        birthLat:  user.birthLat ? Number(user.birthLat) : null,
-        birthLng:  user.birthLng ? Number(user.birthLng) : null,
-      });
-      if (!hv.valid) {
-        logger.warn({ houseValidation: hv.logData }, `House validation failed: ${hv.reason}`);
-        houseValidationWarning = "Дома не прошли валидацию. Не используй дома и управителей домов в ответе.";
+    try {
+      const birthYear = parseInt(user!.birthDate!.split("-")[0]);
+      const age = new Date().getFullYear() - birthYear;
+      const prog = calcProgressions(user!.birthDate!, user?.birthTime || null, lat, lon, age);
+      progressSection = `\n${formatProgressionsForPrompt(prog)}\n`;
+    } catch { /* no progressions */ }
+
+    try {
+      const natalMoon = natalChart.planets.find(p => p.planet === "Луна");
+      if (natalMoon) {
+        const lr = calcLunarReturn(natalMoon.longitude, new Date());
+        lunarRetSection = `\n${formatLunarReturnForPrompt(lr)}\n`;
       }
+    } catch { /* no lunar return */ }
 
-      natalSection = `\n${formatNatalForPrompt(natalChart)}\n`;
+    try {
+      const sa = calcSolarArcDirections(user!.birthDate!, user?.birthTime || null, lat, lon);
+      solarArcSection = `\n${formatSolarArcForPrompt(sa)}\n`;
+    } catch { /* no solar arc */ }
+  }
 
+  try {
+    const ephem = calcEphemeris(natalChart ?? undefined);
+    ephemerisSection = `\n${formatEphemerisForPrompt(ephem, natalChart ?? undefined)}\n`;
+
+    if (natalChart && validation.planetsValid && ephem.transitAspects && ephem.transitAspects.length > 0) {
       try {
-        const sr = calcSolarReturn(user.birthDate, user.birthTime || null, lat, lon, new Date().getFullYear());
+        const withDates = calcTransitPerfections(ephem.transitAspects, natalChart);
+        const formatted = formatTransitPerfectionsForPrompt(withDates);
+        if (formatted) transitPerfSection = `\n${formatted}\n`;
+      } catch { /* no perfection dates */ }
+    }
+  } catch { /* ephemeris fallback */ }
+
+  return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, validation };
+}
+
+/** Натал + транзиты контакта; при extended — соляр, прогрессии, лунар, дуга, даты транзитов.
+ *  Возвращает chart и validation чтобы buildSystemPrompt мог переиспользовать chart для синастрии. */
+function calcContactChartSections(
+  contact: NonNullable<ContactRow>,
+  extended: boolean,
+): { chart: NatalChart | null; validation: ChartValidationResult; base: string; extra: string } {
+  const { chart: natalChart, natalSection, validation } = buildNatalContext(
+    { birthDate: contact.birthDate, birthTime: contact.birthTime, birthLat: contact.birthLat, birthLng: contact.birthLng, name: contact.name },
+    `contact:${contact.name ?? contact.id}`,
+  );
+
+  let ephemerisSection = "", solarRetSection = "";
+  let progressSection = "", lunarRetSection = "", solarArcSection = "", transitPerfSection = "";
+
+  if (natalChart && validation.planetsValid) {
+    const lat = contact.birthLat != null ? Number(contact.birthLat) : null;
+    const lon = contact.birthLng != null ? Number(contact.birthLng) : null;
+
+    if (extended) {
+      try {
+        const sr = calcSolarReturn(contact.birthDate, contact.birthTime || null, lat, lon, new Date().getFullYear());
         solarRetSection = `\n${formatSolarReturnForPrompt(sr)}\n`;
       } catch { /* no SR */ }
 
       try {
-        const birthYear = parseInt(user.birthDate.split("-")[0]);
+        const birthYear = parseInt(contact.birthDate.split("-")[0], 10);
         const age = new Date().getFullYear() - birthYear;
-        const prog = calcProgressions(user.birthDate, user.birthTime || null, lat, lon, age);
+        const prog = calcProgressions(contact.birthDate, contact.birthTime || null, lat, lon, age);
         progressSection = `\n${formatProgressionsForPrompt(prog)}\n`;
       } catch { /* no progressions */ }
 
       try {
-        const natalMoon = natalChart.planets.find(p => p.planet === "Луна");
+        const natalMoon = natalChart.planets.find((p) => p.planet === "Луна");
         if (natalMoon) {
           const lr = calcLunarReturn(natalMoon.longitude, new Date());
           lunarRetSection = `\n${formatLunarReturnForPrompt(lr)}\n`;
@@ -858,18 +974,17 @@ function calcUserData(user: UserRow) {
       } catch { /* no lunar return */ }
 
       try {
-        const sa = calcSolarArcDirections(user.birthDate, user.birthTime || null, lat, lon);
+        const sa = calcSolarArcDirections(contact.birthDate, contact.birthTime || null, lat, lon);
         solarArcSection = `\n${formatSolarArcForPrompt(sa)}\n`;
       } catch { /* no solar arc */ }
-    } catch { natalSection = ""; }
+    }
   }
 
   try {
     const ephem = calcEphemeris(natalChart ?? undefined);
     ephemerisSection = `\n${formatEphemerisForPrompt(ephem, natalChart ?? undefined)}\n`;
 
-    // Transit perfection dates (only when natal chart available)
-    if (natalChart && ephem.transitAspects && ephem.transitAspects.length > 0) {
+    if (extended && natalChart && validation.planetsValid && ephem.transitAspects && ephem.transitAspects.length > 0) {
       try {
         const withDates = calcTransitPerfections(ephem.transitAspects, natalChart);
         const formatted = formatTransitPerfectionsForPrompt(withDates);
@@ -878,74 +993,9 @@ function calcUserData(user: UserRow) {
     }
   } catch { /* ephemeris fallback */ }
 
-  return { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, houseValidationWarning };
-}
-
-/** Натал + транзиты к наталу (база); при extended — соляр, прогрессии, лунар, солнечная дуга, даты транзитов. */
-function calcContactChartSections(contact: NonNullable<ContactRow>, extended: boolean): { base: string; extra: string } {
-  let natalSection = "";
-  let ephemerisSection = "";
-  let solarRetSection = "";
-  let progressSection = "";
-  let lunarRetSection = "";
-  let solarArcSection = "";
-  let transitPerfSection = "";
-  let natalChart = null;
-
-  if (contact.birthDate) {
-    try {
-      const lat = contact.birthLat ? Number(contact.birthLat) : null;
-      const lon = contact.birthLng ? Number(contact.birthLng) : null;
-      natalChart = calcNatalChart(contact.birthDate, contact.birthTime || null, lat, lon);
-      natalSection = `\n${formatNatalForPrompt(natalChart)}\n`;
-
-      if (extended) {
-        try {
-          const sr = calcSolarReturn(contact.birthDate, contact.birthTime || null, lat, lon, new Date().getFullYear());
-          solarRetSection = `\n${formatSolarReturnForPrompt(sr)}\n`;
-        } catch { /* no SR */ }
-
-        try {
-          const birthYear = parseInt(contact.birthDate.split("-")[0], 10);
-          const age = new Date().getFullYear() - birthYear;
-          const prog = calcProgressions(contact.birthDate, contact.birthTime || null, lat, lon, age);
-          progressSection = `\n${formatProgressionsForPrompt(prog)}\n`;
-        } catch { /* no progressions */ }
-
-        try {
-          const natalMoon = natalChart.planets.find((p) => p.planet === "Луна");
-          if (natalMoon) {
-            const lr = calcLunarReturn(natalMoon.longitude, new Date());
-            lunarRetSection = `\n${formatLunarReturnForPrompt(lr)}\n`;
-          }
-        } catch { /* no lunar return */ }
-
-        try {
-          const sa = calcSolarArcDirections(contact.birthDate, contact.birthTime || null, lat, lon);
-          solarArcSection = `\n${formatSolarArcForPrompt(sa)}\n`;
-        } catch { /* no solar arc */ }
-      }
-    } catch {
-      natalSection = "";
-    }
-  }
-
-  try {
-    const ephem = calcEphemeris(natalChart ?? undefined);
-    ephemerisSection = `\n${formatEphemerisForPrompt(ephem, natalChart ?? undefined)}\n`;
-
-    if (extended && natalChart && ephem.transitAspects && ephem.transitAspects.length > 0) {
-      try {
-        const withDates = calcTransitPerfections(ephem.transitAspects, natalChart);
-        const formatted = formatTransitPerfectionsForPrompt(withDates);
-        if (formatted) transitPerfSection = `\n${formatted}\n`;
-      } catch { /* no perfection dates */ }
-    }
-  } catch { /* ephemeris fallback */ }
-
-  const base = `${natalSection}${ephemerisSection}`;
+  const base  = `${natalSection}${ephemerisSection}`;
   const extra = `${solarRetSection}${progressSection}${lunarRetSection}${solarArcSection}${transitPerfSection}`;
-  return { base, extra };
+  return { chart: natalChart, validation, base, extra };
 }
 
 function buildSystemPrompt(
@@ -956,19 +1006,51 @@ function buildSystemPrompt(
 ): string {
   const depth = user?.tonePreferredDepth || "deep";
   const style = user?.tonePreferredStyle || "mystical";
-  const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, houseValidationWarning } = calcUserData(user);
+  const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, validation: userValidation } = calcUserData(user);
 
-  let synastrySection = "";
-  if (contact?.birthDate && natalChart) {
+  // Contact chart — calculated once here and reused for both the contact section
+  // and synastry (no double calculation, no stale data from history).
+  let contactChart: NatalChart | null = null;
+  let contactValidation: ChartValidationResult = { planetsValid: true, housesValid: true };
+  let contactAstroSection = "";
+
+  if (contact?.birthDate) {
     try {
-      const cLat = contact.birthLat ? Number(contact.birthLat) : null;
-      const cLon = contact.birthLng ? Number(contact.birthLng) : null;
-      const contactChart = calcNatalChart(contact.birthDate, contact.birthTime || null, cLat, cLon);
-      const synastry = calcSynastry(natalChart, contactChart);
-      const contactName = contact.name + (contact.relation ? ` (${contact.relation})` : "");
-      synastrySection = `\n${formatSynastryForPrompt(user?.name || "Пользователь", contactName, synastry)}\n`;
+      const { chart, validation, base, extra } = calcContactChartSections(contact, contactExtendedMode);
+      contactChart     = chart;
+      contactValidation = validation;
+
+      const labelBase = `АСТРОЛОГИЯ ВЫБРАННОГО ЧЕЛОВЕКА — база (натал и актуальные транзиты к его наталу):\n`;
+      contactAstroSection = `${labelBase}${base}`;
+      if (contactExtendedMode && extra.trim()) {
+        contactAstroSection += `\nАСТРОЛОГИЯ ВЫБРАННОГО ЧЕЛОВЕКА — расширение (тема года, прогрессии, лунар, солнечная дуга, даты точных транзитов):\n${extra}`;
+      }
+    } catch { contactAstroSection = ""; }
+  }
+
+  // Synastry — only when both charts have valid planetary positions.
+  let synastrySection = "";
+  if (natalChart && contactChart && userValidation.planetsValid && contactValidation.planetsValid) {
+    try {
+      const synastry    = calcSynastry(natalChart, contactChart);
+      const contactName = contact!.name + (contact!.relation ? ` (${contact!.relation})` : "");
+      synastrySection   = `\n${formatSynastryForPrompt(user?.name || "Пользователь", contactName, synastry)}\n`;
     } catch { /* synastry fallback */ }
   }
+
+  // ── Validation warning block ───────────────────────────────────────────────
+  const warningLines: string[] = [];
+  if (!userValidation.planetsValid) {
+    warningLines.push("⚠️ СИСТЕМНОЕ ПРЕДУПРЕЖДЕНИЕ (пользователь): Натальная карта пользователя не прошла проверку. Не используй данные натальной карты пользователя как источник истины. Объясни, что расчёт не удался, и отвечай общими астрологическими принципами.");
+  } else if (!userValidation.housesValid) {
+    warningLines.push("⚠️ СИСТЕМНОЕ ПРЕДУПРЕЖДЕНИЕ (пользователь): Дома пользователя не прошли валидацию. Не используй дома и управителей домов пользователя в ответе. Знаки, планеты и аспекты доступны и корректны.");
+  }
+  if (!contactValidation.planetsValid) {
+    warningLines.push("⚠️ СИСТЕМНОЕ ПРЕДУПРЕЖДЕНИЕ (контакт): Натальная карта контакта не прошла проверку. Не используй данные карты контакта как источник истины.");
+  } else if (!contactValidation.housesValid) {
+    warningLines.push("⚠️ СИСТЕМНОЕ ПРЕДУПРЕЖДЕНИЕ (контакт): Дома контакта не прошли валидацию. Не используй дома и управителей домов контакта в ответе. Планеты, знаки и синастрические аспекты доступны.");
+  }
+  const warningBlock = warningLines.length > 0 ? `\n${warningLines.join("\n")}\n` : "";
 
   const memoriesSection = memories.length > 0
     ? `\nЧто я помню о пользователе из прошлых разговоров:\n${memories.map(m => `— ${m.content}`).join("\n")}\n`
@@ -982,20 +1064,6 @@ function buildSystemPrompt(
 — Место рождения: ${user.birthPlace || "не указано"}
 ${natalSection}${ephemerisSection}${solarRetSection}${progressSection}${lunarRetSection}${solarArcSection}${transitPerfSection}${synastrySection}`
     : "Профиль пользователя ещё не заполнен — отвечай тепло и предложи пройти настройку при возможности.\n";
-
-  let contactAstroSection = "";
-  if (contact?.birthDate) {
-    try {
-      const { base, extra } = calcContactChartSections(contact, contactExtendedMode);
-      const labelBase = `АСТРОЛОГИЯ ВЫБРАННОГО ЧЕЛОВЕКА — база (натал и актуальные транзиты к его наталу):\n`;
-      contactAstroSection = `${labelBase}${base}`;
-      if (contactExtendedMode && extra.trim()) {
-        contactAstroSection += `\nАСТРОЛОГИЯ ВЫБРАННОГО ЧЕЛОВЕКА — расширение (тема года, прогрессии, лунар, солнечная дуга, даты точных транзитов):\n${extra}`;
-      }
-    } catch {
-      contactAstroSection = "";
-    }
-  }
 
   const contactProfileSection = contact
     ? `Профиль выбранного человека для разбора:
@@ -1097,7 +1165,7 @@ ${synastryModeNote}
 — Никогда не придумывай риски, которых нет в карте
 — Всегда добавляй: «Астрология указывает на предрасположенности, а не диагнозы. Для конкретных вопросов здоровья обращайся к врачу»
 
-${houseValidationWarning ? `\n⚠️ СИСТЕМНОЕ ПРЕДУПРЕЖДЕНИЕ: ${houseValidationWarning}\n` : ""}${profileSection}
+${warningBlock}${profileSection}
 ${contactProfileSection}
 ${memoriesSection}
 ${toneInstructions}`;
