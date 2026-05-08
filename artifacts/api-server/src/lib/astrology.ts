@@ -1183,10 +1183,14 @@ export function formatNatalForPrompt(chart: NatalChart): string {
     for (const a of minorA) lines.push(`  ${fmtAsp(a)}`);
   }
 
-  if (Object.keys(chart.houseRulers).length > 0) {
-    lines.push(`\nХозяева домов:`);
-    for (const [h, r] of Object.entries(chart.houseRulers)) {
-      lines.push(`  ${h} дом → ${r}`);
+  if (chart.houses && Object.keys(chart.houseRulers).length > 0) {
+    lines.push(`\nКуспиды домов (знак куспида → управитель):`);
+    for (let h = 0; h < 12; h++) {
+      const cusp    = chart.houses[h];
+      const sign    = longitudeToSign(cusp);
+      const deg     = longitudeToDeg(cusp);
+      const ruler   = chart.houseRulers[h + 1];
+      lines.push(`  H${h + 1}: ${sign} ${deg}° → ${ruler}`);
     }
   }
 
