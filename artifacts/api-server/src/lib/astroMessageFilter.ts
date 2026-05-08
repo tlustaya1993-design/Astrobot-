@@ -1,4 +1,5 @@
 import type { NatalChart } from "./astrology.js";
+export type { ChartValidationResult } from "./astrology.js";
 
 // ─── Astro Message Detection ──────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ export function isAstroAssistantMessage(m: {
   return false;
 }
 
-// ─── House Sanity Validation ──────────────────────────────────────────────────
+// ─── House Sanity Validation (kept for backward-compat and standalone tests) ──
 
 export interface HouseValidationResult {
   valid: boolean;
@@ -79,16 +80,8 @@ export interface HouseValidationResult {
 }
 
 /**
- * Validates that Placidus house cusps and planet distribution are physically
- * plausible before the chart is sent to Claude.
- *
- * Anomaly thresholds:
- *   - any house span > 180° (geometrically impossible for a standard chart)
- *   - any house span < 1°  (numerically degenerate)
- *   - any single house containing > 8 bodies (impossible with 14 total)
- *
- * Returns { valid: true } when no anomalies are found, or when no houses are
- * present (time-unknown charts have no Placidus houses).
+ * Lightweight house-only validator. Used in unit tests.
+ * For the full production pipeline use validateNatalChart() from astrology.ts.
  */
 export function validateHouses(
   chart: NatalChart,

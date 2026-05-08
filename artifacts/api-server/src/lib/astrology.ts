@@ -150,7 +150,7 @@ const ASPECT_CONFIG: Array<{ name: AspectName; angle: number; orb: number }> = [
 ];
 
 // Sign rulers: index 0 = Овен … 11 = Рыбы
-const SIGN_RULERS: Planet[] = [
+export const SIGN_RULERS: Planet[] = [
   "Марс", "Венера", "Меркурий", "Луна", "Солнце", "Меркурий",
   "Венера", "Плутон", "Юпитер", "Сатурн", "Уран", "Нептун",
 ];
@@ -1610,6 +1610,169 @@ export function calcTransitPerfections(
 
     return { ...ta, perfectionDate: bestDate };
   });
+}
+
+// ─── Chart Validation ─────────────────────────────────────────────────────────
+
+export interface ChartValidationResult {
+  /** Planetary positions (longitudes, signs) are internally consistent. */
+  planetsValid: boolean;
+  /** House cusps and planet-house assignments are physically plausible. */
+  housesValid: boolean;
+  /** Human-readable reason for failure (first problem found). */
+  reason?: string;
+  /** Structured diagnostics for server-side logging. */
+  logData?: Record<string, unknown>;
+}
+
+const REQUIRED_PLANETS: Planet[] = ["Солнце", "Луна"];
+
+/**
+ * Validates a freshly-calculated NatalChart for internal consistency.
+ * Called before any chart data is injected into the LLM prompt.
+ *
+ * planetValid = false  → whole chart is unreliable; suppress natal section.
+ * housesValid = false  → house/ruler layer is unreliable; suppress house data,
+ *                         keep sign/planet/aspect data.
+ */
+export function validateNatalChart(
+  chart: NatalChart,
+  meta: { birthDate?: string | null; birthTime?: string | null; birthLat?: number | null; birthLng?: number | null },
+  contextLabel: string,
+): ChartValidationResult {
+  const base = { contextLabel, ...meta, utcDebug: chart._tzDebug };
+
+  // ── 1. Required planets present ───────────────────────────────────────────
+  for (const req of REQUIRED_PLANETS) {
+    if (!chart.planets.find(p => p.planet === req)) {
+      return {
+        planetsValid: false, housesValid: false,
+        reason: `${contextLabel}: missing required planet ${req}`,
+        logData: { ...base, presentPlanets: chart.planets.map(p => p.planet) },
+      };
+    }
+  }
+
+  // ── 2. Planet longitudes in 0–360 ─────────────────────────────────────────
+  for (const p of chart.planets) {
+    if (!isFinite(p.longitude) || p.longitude < 0 || p.longitude >= 360) {
+      return {
+        planetsValid: false, housesValid: false,
+        reason: `${contextLabel}: ${p.planet} longitude ${p.longitude} out of 0–360`,
+        logData: { ...base, planet: p.planet, longitude: p.longitude },
+      };
+    }
+  }
+
+  // ── 3. Sign matches longitude ─────────────────────────────────────────────
+  for (const p of chart.planets) {
+    const expectedSign = SIGNS[Math.floor(p.longitude / 30)];
+    if (p.sign !== expectedSign) {
+      return {
+        planetsValid: false, housesValid: false,
+        reason: `${contextLabel}: ${p.planet} sign mismatch — lon ${p.longitude.toFixed(2)}° → ${expectedSign}, stored ${p.sign}`,
+        logData: { ...base, planet: p.planet, longitude: p.longitude, storedSign: p.sign, expectedSign },
+      };
+    }
+  }
+
+  // ── 4. House cusp spans (0–360, no span > 180°, no span < 1°) ────────────
+  if (chart.houses) {
+    if (chart.houses.length !== 12) {
+      return {
+        planetsValid: true, housesValid: false,
+        reason: `${contextLabel}: houses array length ${chart.houses.length} (expected 12)`,
+        logData: { ...base, housesLength: chart.houses.length },
+      };
+    }
+    const houses = chart.houses;
+
+    // Check cusp range BEFORE computing spans (a cusp > 360 would corrupt span math)
+    for (let i = 0; i < 12; i++) {
+      if (!isFinite(houses[i]) || houses[i] < 0 || houses[i] >= 360) {
+        return {
+          planetsValid: true, housesValid: false,
+          reason: `${contextLabel}: H${i + 1} cusp ${houses[i]} out of 0–360`,
+          logData: { ...base, house: i + 1, cusp: houses[i] },
+        };
+      }
+    }
+
+    const spans = houses.map((c, i) => ((houses[(i + 1) % 12] - c) + 360) % 360);
+    for (let i = 0; i < 12; i++) {
+      if (spans[i] > 180) {
+        return {
+          planetsValid: true, housesValid: false,
+          reason: `${contextLabel}: H${i + 1} span ${spans[i].toFixed(1)}° exceeds 180°`,
+          logData: { ...base, house: i + 1, span: spans[i], cusps: houses },
+        };
+      }
+      if (spans[i] < 1) {
+        return {
+          planetsValid: true, housesValid: false,
+          reason: `${contextLabel}: H${i + 1} span ${spans[i].toFixed(2)}° below 1°`,
+          logData: { ...base, house: i + 1, span: spans[i], cusps: houses },
+        };
+      }
+    }
+
+    // ── 5. planet.house values in 1–12 ────────────────────────────────────
+    for (const p of chart.planets) {
+      if (p.house !== undefined && (!Number.isInteger(p.house) || p.house < 1 || p.house > 12)) {
+        return {
+          planetsValid: true, housesValid: false,
+          reason: `${contextLabel}: ${p.planet} has invalid house ${p.house}`,
+          logData: { ...base, planet: p.planet, house: p.house },
+        };
+      }
+    }
+
+    // ── 6. No anomalous concentration (> 8 bodies in one house) ───────────
+    const bodiesPerHouse: Record<number, number> = {};
+    for (const p of chart.planets) {
+      if (p.house !== undefined) bodiesPerHouse[p.house] = (bodiesPerHouse[p.house] ?? 0) + 1;
+    }
+    for (const [h, count] of Object.entries(bodiesPerHouse)) {
+      if (count > 8) {
+        return {
+          planetsValid: true, housesValid: false,
+          reason: `${contextLabel}: H${h} has ${count} bodies (impossible distribution)`,
+          logData: { ...base, bodiesPerHouse, cusps: houses },
+        };
+      }
+    }
+
+    // ── 7. House rulers match cusp signs ──────────────────────────────────
+    if (Object.keys(chart.houseRulers).length > 0) {
+      for (let h = 0; h < 12; h++) {
+        const cusp = ((houses[h] % 360) + 360) % 360;
+        const expectedRuler = SIGN_RULERS[Math.floor(cusp / 30)];
+        const storedRuler   = chart.houseRulers[h + 1];
+        if (storedRuler && storedRuler !== expectedRuler) {
+          return {
+            planetsValid: true, housesValid: false,
+            reason: `${contextLabel}: H${h + 1} ruler mismatch — cusp ${cusp.toFixed(1)}° → ${expectedRuler}, stored ${storedRuler}`,
+            logData: { ...base, house: h + 1, cusp, expectedRuler, storedRuler },
+          };
+        }
+      }
+    }
+
+    // ── 8. Ascendant sign matches houses[0] ───────────────────────────────
+    if (chart.ascendant !== null) {
+      const ascLon = ((houses[0] % 360) + 360) % 360;
+      const expectedAscSign = SIGNS[Math.floor(ascLon / 30)];
+      if (chart.ascendant !== expectedAscSign) {
+        return {
+          planetsValid: true, housesValid: false,
+          reason: `${contextLabel}: ASC sign mismatch — lon ${ascLon.toFixed(2)}° → ${expectedAscSign}, stored ${chart.ascendant}`,
+          logData: { ...base, ascLon, expectedAscSign, storedAsc: chart.ascendant },
+        };
+      }
+    }
+  }
+
+  return { planetsValid: true, housesValid: true };
 }
 
 export function formatTransitPerfectionsForPrompt(transitsWithDates: TransitWithPerfection[]): string {
