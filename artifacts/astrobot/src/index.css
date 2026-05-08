@@ -269,6 +269,8 @@ html.keyboard-open [data-bottom-nav] {
    GPU-composited (opacity + transform only) — safe on mobile. */
 .stream-block-reveal {
   animation: streamBlockReveal 0.25s ease-out both;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
 }
 @keyframes streamBlockReveal {
   from { opacity: 0; transform: translateY(4px); }
