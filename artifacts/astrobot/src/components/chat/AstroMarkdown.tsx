@@ -51,7 +51,7 @@ export default function AstroMarkdown({ content, isStreaming = false }: AstroMar
       const t = setTimeout(() => {
         stableCountRef.current = 0;
         setShowMarkdown(true);
-      }, 60);
+      }, 300);
       return () => clearTimeout(t);
     }
   }, [isStreaming]);
@@ -64,12 +64,10 @@ export default function AstroMarkdown({ content, isStreaming = false }: AstroMar
     stableCountRef.current = content.length;
 
     return (
-      <div className="leading-[1.6] whitespace-pre-wrap break-words">
-        {stable}
+      <div className="leading-[1.75] whitespace-pre-wrap break-words">
+        <span>{stable}</span>
         {fresh && (
-          <span key={content.length} className="stream-chunk-in">
-            {fresh}
-          </span>
+          <span className="stream-fade-in">{fresh}</span>
         )}
         {isStreaming && <span className="streaming-cursor" aria-hidden />}
       </div>
