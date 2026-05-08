@@ -11,6 +11,9 @@ export const messages = pgTable("messages", {
     .references(() => conversations.id, { onDelete: "cascade" }),
   role: text("role").notNull(),
   content: text("content").notNull(),
+  // 'chat' = pure conversation; 'astro' = contains computed house/planet assignments.
+  // Astro messages are excluded from LLM history (system prompt always has fresh data).
+  messageType: text("message_type").default("chat"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

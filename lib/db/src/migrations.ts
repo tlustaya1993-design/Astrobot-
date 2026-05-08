@@ -37,6 +37,10 @@ export async function runDbMigrations(pool: Pool): Promise<void> {
         ALTER TABLE users
         ADD COLUMN IF NOT EXISTS is_test boolean NOT NULL DEFAULT false
       `);
+      await pool.query(`
+        ALTER TABLE messages
+        ADD COLUMN IF NOT EXISTS message_type text DEFAULT 'chat'
+      `);
     })().catch((error) => {
       migrationsReady = null;
       throw error;
