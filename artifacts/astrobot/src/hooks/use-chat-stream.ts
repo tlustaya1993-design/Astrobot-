@@ -250,17 +250,26 @@ export function useChatStream(conversationId?: number) {
       let streamError: string | null = null;
       let sseBuffer = '';
 
-      // Batch SSE chunks into ~30ms windows. Commit to React state only when
-      // the number of completed markdown blocks (\n\n boundaries) increases —
-      // AstroMarkdown shows no visible change between block boundaries, so
-      // intermediate commits would cause renders and layout effects for nothing.
+      // Batch SSE chunks into ~30ms windows.
+      // Commit strategy:
+      //   • Immediately when a new \n\n block completes (block-reveal trigger).
+      //   • Fallback every 500ms so content is always visible even if the model
+      //     writes a long paragraph without any double-newline.
       let pendingContent = '';
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
       let lastBlockCount = 0;
       const commitMsg = (text: string) =>
         setLocalMessages((prev) =>
           prev.map((m) => (m.id === streamingAssistantId ? { ...m, content: text } : m)),
         );
+      const scheduleFallback = () => {
+        if (fallbackTimer) return;
+        fallbackTimer = setTimeout(() => {
+          fallbackTimer = null;
+          commitMsg(assistantMsg);
+        }, 500);
+      };
       const flushPending = () => {
         flushTimer = null;
         if (!pendingContent) return;
@@ -269,7 +278,12 @@ export function useChatStream(conversationId?: number) {
         const blockCount = assistantMsg.split('\n\n').length - 1;
         if (blockCount > lastBlockCount) {
           lastBlockCount = blockCount;
+          if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
           commitMsg(assistantMsg);
+        } else {
+          // No new completed block yet — schedule a low-frequency fallback
+          // so the user sees content even before the first \n\n.
+          scheduleFallback();
         }
       };
 
@@ -307,9 +321,10 @@ export function useChatStream(conversationId?: number) {
         if (streamError) break;
       }
 
-      // Flush buffered content, then do one unconditional final commit so the
-      // complete text is always present when isStreaming flips false.
+      // Flush buffered content, then unconditional final commit so the complete
+      // text is always present when isStreaming flips false.
       if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
       flushPending();
       commitMsg(assistantMsg);
 

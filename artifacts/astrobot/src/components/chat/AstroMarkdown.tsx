@@ -64,17 +64,28 @@ export default function AstroMarkdown({ content, isStreaming = false }: AstroMar
   }
 
   // ── Streaming path ───────────────────────────────────────────────────────────
-  // Split on \n\n. Segments before the last one are "complete" — the LLM has
-  // already moved past them. The last segment is still being written and is
-  // intentionally NOT rendered: blocks appear as whole units (block-reveal UX),
-  // not word-by-word. When isStreaming flips false the full content renders.
-  const segments    = content.split('\n\n');
+  // Split on \n\n. Segments before the last are "complete". The last segment
+  // is the active tail (still being written).
+  //
+  // Active tail visibility:
+  //   • Once completed blocks exist → hide the tail (blocks appear whole).
+  //   • Before the first \n\n → show the tail as a plain-text preview so the
+  //     user sees content. The hook's 500ms fallback timer caps update rate,
+  //     preventing jitter while guaranteeing text is visible promptly.
+  const segments     = content.split('\n\n');
   const completeSegs = segments.slice(0, -1);
+  const activeTail   = segments[segments.length - 1] ?? '';
+  const hasBlocks    = completeSegs.some(s => s.trim());
 
   return (
     <div className="leading-[1.6]">
       {completeSegs.map((block, idx) =>
         block.trim() ? <CompletedBlock key={idx} text={block} /> : null
+      )}
+      {!hasBlocks && activeTail.trim() && (
+        <div className="leading-[1.6] whitespace-pre-wrap break-words">
+          {activeTail}
+        </div>
       )}
       <span className="streaming-cursor" aria-hidden />
     </div>
