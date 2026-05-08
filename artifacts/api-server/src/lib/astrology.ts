@@ -485,15 +485,28 @@ function calcPlacidusHouses(jd: number, lat: number, lon: number): number[] {
   let h2  = placidusIntermediate(120, 1 / 3);
   let h3  = placidusIntermediate(150, 2 / 3);
 
-  // Guard: simplified Placidus can overshoot ASC or IC near the horizon at mid/high latitudes.
-  const ic = normalizeAngle(mc + 180);
-  const dsc = normalizeAngle(asc + 180);
-  const mcAscArc  = normalizeAngle(asc - mc);
-  const ascIcArc  = normalizeAngle(ic  - asc);
-  if (normalizeAngle(h12 - mc) >= mcAscArc) h12 = normalizeAngle(mc + (2 / 3) * mcAscArc);
-  if (normalizeAngle(h11 - mc) >= normalizeAngle(h12 - mc)) h11 = normalizeAngle(mc + (1 / 3) * mcAscArc);
-  if (normalizeAngle(h3  - asc) >= ascIcArc) h3 = normalizeAngle(asc + (2 / 3) * ascIcArc);
-  if (normalizeAngle(h2  - asc) >= normalizeAngle(h3  - asc)) h2 = normalizeAngle(asc + (1 / 3) * ascIcArc);
+  // Guard: ensure strict order MC → H11 → H12 → ASC and ASC → H2 → H3 → IC.
+  // A single compound check per hemisphere avoids the sequential-patch bug where
+  // fixing one cusp in isolation can leave the other out of order.
+  // Falls back to equal trisection of the arc whenever Placidus overshoots.
+  const ic       = normalizeAngle(mc + 180);
+  const dsc      = normalizeAngle(asc + 180);
+  const mcAscArc = normalizeAngle(asc - mc);
+  const ascIcArc = normalizeAngle(ic  - asc);
+
+  const d11 = normalizeAngle(h11 - mc);
+  const d12 = normalizeAngle(h12 - mc);
+  if (!(d11 > 0 && d11 < d12 && d12 < mcAscArc)) {
+    h11 = normalizeAngle(mc + mcAscArc / 3);
+    h12 = normalizeAngle(mc + (2 / 3) * mcAscArc);
+  }
+
+  const e2 = normalizeAngle(h2 - asc);
+  const e3 = normalizeAngle(h3 - asc);
+  if (!(e2 > 0 && e2 < e3 && e3 < ascIcArc)) {
+    h2 = normalizeAngle(asc + ascIcArc / 3);
+    h3 = normalizeAngle(asc + (2 / 3) * ascIcArc);
+  }
 
   const h4  = ic;
   const h5  = normalizeAngle(h11 + 180);
