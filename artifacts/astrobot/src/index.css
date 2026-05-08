@@ -265,12 +265,23 @@ html.keyboard-open [data-bottom-nav] {
   animation: streamFadeIn 0.4s ease-out forwards;
 }
 
-/* Markdown reveal after streaming ends */
+/* Block-level reveal: each completed paragraph/heading slides in gently.
+   GPU-composited (opacity + transform only) — safe on mobile. */
+.stream-block-reveal {
+  animation: streamBlockReveal 0.25s ease-out both;
+}
+@keyframes streamBlockReveal {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Completed message fade-in — barely noticeable, just smooths the
+   streaming-branch → static-branch DOM swap when isStreaming goes false. */
 .stream-md-reveal {
-  animation: streamMdReveal 0.2s ease-out both;
+  animation: streamMdReveal 0.15s ease-out both;
 }
 @keyframes streamMdReveal {
-  from { opacity: 0.65; }
+  from { opacity: 0.92; }
   to   { opacity: 1; }
 }
 

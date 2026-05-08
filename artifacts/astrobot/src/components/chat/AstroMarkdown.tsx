@@ -1,16 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 
-/**
- * Max interval (ms) between markdown re-parses during streaming.
- * Caps parse frequency at ~20fps — imperceptible to the eye but noticeably
- * lighter on mobile GPUs compared to parsing every ~30ms SSE batch.
- */
-const STREAM_THROTTLE_MS = 50;
-
-/** Stable plugin array — avoids creating a new reference on every render. */
 const REMARK_PLUGINS = [remarkGfm];
 
 interface AstroMarkdownProps {
@@ -45,78 +37,102 @@ const MD_COMPONENTS: Components = {
 };
 
 /**
- * Strip trailing incomplete emphasis/bold markers so the parser never sees
- * an unclosed token that would render as raw symbols while the LLM is
- * mid-token (e.g. "**Заголовок" before the closing "**" has arrived).
- * The window where this matters is at most one ~30ms SSE batch.
+ * Close any unclosed inline emphasis/bold markers at the trailing edge of an
+ * in-progress block so react-markdown never receives a dangling token that
+ * it would render as raw * or ** characters.
+ *
+ * Examples:
+ *   "**Заголовок"          → "**Заголовок**"   (bold rendered correctly)
+ *   "**Заголовок**"        → unchanged          (already balanced)
+ *   "text ending with *"   → "text ending with" (trailing stripped)
  */
-function sanitizeStreamingContent(text: string): string {
-  return text.replace(/(\*{1,3}|_{1,3})$/, '');
+function closeUnclosedMarkers(text: string): string {
+  // Strip any bare trailing marker characters (1–3 * or _).
+  let s = text.replace(/[*_]{1,3}$/, '');
+
+  // Balance ** (bold): odd count means one is unclosed → close it.
+  const boldCount = (s.match(/\*\*/g) ?? []).length;
+  if (boldCount % 2 !== 0) s += '**';
+
+  // Balance * (italic): count after removing all ** so they don't interfere.
+  const withoutBold = s.replace(/\*\*/g, '');
+  const italicCount = (withoutBold.match(/\*/g) ?? []).length;
+  if (italicCount % 2 !== 0) s += '*';
+
+  return s;
+}
+
+/**
+ * A completed markdown block.
+ *
+ * Memoized so it never re-renders once mounted — the key guarantee behind
+ * the performance model. Each instance plays a one-shot CSS fade-in on
+ * first mount, giving the block-level reveal animation.
+ */
+const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) {
+  return (
+    <div className="stream-block-reveal">
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+});
+
+/**
+ * The in-progress (active) block at the tail of the stream.
+ *
+ * NOT memoized — intentionally re-renders on every content update so the
+ * user sees text growing in real time. No animation since the content is
+ * still changing. closeUnclosedMarkers() ensures no raw symbols appear.
+ */
+function ActiveBlock({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  );
 }
 
 export default function AstroMarkdown({ content, isStreaming = false }: AstroMarkdownProps) {
-  // Throttled display content: React state that updates at most every
-  // STREAM_THROTTLE_MS during streaming, immediately on stream end.
-  // This decouples the markdown parse rate from the SSE batch rate.
-  const [displayContent, setDisplayContent] = useState(content);
+  // ── Non-streaming: render the entire content as a single markdown document ──
+  if (!isStreaming) {
+    return (
+      <div className="leading-[1.6] stream-md-reveal">
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+          {content}
+        </ReactMarkdown>
+      </div>
+    );
+  }
 
-  const lastFlushRef  = useRef(performance.now());
-  const timerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Always-fresh ref so the deferred timer callback uses the latest content,
-  // not a stale closure captured at scheduling time.
-  const latestContentRef = useRef(content);
-  latestContentRef.current = content;
-
-  useEffect(() => {
-    if (!isStreaming) {
-      // Stream finished — flush immediately so the final text is complete.
-      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-      setDisplayContent(content);
-      return;
-    }
-
-    const now     = performance.now();
-    const elapsed = now - lastFlushRef.current;
-
-    if (elapsed >= STREAM_THROTTLE_MS) {
-      // Enough time has passed — update right away.
-      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
-      lastFlushRef.current = now;
-      setDisplayContent(content);
-    } else if (!timerRef.current) {
-      // Schedule a flush for when the throttle window expires.
-      // If more chunks arrive before the timer fires, the ref keeps them
-      // without rescheduling — the timer will pick up the latest value.
-      timerRef.current = setTimeout(() => {
-        timerRef.current = null;
-        lastFlushRef.current = performance.now();
-        setDisplayContent(latestContentRef.current);
-      }, STREAM_THROTTLE_MS - elapsed);
-    }
-  }, [content, isStreaming]);
-
-  // Cleanup deferred timer on unmount.
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
-
-  const parseContent = isStreaming
-    ? sanitizeStreamingContent(displayContent)
-    : displayContent;
-
-  // Memoize the ReactMarkdown output: re-parses only when parseContent changes
-  // (throttled during streaming → at most ~20fps, not ~33fps).
-  const renderedMarkdown = useMemo(
-    () => (
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-        {parseContent}
-      </ReactMarkdown>
-    ),
-    [parseContent],
-  );
+  // ── Streaming path ───────────────────────────────────────────────────────────
+  //
+  // Split on "\n\n" (the markdown paragraph separator). Every segment *before*
+  // the last one is definitively complete — it already has a \n\n after it and
+  // the LLM will not go back to edit it. The last segment is the "active" block
+  // currently being written.
+  //
+  // Visual model:
+  //   complete blocks → CompletedBlock (memoized, fade-in animation, never
+  //                     re-renders once mounted — O(1) per new chunk)
+  //   active block    → ActiveBlock    (updates every SSE batch, no animation)
+  //   cursor          → thin horizontal bar after the active block
+  //
+  const segments   = content.split('\n\n');
+  // Use the original segment index as key — do NOT filter before mapping.
+  // Filtering would compact indices and reassign keys to existing CompletedBlocks,
+  // causing React.memo to miss the cache and replay the fade-in animation.
+  const completeSegs = segments.slice(0, -1);
+  const activeText   = closeUnclosedMarkers(segments[segments.length - 1] ?? '');
 
   return (
     <div className="leading-[1.6]">
-      {renderedMarkdown}
-      {isStreaming && <span className="streaming-cursor" aria-hidden />}
+      {completeSegs.map((block, idx) =>
+        block.trim() ? <CompletedBlock key={idx} text={block} /> : null
+      )}
+      {activeText.trim() && <ActiveBlock text={activeText} />}
+      <span className="streaming-cursor" aria-hidden />
     </div>
   );
 }
