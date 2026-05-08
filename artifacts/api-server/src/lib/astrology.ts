@@ -456,7 +456,6 @@ function calcMidheaven(jd: number, lon: number): number {
 }
 
 // ─── Placidus House System ────────────────────────────────────────────────────
-// Replaces the Equal House (30° each) approximation.
 // Uses the standard Placidus semi-arc formula for intermediate cusps.
 // Falls back to equal houses when lat is extreme (|lat| > 66°, polar regions).
 
@@ -469,9 +468,7 @@ function calcPlacidusHouses(jd: number, lat: number, lon: number): number[] {
   const epsR = deg2rad(eps);
   const latR = deg2rad(lat);
 
-  // Simplified Placidus formula for intermediate cusps.
-  // H = atan2(sin(RAMC + offset), cos(RAMC + offset)*cos(ε) + k*tan(φ)*sin(ε))
-  // k = 1/3 for cusps adjacent to MC/IC, 2/3 for those adjacent to ASC/DSC.
+  // Placidus formula: H = atan2(sin(RAMC+offset), cos(RAMC+offset)*cos(ε) + k*tan(φ)*sin(ε))
   function placidusIntermediate(ramcOffset: number, k: number): number {
     const ra = deg2rad(normalizeAngle(ramc + ramcOffset));
     const raw = rad2deg(Math.atan2(Math.sin(ra), Math.cos(ra) * Math.cos(epsR) + k * Math.tan(latR) * Math.sin(epsR)));
@@ -483,13 +480,12 @@ function calcPlacidusHouses(jd: number, lat: number, lon: number): number[] {
     return Array.from({ length: 12 }, (_, i) => normalizeAngle(asc + i * 30));
   }
 
-  let h11 = placidusIntermediate(30,  1 / 3);  // between MC and ASC
+  let h11 = placidusIntermediate(30,  1 / 3);
   let h12 = placidusIntermediate(60,  2 / 3);
-  let h2  = placidusIntermediate(120, 1 / 3);  // between ASC and IC
+  let h2  = placidusIntermediate(120, 1 / 3);
   let h3  = placidusIntermediate(150, 2 / 3);
 
   // Guard: simplified Placidus can overshoot ASC or IC near the horizon at mid/high latitudes.
-  // If an intermediate cusp is outside its bracketing arc, interpolate linearly instead.
   const ic = normalizeAngle(mc + 180);
   const dsc = normalizeAngle(asc + 180);
   const mcAscArc  = normalizeAngle(asc - mc);
@@ -499,14 +495,13 @@ function calcPlacidusHouses(jd: number, lat: number, lon: number): number[] {
   if (normalizeAngle(h3  - asc) >= ascIcArc) h3 = normalizeAngle(asc + (2 / 3) * ascIcArc);
   if (normalizeAngle(h2  - asc) >= normalizeAngle(h3  - asc)) h2 = normalizeAngle(asc + (1 / 3) * ascIcArc);
 
-  const h4  = ic;          // IC
+  const h4  = ic;
   const h5  = normalizeAngle(h11 + 180);
   const h6  = normalizeAngle(h12 + 180);
-  const h7  = normalizeAngle(asc + 180);          // DSC
+  const h7  = dsc;
   const h8  = normalizeAngle(h2  + 180);
   const h9  = normalizeAngle(h3  + 180);
 
-  // Houses 1–12 (cusp of 1 = ASC, cusp of 10 = MC)
   return [asc, h2, h3, h4, h5, h6, h7, h8, h9, mc, h11, h12];
 }
 
