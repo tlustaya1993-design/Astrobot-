@@ -108,7 +108,6 @@ export function useChatStream(conversationId?: number) {
     };
     setLocalMessages(prev => [...prev, tempUserMsg, tempAssistantMsg]);
     setIsStreaming(true);
-    setStreamingText('');
 
     let hadSendError = false;
     let requestTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -172,12 +171,10 @@ export function useChatStream(conversationId?: number) {
             setLocalMessages(prev =>
               prev.map(m => m.id === streamingAssistantId ? { ...m, content: waitMsg } : m)
             );
-            setStreamingText(waitMsg);
             await new Promise(r => setTimeout(r, 4000 * htmlRetryCount));
             setLocalMessages(prev =>
               prev.map(m => m.id === streamingAssistantId ? { ...m, content: '' } : m)
             );
-            setStreamingText('');
             requestTimeout = setTimeout(() => controller.abort(), 60_000);
             continue fetchRetry;
           }
@@ -255,9 +252,14 @@ export function useChatStream(conversationId?: number) {
       //   • Immediately when a new \n\n block completes (block-reveal trigger).
       //   • Fallback every 500ms so content is always visible even if the model
       //     writes a long paragraph without any double-newline.
+      // Commit strategy:
+      //   • Immediately on a new \n\n block boundary (block-reveal trigger).
+      //   • Fallback: first preview after 1500ms, subsequent at most every 600ms.
+      //     Keeps typing dots from showing forever on long paragraphs without \n\n.
       let pendingContent = '';
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
       let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+      let firstFallbackFired = false;
       let lastBlockCount = 0;
       const commitMsg = (text: string) =>
         setLocalMessages((prev) =>
@@ -265,10 +267,12 @@ export function useChatStream(conversationId?: number) {
         );
       const scheduleFallback = () => {
         if (fallbackTimer) return;
+        const delay = firstFallbackFired ? 600 : 1500;
         fallbackTimer = setTimeout(() => {
           fallbackTimer = null;
+          firstFallbackFired = true;
           commitMsg(assistantMsg);
-        }, 500);
+        }, delay);
       };
       const flushPending = () => {
         flushTimer = null;
@@ -281,8 +285,6 @@ export function useChatStream(conversationId?: number) {
           if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
           commitMsg(assistantMsg);
         } else {
-          // No new completed block yet — schedule a low-frequency fallback
-          // so the user sees content even before the first \n\n.
           scheduleFallback();
         }
       };

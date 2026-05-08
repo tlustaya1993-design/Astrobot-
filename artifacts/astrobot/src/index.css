@@ -271,6 +271,7 @@ html.keyboard-open [data-bottom-nav] {
   animation: streamBlockReveal 0.25s ease-out both;
   will-change: opacity, transform;
   backface-visibility: hidden;
+  contain: layout paint;
 }
 @keyframes streamBlockReveal {
   from { opacity: 0; transform: translateY(4px); }
