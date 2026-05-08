@@ -119,15 +119,18 @@ export default function AstroMarkdown({ content, isStreaming = false }: AstroMar
   //   active block    → ActiveBlock    (updates every SSE batch, no animation)
   //   cursor          → thin horizontal bar after the active block
   //
-  const segments     = content.split('\n\n');
-  const completeRaw  = segments.slice(0, -1).filter(s => s.trim());
+  const segments   = content.split('\n\n');
+  // Use the original segment index as key — do NOT filter before mapping.
+  // Filtering would compact indices and reassign keys to existing CompletedBlocks,
+  // causing React.memo to miss the cache and replay the fade-in animation.
+  const completeSegs = segments.slice(0, -1);
   const activeText   = closeUnclosedMarkers(segments[segments.length - 1] ?? '');
 
   return (
     <div className="leading-[1.6]">
-      {completeRaw.map((block, idx) => (
-        <CompletedBlock key={idx} text={block} />
-      ))}
+      {completeSegs.map((block, idx) =>
+        block.trim() ? <CompletedBlock key={idx} text={block} /> : null
+      )}
       {activeText.trim() && <ActiveBlock text={activeText} />}
       <span className="streaming-cursor" aria-hidden />
     </div>
