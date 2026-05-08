@@ -79,7 +79,6 @@ function appendInterruptedResponseNotice(content: string, message: string): stri
 export function useChatStream(conversationId?: number) {
   const [localMessages, setLocalMessages] = useState<OpenaiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streamingText, setStreamingText] = useState('');
   const [paywallState, setPaywallState] = useState<PaywallState | null>(null);
   const [failureCount, setFailureCount] = useState(0);
   const queryClient = useQueryClient();
@@ -251,20 +250,27 @@ export function useChatStream(conversationId?: number) {
       let streamError: string | null = null;
       let sseBuffer = '';
 
-      // Batch SSE chunks into ~30ms windows so React re-renders word groups, not single chars
+      // Batch SSE chunks into ~30ms windows. Commit to React state only when
+      // the number of completed markdown blocks (\n\n boundaries) increases —
+      // AstroMarkdown shows no visible change between block boundaries, so
+      // intermediate commits would cause renders and layout effects for nothing.
       let pendingContent = '';
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      let lastBlockCount = 0;
+      const commitMsg = (text: string) =>
+        setLocalMessages((prev) =>
+          prev.map((m) => (m.id === streamingAssistantId ? { ...m, content: text } : m)),
+        );
       const flushPending = () => {
         flushTimer = null;
         if (!pendingContent) return;
         assistantMsg += pendingContent;
         pendingContent = '';
-        setStreamingText(assistantMsg);
-        setLocalMessages((prev) =>
-          prev.map((m) =>
-            m.id === streamingAssistantId ? { ...m, content: assistantMsg } : m,
-          ),
-        );
+        const blockCount = assistantMsg.split('\n\n').length - 1;
+        if (blockCount > lastBlockCount) {
+          lastBlockCount = blockCount;
+          commitMsg(assistantMsg);
+        }
       };
 
       while (true) {
@@ -301,9 +307,11 @@ export function useChatStream(conversationId?: number) {
         if (streamError) break;
       }
 
-      // Flush any content that was buffered but not yet committed
+      // Flush buffered content, then do one unconditional final commit so the
+      // complete text is always present when isStreaming flips false.
       if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
       flushPending();
+      commitMsg(assistantMsg);
 
       if (streamError) {
         throw new Error(streamError);
@@ -358,7 +366,6 @@ export function useChatStream(conversationId?: number) {
     } finally {
       clearRequestTimeout();
       setIsStreaming(false);
-      setStreamingText('');
     }
 
     return hadSendError ? undefined : targetId;
@@ -390,7 +397,6 @@ export function useChatStream(conversationId?: number) {
   return {
     localMessages,
     isStreaming,
-    streamingText,
     paywallState,
     failureCount,
     closePaywall,
