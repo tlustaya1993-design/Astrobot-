@@ -497,9 +497,14 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   const systemPrompt = safeBuildSystemPrompt(userProfile, contactProfile, userMemories, nextExtended);
 
+  // Astro-tagged assistant messages are excluded from LLM history: their house/planet
+  // data is always stale vs the fresh system prompt. Replaced with a neutral marker so
+  // Claude still knows an analysis happened (for conversational continuity).
   const chatMessages = history.map((m) => ({
     role: m.role as "user" | "assistant",
-    content: m.content,
+    content: m.role === "assistant" && m.messageType === "astro"
+      ? "[астрологический разбор был предоставлен — актуальные данные в системном промпте]"
+      : m.content,
   }));
 
   let heartbeat: ReturnType<typeof setInterval> | undefined;
@@ -599,8 +604,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
       }
 
       // Save to DB and charge regardless of whether client is still connected.
+      // Tag as 'astro' when the response was built with a full natal chart (date+time+coords),
+      // meaning it likely contains house/planet assignments that become stale over deploys.
+      const hasNatalHouses = !!(userProfile?.birthDate && userProfile?.birthTime && userProfile?.birthLat);
       await Promise.all([
-        db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse }),
+        db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse, messageType: hasNatalHouses ? "astro" : "chat" }),
         db
           .update(usersTable)
           .set({
