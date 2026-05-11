@@ -347,6 +347,11 @@ export function useChatStream(conversationId?: number) {
               : m,
           );
         }
+        // If navigation cleared the optimistic pair, this failure belongs to a
+        // chat that is no longer on screen; do not leak its error into another thread.
+        const hasOriginalUser = prev.some((m) => m.id === tempUserMsg.id);
+        if (!hasOriginalUser) return prev;
+
         const tempAssistantError: OpenaiMessage = {
           id: Date.now() + 1,
           conversationId: targetId || 0,

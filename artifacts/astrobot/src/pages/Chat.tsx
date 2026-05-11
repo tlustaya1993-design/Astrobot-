@@ -729,6 +729,9 @@ export default function Chat() {
 
   // IDs of messages added during this session (not loaded from DB) — they get a fade-in entry
   const localMsgIdSet = useMemo(() => new Set(localMessages.map((m) => m.id)), [localMessages]);
+  const streamingLocalMessageId = isStreaming
+    ? localMessages[localMessages.length - 1]?.id
+    : undefined;
 
   const isNew = !conversationId && displayMessages.length === 0;
   const selectedRelation = selectedContactId != null ? (contactRelationById[selectedContactId] || '') : '';
@@ -879,7 +882,12 @@ export default function Chat() {
               const precedingUserMsg = isErrMsg
                 ? displayMessages.slice(0, idx).reverse().find(m => m.role === 'user') ?? null
                 : null;
-              const isStreamingMsg = isStreaming && idx === displayMessages.length - 1 && msg.role === 'assistant';
+              const isStreamingMsg =
+                isStreaming &&
+                msg.role === 'assistant' &&
+                msg.id === streamingLocalMessageId &&
+                localMsgIdSet.has(msg.id) &&
+                idx === displayMessages.length - 1;
               return (
               <motion.div
                 key={msg.id || idx}
