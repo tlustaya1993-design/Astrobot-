@@ -82,7 +82,11 @@ function ActiveBlock({ text }: { text: string }) {
   );
 }
 
-export default function AstroMarkdown({ content, isStreaming = false }: AstroMarkdownProps) {
+// Wrap the entire component in React.memo so that non-streaming messages
+// (isStreaming=false, stable content) are skipped entirely when Chat re-renders
+// at ~30ms cadence during a streaming response. Without this, all 20+ historical
+// messages would re-parse their markdown on every SSE batch.
+const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false }: AstroMarkdownProps) {
   // ── Non-streaming: full static render ───────────────────────────────────────
   if (!isStreaming) {
     return (
@@ -122,4 +126,6 @@ export default function AstroMarkdown({ content, isStreaming = false }: AstroMar
       <span className="streaming-cursor" aria-hidden />
     </div>
   );
-}
+});
+
+export default AstroMarkdown;
