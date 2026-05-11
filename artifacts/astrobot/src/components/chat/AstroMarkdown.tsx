@@ -81,15 +81,15 @@ function ActiveBlock({ text }: { text: string }) {
   const latestText = useRef(text);
   latestText.current = text;
 
-  // Reveal ~4 chars per frame (≈ 16 ms tick → ~240 chars/sec ≈ 48 words/sec).
-  // Fast enough that it doesn't look like character-by-character typing,
-  // smooth enough that the left-to-right flow is perceptible.
+  // Reveal ~2 chars per tick at 30 ms intervals ≈ 67 chars/sec ≈ 13 words/sec.
+  // Matches a comfortable reading/watching pace — the user can follow the text
+  // as it flows in without it feeling too slow or too instant.
   useEffect(() => {
     const id = setInterval(() => {
-      setVisIdx(prev => Math.min(prev + 4, latestText.current.length));
-    }, 16);
+      setVisIdx(prev => Math.min(prev + 2, latestText.current.length));
+    }, 30);
     return () => clearInterval(id);
-  }, []); // start once on mount, self-clears via setVisIdx reaching target
+  }, []);
 
   const displayText = closeUnclosedMarkers(text.slice(0, visIdx));
 
