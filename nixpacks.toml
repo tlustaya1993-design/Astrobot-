@@ -1,5 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs_22"]
+# python3 + gcc + gnumake are required by node-gyp to compile swisseph-v2
+# (Swiss Ephemeris native addon). Without them pnpm install fails at the
+# C compilation step.
+nixPkgs = ["nodejs_22", "python3", "gcc", "gnumake"]
 
 [phases.install]
 cmds = ["npm install -g pnpm@9", "pnpm install --frozen-lockfile=false"]
