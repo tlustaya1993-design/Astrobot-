@@ -24,7 +24,8 @@
     "geo-tz": "^8.1.6",
     "jsonwebtoken": "^9.0.3",
     "pino": "^9",
-    "pino-http": "^10"
+    "pino-http": "^10",
+    "swisseph-v2": "^1.0.4"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
