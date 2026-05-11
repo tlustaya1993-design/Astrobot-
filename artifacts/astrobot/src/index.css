@@ -288,21 +288,11 @@ html.keyboard-open [data-bottom-nav] {
   to   { opacity: 1; }
 }
 
-/* Blinking cursor during AI streaming.
-   Displayed as a thin horizontal bar below the last paragraph — matches
-   the ChatGPT / Claude cursor style that works well after block elements. */
-.streaming-cursor {
-  display: block;
-  width: 16px;
-  height: 2px;
-  background: currentColor;
-  margin-top: 8px;
-  border-radius: 1px;
-  opacity: 0.6;
-  animation: cursorBlink 1s ease-in-out infinite;
-}
-
-@keyframes cursorBlink {
-  0%, 100% { opacity: 0.5; }
-  50%       { opacity: 0; }
+/* Three animated dots shown while AI is streaming — same animation as the
+   pre-message typing indicator, so the UX is consistent. */
+.streaming-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
 }
