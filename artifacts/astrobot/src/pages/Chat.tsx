@@ -290,17 +290,19 @@ export default function Chat() {
     return Math.abs(pTime - lTime) < 120_000;
   };
 
-  const displayMessages = (() => {
+  // Memoised so the O(n×m) filter + array allocation doesn't run on every
+  // ~30ms re-render during streaming. Re-runs only when persisted messages
+  // or localMessages actually change.
+  const displayMessages = useMemo(() => {
     const persisted = conversation?.messages ?? [];
     if (localMessages.length === 0) return persisted;
     if (persisted.length === 0) return localMessages;
-
     const pendingLocal = localMessages.filter(
       (lm) => !persisted.some((pm) => isLikelySameMessage(pm, lm)),
     );
-
     return [...persisted, ...pendingLocal];
-  })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation?.messages, localMessages]);
 
   useEffect(() => {
     clearLocalMessages();
@@ -426,9 +428,11 @@ export default function Chat() {
   }, [localMessages.length]);
 
   // Number of completed \n\n-blocks in the currently streaming assistant message.
-  // Updates only when localMessages changes (i.e. when a new block is committed),
-  // not on every 30ms SSE chunk — so the scroll effect below fires at block
-  // boundaries only, eliminating the per-chunk forced layout on mobile.
+  // Derives the number of completed \n\n-blocks in the streaming message.
+  // Even though localMessages now changes every ~30ms, streamingBlockCount is a
+  // NUMBER — the useLayoutEffect below only fires when its value changes (i.e.
+  // when a new \n\n appears), so forced scroll-layout stays at block-boundary
+  // cadence, not 30ms cadence.
   const streamingBlockCount = useMemo(() => {
     if (!isStreaming) return 0;
     const last = localMessages[localMessages.length - 1];

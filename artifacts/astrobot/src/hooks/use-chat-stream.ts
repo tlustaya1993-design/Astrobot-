@@ -247,46 +247,23 @@ export function useChatStream(conversationId?: number) {
       let streamError: string | null = null;
       let sseBuffer = '';
 
-      // Batch SSE chunks into ~30ms windows.
-      // Commit strategy:
-      //   • Immediately when a new \n\n block completes (block-reveal trigger).
-      //   • Fallback every 500ms so content is always visible even if the model
-      //     writes a long paragraph without any double-newline.
-      // Commit strategy:
-      //   • Immediately on a new \n\n block boundary (block-reveal trigger).
-      //   • Fallback: first preview after 1500ms, subsequent at most every 600ms.
-      //     Keeps typing dots from showing forever on long paragraphs without \n\n.
+      // Batch SSE chunks into ~30ms windows, then commit to React state on every
+      // flush. AstroMarkdown renders the active tail through ReactMarkdown on each
+      // commit so the user sees live rendered text (no raw markdown) at ~30ms
+      // cadence. Completed blocks (React.memo + stable keys) incur zero re-render
+      // cost, so only the small in-progress tail is ever re-parsed.
       let pendingContent = '';
       let flushTimer: ReturnType<typeof setTimeout> | null = null;
-      let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
-      let firstFallbackFired = false;
-      let lastBlockCount = 0;
       const commitMsg = (text: string) =>
         setLocalMessages((prev) =>
           prev.map((m) => (m.id === streamingAssistantId ? { ...m, content: text } : m)),
         );
-      const scheduleFallback = () => {
-        if (fallbackTimer) return;
-        const delay = firstFallbackFired ? 600 : 1500;
-        fallbackTimer = setTimeout(() => {
-          fallbackTimer = null;
-          firstFallbackFired = true;
-          commitMsg(assistantMsg);
-        }, delay);
-      };
       const flushPending = () => {
         flushTimer = null;
         if (!pendingContent) return;
         assistantMsg += pendingContent;
         pendingContent = '';
-        const blockCount = assistantMsg.split('\n\n').length - 1;
-        if (blockCount > lastBlockCount) {
-          lastBlockCount = blockCount;
-          if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
-          commitMsg(assistantMsg);
-        } else {
-          scheduleFallback();
-        }
+        commitMsg(assistantMsg);
       };
 
       while (true) {
@@ -326,7 +303,6 @@ export function useChatStream(conversationId?: number) {
       // Flush buffered content, then unconditional final commit so the complete
       // text is always present when isStreaming flips false.
       if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
-      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
       flushPending();
       commitMsg(assistantMsg);
 

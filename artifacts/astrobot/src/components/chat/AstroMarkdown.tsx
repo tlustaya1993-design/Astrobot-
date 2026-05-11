@@ -37,9 +37,26 @@ const MD_COMPONENTS: Components = {
 };
 
 /**
- * A completed markdown block — memoized so it never re-renders or
- * re-animates after its initial mount. Stable key from the segment index
- * guarantees React.memo always hits the cache for existing blocks.
+ * Close any trailing unclosed inline markers so ReactMarkdown never receives
+ * a dangling ** or * that would render as a raw symbol.
+ *
+ * "**Хирон в Близнецах"  →  "**Хирон в Близнецах**"  (rendered gold bold)
+ * "**Хирон в Близнецах**" →  unchanged                 (already balanced)
+ */
+function closeUnclosedMarkers(text: string): string {
+  let s = text.replace(/[*_]{1,3}$/, '');
+  const boldCount = (s.match(/\*\*/g) ?? []).length;
+  if (boldCount % 2 !== 0) s += '**';
+  const withoutBold = s.replace(/\*\*/g, '');
+  const italicCount = (withoutBold.match(/\*/g) ?? []).length;
+  if (italicCount % 2 !== 0) s += '*';
+  return s;
+}
+
+/**
+ * Completed markdown block.
+ * Memoized — never re-renders or re-animates after first mount.
+ * Stable key={idx} from the original segment index guarantees the cache hit.
  */
 const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) {
   return (
@@ -51,8 +68,26 @@ const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) 
   );
 });
 
-export default function AstroMarkdown({ content, isStreaming = false }: AstroMarkdownProps) {
-  // ── Non-streaming: render the entire content as a single markdown document ──
+/**
+ * Active (in-progress) block at the tail of the stream.
+ * NOT memoized — re-renders on every SSE batch (~30 ms).
+ * closeUnclosedMarkers ensures no raw ** or * is ever visible.
+ * Always rendered through ReactMarkdown so formatting is immediate.
+ */
+function ActiveBlock({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  );
+}
+
+// Wrap the entire component in React.memo so that non-streaming messages
+// (isStreaming=false, stable content) are skipped entirely when Chat re-renders
+// at ~30ms cadence during a streaming response. Without this, all 20+ historical
+// messages would re-parse their markdown on every SSE batch.
+const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false }: AstroMarkdownProps) {
+  // ── Non-streaming: full static render ───────────────────────────────────────
   if (!isStreaming) {
     return (
       <div className="leading-[1.6] stream-md-reveal">
@@ -64,30 +99,33 @@ export default function AstroMarkdown({ content, isStreaming = false }: AstroMar
   }
 
   // ── Streaming path ───────────────────────────────────────────────────────────
-  // Split on \n\n. Segments before the last are "complete". The last segment
-  // is the active tail (still being written).
   //
-  // Active tail visibility:
-  //   • Once completed blocks exist → hide the tail (blocks appear whole).
-  //   • Before the first \n\n → show the tail as a plain-text preview so the
-  //     user sees content. The hook's 500ms fallback timer caps update rate,
-  //     preventing jitter while guaranteeing text is visible promptly.
+  // Split on \n\n (markdown paragraph boundary).
+  // All segments except the last are "complete" — the model won't edit them.
+  // The last segment is the active tail, still being written.
+  //
+  // Visual model:
+  //   CompletedBlock (React.memo, fade-in animation, immutable after mount)
+  //   ActiveBlock    (live, updates every ~30 ms, rendered via ReactMarkdown)
+  //   cursor         (blinking bar below active block)
+  //
+  // The active tail is ALWAYS rendered — not hidden behind a "hasBlocks" guard.
+  // This prevents the "plain canvas" effect where the paragraph being typed
+  // would disappear and then jump into a CompletedBlock on \n\n arrival.
+  // closeUnclosedMarkers() ensures no raw markdown symbols are ever visible.
   const segments     = content.split('\n\n');
   const completeSegs = segments.slice(0, -1);
-  const activeTail   = segments[segments.length - 1] ?? '';
-  const hasBlocks    = completeSegs.some(s => s.trim());
+  const activeTail   = closeUnclosedMarkers(segments[segments.length - 1] ?? '');
 
   return (
     <div className="leading-[1.6]">
       {completeSegs.map((block, idx) =>
         block.trim() ? <CompletedBlock key={idx} text={block} /> : null
       )}
-      {!hasBlocks && activeTail.trim() && (
-        <div className="leading-[1.6] whitespace-pre-wrap break-words">
-          {activeTail}
-        </div>
-      )}
+      {activeTail.trim() && <ActiveBlock text={activeTail} />}
       <span className="streaming-cursor" aria-hidden />
     </div>
   );
-}
+});
+
+export default AstroMarkdown;
