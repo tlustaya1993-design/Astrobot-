@@ -15,7 +15,11 @@
  */
 
 import { resolveUtcBirthTime } from './timezoneUtils.js';
-import { sweBody, sweHouses } from './swissephAdapter.js';
+import { sweBody, sweHouses, SWE_AVAILABLE, AstroEngineError } from './swissephAdapter.js';
+
+// Re-export so callers (routes) can check availability without importing the
+// adapter directly — keeping swisseph-v2 fully encapsulated behind this module.
+export { SWE_AVAILABLE, AstroEngineError };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
