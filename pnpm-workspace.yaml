@@ -38,6 +38,7 @@ onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
   - msw
+  - swisseph-v2
   - unrs-resolver
 
 overrides:

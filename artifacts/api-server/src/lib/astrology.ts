@@ -15,6 +15,7 @@
  */
 
 import { resolveUtcBirthTime } from './timezoneUtils.js';
+import { sweBody, sweHouses } from './swissephAdapter.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -268,15 +269,7 @@ function getDignity(planet: string, signIndex: number): Dignity | undefined {
 // ─── Sun ─────────────────────────────────────────────────────────────────────
 
 function sunLongitude(jd: number): number {
-  const T  = jdToT(jd);
-  const L0 = normalizeAngle(280.46646 + 36000.76983 * T + 0.0003032 * T * T);
-  const M  = normalizeAngle(357.52911 + 35999.05029 * T - 0.0001537 * T * T);
-  const Mr = deg2rad(M);
-  const C  =
-    (1.914602 - 0.004817 * T - 0.000014 * T * T) * Math.sin(Mr) +
-    (0.019993 - 0.000101 * T) * Math.sin(2 * Mr) +
-    0.000289 * Math.sin(3 * Mr);
-  return normalizeAngle(L0 + C);
+  return sweBody(jd, "sun").longitude;
 }
 
 function sunDistance(jd: number): number {
@@ -291,32 +284,7 @@ function sunDistance(jd: number): number {
 // ─── Moon ────────────────────────────────────────────────────────────────────
 
 function moonLongitude(jd: number): number {
-  const T   = jdToT(jd);
-  const L0  = normalizeAngle(218.3165 + 481267.8813 * T);
-  const M   = normalizeAngle(357.5291 + 35999.0503 * T);
-  const Mp  = normalizeAngle(134.9634 + 477198.8676 * T);
-  const F   = normalizeAngle(93.2721  + 483202.0175 * T);
-  const Om  = normalizeAngle(125.0445 - 1934.1363 * T);
-  const Mpr = deg2rad(Mp);
-  const L0r = deg2rad(L0);
-  const Fr  = deg2rad(F);
-  const Omr = deg2rad(Om);
-  const Mr  = deg2rad(M);
-  return normalizeAngle(
-    L0 +
-    6.2886  * Math.sin(Mpr) +
-    1.2740  * Math.sin(2 * L0r - Mpr) +
-    0.6583  * Math.sin(2 * Mr) +
-    0.2136  * Math.sin(2 * Mpr) -
-    0.1851  * Math.sin(Mr) -
-    0.1143  * Math.sin(2 * Fr) +
-    0.0588  * Math.sin(2 * Mpr - Mr) +
-    0.0572  * Math.sin(2 * L0r - Mr) +
-    0.0533  * Math.sin(2 * L0r + Mpr) -
-    0.0468  * Math.sin(Mpr - Mr) +
-    0.0204  * Math.sin(2 * Omr) +
-    0.0161  * Math.sin(Mpr - 2 * Fr)
-  );
+  return sweBody(jd, "moon").longitude;
 }
 
 // ─── Planets — proper heliocentric → geocentric conversion ───────────────────
@@ -395,33 +363,24 @@ function helioToGeocentric(
 }
 
 function planetGeocentric(name: string, jd: number): number {
-  const { lon: pLon, dist: pDist } = heliocentricPos(name, jd);
-  const earthLon  = normalizeAngle(sunLongitude(jd) + 180);
-  const earthDist = sunDistance(jd);
-  return helioToGeocentric(pLon, pDist, earthLon, earthDist);
+  return sweBody(jd, name).longitude;
 }
 
 function isRetrograde(name: string, jd: number): boolean {
   if (name === "Солнце" || name === "Луна") return false;
-  const step  = (name === "Mercury" || name === "Venus") ? 1 : 2;
-  const lon1  = planetGeocentric(name, jd - step);
-  const lon2  = planetGeocentric(name, jd + step);
-  const diff  = normalizeAngle(lon2 - lon1);
-  return diff > 180;
+  return sweBody(jd, name).speed < 0;
 }
 
 // ─── Lunar Nodes ─────────────────────────────────────────────────────────────
 
 function northNodeLon(jd: number): number {
-  const T = jdToT(jd);
-  return normalizeAngle(125.04452 - 1934.136261 * T + 0.0020708 * T * T);
+  return sweBody(jd, "northNode").longitude;
 }
 
 // ─── Lilith (Mean Black Moon = mean apogee) ───────────────────────────────────
 
 function lilithLon(jd: number): number {
-  const T = jdToT(jd);
-  return normalizeAngle(83.3532465 + 4069.0137287 * T - 0.0103200 * T * T);
+  return sweBody(jd, "lilith").longitude;
 }
 
 // ─── Ascendant, MC ────────────────────────────────────────────────────────────
@@ -460,62 +419,7 @@ function calcMidheaven(jd: number, lon: number): number {
 // Falls back to equal houses when lat is extreme (|lat| > 66°, polar regions).
 
 function calcPlacidusHouses(jd: number, lat: number, lon: number): number[] {
-  const eps  = obliquity(jd);
-  const ramc = localSiderealTime(jd, lon);  // RAMC in degrees
-  const mc   = calcMidheaven(jd, lon);
-  const asc  = calcAscendant(jd, lat, lon);
-
-  const epsR = deg2rad(eps);
-  const latR = deg2rad(lat);
-
-  // Placidus formula: H = atan2(sin(RAMC+offset), cos(RAMC+offset)*cos(ε) + k*tan(φ)*sin(ε))
-  function placidusIntermediate(ramcOffset: number, k: number): number {
-    const ra = deg2rad(normalizeAngle(ramc + ramcOffset));
-    const raw = rad2deg(Math.atan2(Math.sin(ra), Math.cos(ra) * Math.cos(epsR) + k * Math.tan(latR) * Math.sin(epsR)));
-    return normalizeAngle(raw);
-  }
-
-  // Polar fallback: equal houses
-  if (Math.abs(lat) > 66) {
-    return Array.from({ length: 12 }, (_, i) => normalizeAngle(asc + i * 30));
-  }
-
-  let h11 = placidusIntermediate(30,  1 / 3);
-  let h12 = placidusIntermediate(60,  2 / 3);
-  let h2  = placidusIntermediate(120, 1 / 3);
-  let h3  = placidusIntermediate(150, 2 / 3);
-
-  // Guard: ensure strict order MC → H11 → H12 → ASC and ASC → H2 → H3 → IC.
-  // A single compound check per hemisphere avoids the sequential-patch bug where
-  // fixing one cusp in isolation can leave the other out of order.
-  // Falls back to equal trisection of the arc whenever Placidus overshoots.
-  const ic       = normalizeAngle(mc + 180);
-  const dsc      = normalizeAngle(asc + 180);
-  const mcAscArc = normalizeAngle(asc - mc);
-  const ascIcArc = normalizeAngle(ic  - asc);
-
-  const d11 = normalizeAngle(h11 - mc);
-  const d12 = normalizeAngle(h12 - mc);
-  if (!(d11 > 0 && d11 < d12 && d12 < mcAscArc)) {
-    h11 = normalizeAngle(mc + mcAscArc / 3);
-    h12 = normalizeAngle(mc + (2 / 3) * mcAscArc);
-  }
-
-  const e2 = normalizeAngle(h2 - asc);
-  const e3 = normalizeAngle(h3 - asc);
-  if (!(e2 > 0 && e2 < e3 && e3 < ascIcArc)) {
-    h2 = normalizeAngle(asc + ascIcArc / 3);
-    h3 = normalizeAngle(asc + (2 / 3) * ascIcArc);
-  }
-
-  const h4  = ic;
-  const h5  = normalizeAngle(h11 + 180);
-  const h6  = normalizeAngle(h12 + 180);
-  const h7  = dsc;
-  const h8  = normalizeAngle(h2  + 180);
-  const h9  = normalizeAngle(h3  + 180);
-
-  return [asc, h2, h3, h4, h5, h6, h7, h8, h9, mc, h11, h12];
+  return sweHouses(jd, lat, lon).cusps;
 }
 
 // Keep old equal-house as a thin wrapper (used in progressions that don't have location)
