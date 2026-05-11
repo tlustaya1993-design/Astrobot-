@@ -67,22 +67,18 @@ export default function AstroMarkdown({ content, isStreaming = false }: AstroMar
   // Split on \n\n. Segments before the last are "complete". The last segment
   // is the active tail (still being written).
   //
-  // Active tail visibility:
-  //   • Once completed blocks exist → hide the tail (blocks appear whole).
-  //   • Before the first \n\n → show the tail as a plain-text preview so the
-  //     user sees content. The hook's 500ms fallback timer caps update rate,
-  //     preventing jitter while guaranteeing text is visible promptly.
+  // The tail stays visible even after completed blocks exist; otherwise normal
+  // multi-paragraph answers look frozen until the stream fully finishes.
   const segments     = content.split('\n\n');
   const completeSegs = segments.slice(0, -1);
   const activeTail   = segments[segments.length - 1] ?? '';
-  const hasBlocks    = completeSegs.some(s => s.trim());
 
   return (
     <div className="leading-[1.6]">
       {completeSegs.map((block, idx) =>
         block.trim() ? <CompletedBlock key={idx} text={block} /> : null
       )}
-      {!hasBlocks && activeTail.trim() && (
+      {activeTail.trim() && (
         <div className="leading-[1.6] whitespace-pre-wrap break-words">
           {activeTail}
         </div>
