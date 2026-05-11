@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
@@ -39,9 +39,6 @@ const MD_COMPONENTS: Components = {
 /**
  * Close any trailing unclosed inline markers so ReactMarkdown never receives
  * a dangling ** or * that would render as a raw symbol.
- *
- * "**Хирон в Близнецах"  →  "**Хирон в Близнецах**"  (rendered gold bold)
- * "**Хирон в Близнецах**" →  unchanged                 (already balanced)
  */
 function closeUnclosedMarkers(text: string): string {
   let s = text.replace(/[*_]{1,3}$/, '');
@@ -53,11 +50,7 @@ function closeUnclosedMarkers(text: string): string {
   return s;
 }
 
-/**
- * Completed markdown block.
- * Memoized — never re-renders or re-animates after first mount.
- * Stable key={idx} from the original segment index guarantees the cache hit.
- */
+/** Completed markdown block — immutable after first mount. */
 const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) {
   return (
     <div className="stream-block-reveal">
@@ -69,23 +62,63 @@ const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) 
 });
 
 /**
- * Active (in-progress) block at the tail of the stream.
- * NOT memoized — re-renders on every SSE batch (~30 ms).
- * closeUnclosedMarkers ensures no raw ** or * is ever visible.
- * Always rendered through ReactMarkdown so formatting is immediate.
+ * In-progress block at the tail of the stream.
+ *
+ * Maintains a local `visIdx` that advances at ~220 chars/sec (≈ 4 chars
+ * every 18 ms). This makes text flow smoothly from left to right as it is
+ * generated — the user sees a continuous reveal, not sudden large chunks.
+ *
+ * When the parent's `text` prop grows faster than the reveal speed (burst
+ * from the LLM), `visIdx` catches up gradually, which is the desired
+ * typewriter-flow effect. When `text` stops growing (stream end), `visIdx`
+ * reaches `text.length` and the interval clears itself.
  */
 function ActiveBlock({ text }: { text: string }) {
+  // How many characters of `text` are currently visible.
+  const [visIdx, setVisIdx] = useState(0);
+  // Always-fresh ref so the interval callback can read the latest text
+  // without being stale-closed over an old value.
+  const latestText = useRef(text);
+  latestText.current = text;
+
+  // Reveal ~4 chars per frame (≈ 16 ms tick → ~240 chars/sec ≈ 48 words/sec).
+  // Fast enough that it doesn't look like character-by-character typing,
+  // smooth enough that the left-to-right flow is perceptible.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVisIdx(prev => Math.min(prev + 4, latestText.current.length));
+    }, 16);
+    return () => clearInterval(id);
+  }, []); // start once on mount, self-clears via setVisIdx reaching target
+
+  const displayText = closeUnclosedMarkers(text.slice(0, visIdx));
+
   return (
     <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-      {text}
+      {displayText}
     </ReactMarkdown>
   );
 }
 
-// Wrap the entire component in React.memo so that non-streaming messages
-// (isStreaming=false, stable content) are skipped entirely when Chat re-renders
-// at ~30ms cadence during a streaming response. Without this, all 20+ historical
-// messages would re-parse their markdown on every SSE batch.
+/** Three animated dots — same animation as the pre-message typing indicator. */
+function StreamingDots() {
+  return (
+    <span className="streaming-dots not-prose" aria-hidden>
+      <svg className="w-1.5 h-1.5 text-primary/70 typing-dot" viewBox="0 0 10 10">
+        <circle cx="5" cy="5" r="5" />
+      </svg>
+      <svg className="w-1.5 h-1.5 text-primary/70 typing-dot" viewBox="0 0 10 10">
+        <circle cx="5" cy="5" r="5" />
+      </svg>
+      <svg className="w-1.5 h-1.5 text-primary/70 typing-dot" viewBox="0 0 10 10">
+        <circle cx="5" cy="5" r="5" />
+      </svg>
+    </span>
+  );
+}
+
+// Wrap in React.memo so non-streaming historical messages don't re-render
+// on every ~30 ms SSE commit during a streaming response.
 const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false }: AstroMarkdownProps) {
   // ── Non-streaming: full static render ───────────────────────────────────────
   if (!isStreaming) {
@@ -99,23 +132,16 @@ const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false
   }
 
   // ── Streaming path ───────────────────────────────────────────────────────────
+  // Split on \n\n.  All segments except the last are "complete" — the model
+  // won't edit them. The last segment is the active tail, still being written.
   //
-  // Split on \n\n (markdown paragraph boundary).
-  // All segments except the last are "complete" — the model won't edit them.
-  // The last segment is the active tail, still being written.
-  //
-  // Visual model:
-  //   CompletedBlock (React.memo, fade-in animation, immutable after mount)
-  //   ActiveBlock    (live, updates every ~30 ms, rendered via ReactMarkdown)
-  //   cursor         (blinking bar below active block)
-  //
-  // The active tail is ALWAYS rendered — not hidden behind a "hasBlocks" guard.
-  // This prevents the "plain canvas" effect where the paragraph being typed
-  // would disappear and then jump into a CompletedBlock on \n\n arrival.
-  // closeUnclosedMarkers() ensures no raw markdown symbols are ever visible.
+  // CompletedBlock: React.memo + stable key → immutable, zero re-render cost.
+  // ActiveBlock:    maintains a visIdx that advances 4 chars / 16 ms, giving
+  //                 a smooth left-to-right text-flow effect.
+  // StreamingDots:  three animated dots (same as pre-message typing indicator).
   const segments     = content.split('\n\n');
   const completeSegs = segments.slice(0, -1);
-  const activeTail   = closeUnclosedMarkers(segments[segments.length - 1] ?? '');
+  const activeTail   = segments[segments.length - 1] ?? '';
 
   return (
     <div className="leading-[1.6]">
@@ -123,7 +149,7 @@ const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false
         block.trim() ? <CompletedBlock key={idx} text={block} /> : null
       )}
       {activeTail.trim() && <ActiveBlock text={activeTail} />}
-      <span className="streaming-cursor" aria-hidden />
+      <StreamingDots />
     </div>
   );
 });
