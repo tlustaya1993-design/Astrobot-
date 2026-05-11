@@ -265,17 +265,18 @@ html.keyboard-open [data-bottom-nav] {
   animation: streamFadeIn 0.4s ease-out forwards;
 }
 
-/* Block-level reveal: each completed paragraph/heading slides in gently.
-   GPU-composited (opacity + transform only) — safe on mobile. */
+/* Block crystallisation: when the active tail completes and locks in, a
+   subtle upward settle (translateY only, no opacity change) so the text
+   that was already partially visible doesn't flash to invisible and back. */
 .stream-block-reveal {
-  animation: streamBlockReveal 0.25s ease-out both;
-  will-change: opacity, transform;
+  animation: streamBlockReveal 0.2s ease-out both;
+  will-change: transform;
   backface-visibility: hidden;
   contain: layout paint;
 }
 @keyframes streamBlockReveal {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { transform: translateY(4px); }
+  to   { transform: translateY(0); }
 }
 
 /* Completed message fade-in — barely noticeable, just smooths the
