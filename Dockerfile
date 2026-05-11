@@ -1,4 +1,7 @@
 FROM node:22-alpine AS base
+# Build tools required by node-gyp to compile native Node.js addons (swisseph-v2).
+# python3 + make + g++ are the minimal prerequisites.
+RUN apk add --no-cache python3 make g++
 RUN npm install -g pnpm@9
 WORKDIR /app
 
