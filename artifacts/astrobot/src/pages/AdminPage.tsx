@@ -115,6 +115,9 @@ export default function AdminPage() {
   const [financePeriod, setFinancePeriod] = useState<FinancePeriod>("30d");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [prompt, setPrompt] = useState<string | null>(null);
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptVisible, setPromptVisible] = useState(false);
 
   const canSearch = useMemo(() => queryEmail.trim().length > 4, [queryEmail]);
 
@@ -178,6 +181,21 @@ export default function AdminPage() {
       // best-effort
     } finally {
       setFinanceLoading(false);
+    }
+  };
+
+  const fetchPrompt = async () => {
+    setPromptLoading(true);
+    try {
+      const res = await fetch("/api/admin/prompt", { headers: getAuthHeaders() });
+      const payload = (await res.json()) as { ok?: boolean; prompt?: string; error?: string };
+      if (!res.ok || !payload.ok) throw new Error(payload.error || `Ошибка (${res.status})`);
+      setPrompt(payload.prompt ?? "");
+      setPromptVisible(true);
+    } catch (err) {
+      toast({ title: "Ошибка", description: err instanceof Error ? err.message : "Не удалось загрузить промпт" });
+    } finally {
+      setPromptLoading(false);
     }
   };
 
@@ -599,6 +617,29 @@ export default function AdminPage() {
               )}
             </div>
           ) : null}
+        </div>
+
+        {/* System prompt viewer */}
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Системный промпт</p>
+            <button
+              type="button"
+              onClick={promptVisible ? () => setPromptVisible(false) : fetchPrompt}
+              disabled={promptLoading}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {promptLoading ? "Загружаю..." : promptVisible ? "Скрыть" : "Показать"}
+            </button>
+          </div>
+          {promptVisible && prompt !== null && (
+            <textarea
+              readOnly
+              value={prompt}
+              rows={20}
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs font-mono resize-y outline-none text-foreground"
+            />
+          )}
         </div>
 
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">

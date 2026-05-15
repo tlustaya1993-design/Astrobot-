@@ -5,6 +5,7 @@ import { db, paymentsTable, usersTable, conversations, messages } from "@workspa
 import { hasRedis, pingRedis } from "../lib/ai-rate-limit.js";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
 import { getYookassaPayment, createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
+import { safeBuildSystemPrompt } from "./openai/conversations.js";
 
 const router: IRouter = Router();
 
@@ -548,6 +549,12 @@ router.post("/payments/refund", async (req, res) => {
     .limit(1);
 
   res.json({ ok: true, refundId, user: updatedUser });
+});
+
+router.get("/prompt", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
+  const prompt = safeBuildSystemPrompt(null, null, [], false);
+  res.json({ ok: true, prompt });
 });
 
 router.get("/export/emails", async (req, res) => {
