@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CalendarDays, LogIn } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -32,6 +33,8 @@ interface Props {
   onLoginClick: () => void;
 }
 
+const DRAWER_BOTTOM = 'calc(2.5rem + env(safe-area-inset-bottom, 0px))';
+
 export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -41,6 +44,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
   const [showPaywall, setShowPaywall] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [portalReady, setPortalReady] = useState(false);
 
   const { data: conversations, isLoading } = useListOpenaiConversations({
     request: { headers: getAuthHeaders() },
@@ -61,6 +65,10 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
       onSuccess: () => queryClient.invalidateQueries({ queryKey: getListOpenaiConversationsQueryKey() }),
     },
   });
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   const handleDelete = (id: number) => {
     if (confirm('Удалить диалог?')) deleteMutation.mutate({ id });
@@ -122,123 +130,125 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     if (dx < -60) onClose();
   };
 
-  return (
+  const drawer = (
     <AnimatePresence>
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[3px]"
+            key="history-drawer-backdrop"
+            className="fixed inset-0 z-[80] bg-black/55 backdrop-blur-[3px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.32, ease: MENU_EASE }}
+            transition={{ duration: 0.28, ease: MENU_EASE }}
             onClick={onClose}
+            aria-hidden
           />
 
           <motion.aside
-            className={`fixed top-0 left-0 z-50 w-[86%] max-w-[340px] ${MENU_PANEL_CLASS} pt-safe`}
-            style={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
-            initial={{ x: '-100%', opacity: 0.6 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: '-100%', opacity: 0.5 }}
-            transition={{ duration: 0.38, ease: MENU_EASE }}
+            key="history-drawer-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Меню чатов"
+            className={`fixed top-0 left-0 z-[81] w-[min(340px,86vw)] ${MENU_PANEL_CLASS} pt-safe`}
+            style={{ bottom: DRAWER_BOTTOM }}
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ duration: 0.36, ease: MENU_EASE }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
             <ChatMenuAtmosphere />
             <ChatMenuCloseButton onClose={onClose} />
 
-            <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
-            <ChatMenuHero
-              profileName={profileName}
-              email={email}
-              isLoggedIn={isLoggedIn}
-              avatarConfig={avatarConfig}
-              onNavigate={onClose}
-            />
+            <motion.div className="relative z-[1] flex min-h-0 flex-1 flex-col">
+              <ChatMenuHero
+                profileName={profileName}
+                email={email}
+                isLoggedIn={isLoggedIn}
+                avatarConfig={avatarConfig}
+                onNavigate={onClose}
+              />
 
-            <ChatMenuNewChatButton onClick={() => openChat()} />
+              <ChatMenuNewChatButton onClick={() => openChat()} />
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              {hasConversations && <ChatMenuSectionTitle>Недавние диалоги</ChatMenuSectionTitle>}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {hasConversations && <ChatMenuSectionTitle>Недавние диалоги</ChatMenuSectionTitle>}
 
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.35, ease: MENU_EASE, delay: 0.1 }}
-                className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
-              >
-                {isLoading && hasConversations ? (
-                  <motion.div className="space-y-3 pt-1">
-                    {[1, 2, 3, 4].map((i) => (
-                      <motion.div
-                        key={i}
-                        className="h-[72px] rounded-[22px] animate-pulse"
-                        style={{
-                          background:
-                            'linear-gradient(168deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
-                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
-                        }}
-                      />
-                    ))}
-                  </motion.div>
-                ) : !conversations?.length ? (
-                  <motion.div className="flex flex-col items-center justify-center px-2 py-16 text-center">
-                    <CalendarDays className="mb-3 h-8 w-8 text-foreground/25" strokeWidth={1.5} />
-                    <p className="text-sm font-medium text-foreground/85">Пока без диалогов</p>
-                    <p className="mt-1.5 max-w-[220px] text-xs leading-relaxed text-foreground/40">
-                      Начните с «Новый диалог» — название подберётся по смыслу первого вопроса.
-                    </p>
-                  </motion.div>
-                ) : (
-                  <motion.div className="space-y-3">
-                    {conversations.map((conv, index) => (
-                      <ConversationHistoryRow
-                        key={conv.id}
-                        index={index}
-                        conv={conv}
-                        userAvatarConfig={avatarConfig}
-                        isEditing={editingConversationId === conv.id}
-                        editingTitle={editingTitle}
-                        onEditingTitleChange={setEditingTitle}
-                        onOpen={() => openChat(conv.id)}
-                        onSaveEdit={() => void saveEditing(conv.id)}
-                        onCancelEdit={() => cancelEditing()}
-                        onRequestRename={() => startEditing(conv.id, conv.title || 'Чтение')}
-                        onRequestDelete={() => handleDelete(conv.id)}
-                      />
-                    ))}
-                  </motion.div>
+                <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+                  {isLoading && hasConversations ? (
+                    <div className="space-y-3 pt-1">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          className="h-[72px] rounded-[22px] animate-pulse"
+                          style={{
+                            background:
+                              'linear-gradient(168deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  ) : !conversations?.length ? (
+                    <div className="flex flex-col items-center justify-center px-2 py-16 text-center">
+                      <CalendarDays className="mb-3 h-8 w-8 text-foreground/25" strokeWidth={1.5} />
+                      <p className="text-sm font-medium text-foreground/85">Пока без диалогов</p>
+                      <p className="mt-1.5 max-w-[220px] text-xs leading-relaxed text-foreground/40">
+                        Начните с «Новый диалог» — название подберётся по смыслу первого вопроса.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {conversations.map((conv, index) => (
+                        <ConversationHistoryRow
+                          key={conv.id}
+                          index={index}
+                          conv={conv}
+                          userAvatarConfig={avatarConfig}
+                          isEditing={editingConversationId === conv.id}
+                          editingTitle={editingTitle}
+                          onEditingTitleChange={setEditingTitle}
+                          onOpen={() => openChat(conv.id)}
+                          onSaveEdit={() => void saveEditing(conv.id)}
+                          onCancelEdit={() => cancelEditing()}
+                          onRequestRename={() => startEditing(conv.id, conv.title || 'Чтение')}
+                          onRequestDelete={() => handleDelete(conv.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="relative z-[1] shrink-0 space-y-2.5 border-t border-white/[0.03] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                {!isLoggedIn && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onLoginClick();
+                    }}
+                    className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-white/[0.08] py-2.5 text-[13px] font-medium text-foreground/70 transition-colors hover:bg-white/[0.04]"
+                  >
+                    <LogIn className="h-4 w-4" strokeWidth={1.75} />
+                    Войти / Зарегистрироваться
+                  </button>
                 )}
-              </motion.div>
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: MENU_EASE, delay: 0.14 }}
-              className="relative z-[1] shrink-0 space-y-2.5 border-t border-white/[0.03] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
-            >
-              {!isLoggedIn && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onLoginClick();
-                  }}
-                  className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-white/[0.08] py-2.5 text-[13px] font-medium text-foreground/70 transition-colors hover:bg-white/[0.04]"
-                >
-                  <LogIn className="h-4 w-4" strokeWidth={1.75} />
-                  Войти / Зарегистрироваться
-                </button>
-              )}
-              <ChatMenuSubscriptionCard onClick={() => setShowPaywall(true)} />
+                <ChatMenuSubscriptionCard onClick={() => setShowPaywall(true)} />
+              </div>
             </motion.div>
-            </div>
           </motion.aside>
         </>
       )}
-      <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
     </AnimatePresence>
+  );
+
+  return (
+    <>
+      {portalReady ? createPortal(drawer, document.body) : null}
+      <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
+    </>
   );
 }
