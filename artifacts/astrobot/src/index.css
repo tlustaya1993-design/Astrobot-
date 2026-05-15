@@ -275,10 +275,7 @@ html.keyboard-open [data-bottom-nav] {
 
 /* Streaming bot bubble: smooth height growth driven by JS freeze→expand in useLayoutEffect.
    overflow:hidden clips the brief freeze frame; transition animates the expand. */
-.assistant-bubble {
-  overflow: hidden;
-  transition: height 0.15s ease-out;
-}
+/* .assistant-bubble removed — height transitions caused cascade jitter */
 
 /* New text chunk fades in smoothly during streaming */
 .stream-chunk-in {
@@ -300,16 +297,8 @@ html.keyboard-open [data-bottom-nav] {
 /* Block crystallisation: when the active tail completes and locks in, a
    subtle upward settle (translateY only, no opacity change) so the text
    that was already partially visible doesn't flash to invisible and back. */
-.stream-block-reveal {
-  animation: streamBlockReveal 0.2s ease-out both;
-  will-change: transform;
-  backface-visibility: hidden;
-  contain: layout paint;
-}
-@keyframes streamBlockReveal {
-  from { transform: translateY(4px); }
-  to   { transform: translateY(0); }
-}
+/* .stream-block-reveal — translateY animation removed, caused visual jump
+   at paragraph boundaries. Blocks now appear immediately at full position. */
 
 /* Completed message fade-in — barely noticeable, just smooths the
    streaming-branch → static-branch DOM swap when isStreaming goes false. */

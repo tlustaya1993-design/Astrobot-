@@ -241,7 +241,7 @@ export default function Chat() {
   const initialOpenScrolledConversationRef = useRef<number | null>(null);
   /** Если пользователь вручную скроллит/касается во время ответа — автоследование отключаем. */
   const autoScrollEnabledRef = useRef(true);
-  const streamingBubbleRef = useRef<HTMLDivElement | null>(null);
+
   const lastSendHapticAtRef = useRef(0);
   const pwaInstallRef = useRef<PwaInstallBannerHandle>(null);
 
@@ -439,34 +439,17 @@ export default function Chat() {
     return (last.content || '').length;
   }, [isStreaming, localMessages]);
 
-  // Во время стрима: анимация высоты пузыря + синхронный scroll до paint.
-  // Freeze → rAF-expand: элемент замораживается на текущей отображаемой высоте
-  // (offsetHeight корректен даже в середине transition), затем в следующем кадре
-  // плавно раскрывается до naturalH. Скролл добавляет дельту, чтобы попасть
-  // в истинный низ ещё до перерисовки.
+  // Во время стрима: простой scroll до низа при каждом обновлении контента.
   useLayoutEffect(() => {
     if (!isStreaming || !autoScrollEnabledRef.current) return;
     const container = messagesScrollRef.current;
     if (!container) return;
-
-    const bubble = streamingBubbleRef.current;
-    if (bubble) {
-      const displayH = bubble.offsetHeight;
-      const naturalH = bubble.scrollHeight;
-      bubble.style.height = `${displayH}px`;
-      requestAnimationFrame(() => { bubble.style.height = `${naturalH}px`; });
-      container.scrollTop = container.scrollHeight + (naturalH - displayH);
-    } else {
-      container.scrollTop = container.scrollHeight;
-    }
+    container.scrollTop = container.scrollHeight;
   }, [isStreaming, streamingContentLength]);
 
-  // После завершения стрима — снять явную высоту пузыря и мягко докрутить вниз.
+  // После завершения стрима — мягко докрутить вниз.
   useEffect(() => {
     if (isStreaming) return;
-    if (streamingBubbleRef.current) {
-      streamingBubbleRef.current.style.height = '';
-    }
     const container = messagesScrollRef.current;
     if (!container || !autoScrollEnabledRef.current) return;
     const t = setTimeout(() => {
@@ -918,11 +901,10 @@ export default function Chat() {
                 )}
                 <div className={msg.role === 'user' ? 'max-w-[82%] min-w-0 flex flex-col' : 'flex-1 min-w-0 flex flex-col'}>
                   <div
-                    ref={isStreamingMsg ? (el: HTMLDivElement | null) => { if (el === null && streamingBubbleRef.current) { streamingBubbleRef.current.style.height = ''; } streamingBubbleRef.current = el; } : undefined}
                     className={`min-w-0 ${
                       msg.role === 'user'
                         ? 'rounded-2xl p-4 bg-[rgba(201,162,39,0.12)] border border-[rgba(201,162,39,0.2)] text-foreground rounded-tr-sm break-words overflow-x-hidden'
-                        : `rounded-2xl p-5 bg-white/[0.04] border border-white/[0.06] shadow-[0_2px_12px_rgba(0,0,0,0.15)] break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto streaming-message-content${isStreamingMsg ? ' assistant-bubble' : ''}`
+                        : 'rounded-2xl p-5 bg-white/[0.04] border border-white/[0.06] shadow-[0_2px_12px_rgba(0,0,0,0.15)] break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto streaming-message-content'
                     }`}
                     style={{ fontSize: '16px', lineHeight: 1.65, fontWeight: 400 }}
                   >
