@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Plus, Settings } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { Link } from 'wouter';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import type { AvatarConfig } from '@/components/ui/AstroAvatar';
@@ -110,17 +110,11 @@ export function ChatMenuHero({
         <Link
           href={settingsHref}
           onClick={onNavigate}
-          className="min-w-0 flex-1 text-left group/link"
-          aria-label="Профиль и настройки"
+          className="min-w-0 flex-1 text-left"
         >
-          <div className="flex min-w-0 items-center gap-1.5">
-            <p className="min-w-0 flex-1 truncate text-[17px] font-semibold tracking-tight text-foreground/95">
-              {profileName || 'Профиль'}
-            </p>
-            <span className="shrink-0 rounded-lg p-1 text-foreground/38 transition-colors duration-300 group-hover/link:bg-white/[0.03] group-hover/link:text-foreground/65">
-              <Settings className="h-[17px] w-[17px]" strokeWidth={1.75} aria-hidden />
-            </span>
-          </div>
+          <p className="truncate text-[17px] font-semibold tracking-tight text-foreground/95">
+            {profileName || 'Профиль'}
+          </p>
           <p className="mt-0.5 truncate text-[13px] text-foreground/42">
             {isLoggedIn ? email : 'Гостевой профиль'}
           </p>
