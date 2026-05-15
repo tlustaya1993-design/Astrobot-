@@ -118,6 +118,7 @@ export default function AdminPage() {
   const [prompt, setPrompt] = useState<string | null>(null);
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptVisible, setPromptVisible] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
 
   const canSearch = useMemo(() => queryEmail.trim().length > 4, [queryEmail]);
 
@@ -623,14 +624,30 @@ export default function AdminPage() {
         <div className="rounded-xl border border-border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Системный промпт</p>
-            <button
-              type="button"
-              onClick={promptVisible ? () => setPromptVisible(false) : fetchPrompt}
-              disabled={promptLoading}
-              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
-            >
-              {promptLoading ? "Загружаю..." : promptVisible ? "Скрыть" : "Показать"}
-            </button>
+            <div className="flex items-center gap-3">
+              {promptVisible && prompt !== null && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(prompt).then(() => {
+                      setPromptCopied(true);
+                      setTimeout(() => setPromptCopied(false), 2000);
+                    });
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {promptCopied ? "Скопировано ✓" : "Копировать"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={promptVisible ? () => setPromptVisible(false) : fetchPrompt}
+                disabled={promptLoading}
+                className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+              >
+                {promptLoading ? "Загружаю..." : promptVisible ? "Скрыть" : "Показать"}
+              </button>
+            </div>
           </div>
           {promptVisible && prompt !== null && (
             <textarea
