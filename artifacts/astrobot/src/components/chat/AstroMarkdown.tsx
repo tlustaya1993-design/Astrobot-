@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
@@ -98,15 +98,37 @@ const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) 
 /**
  * In-progress block at the tail of the stream.
  *
- * Renders the full `text` prop directly — the 30 ms batch cadence from
- * use-chat-stream.ts already provides smooth visual rhythm. A separate
- * per-character interval fought the batch timer and created a jerky
- * double-animation effect, so it has been removed.
+ * Uses requestAnimationFrame to reveal 5 chars per frame (~300 chars/sec at
+ * 60 fps). The loop runs independently of the 30 ms batch timer so there is
+ * no double-animation conflict. Formatting via ReactMarkdown is applied on
+ * every frame, so bold/italic/headers appear correctly from the first char.
+ *
+ * The component is keyed by paragraph index in the parent so it remounts
+ * cleanly for each new paragraph, resetting visibleLength to 0.
  */
 function ActiveBlock({ text }: { text: string }) {
+  const [visibleLength, setVisibleLength] = useState(0);
+  const textRef = useRef(text);
+  textRef.current = text;
+
+  useEffect(() => {
+    setVisibleLength(0);
+    let rafId: number;
+    const step = () => {
+      setVisibleLength(prev => {
+        const target = textRef.current.length;
+        if (prev >= target) return prev;
+        return Math.min(prev + 5, target);
+      });
+      rafId = requestAnimationFrame(step);
+    };
+    rafId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
   return (
     <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-      {closeUnclosedMarkers(text)}
+      {closeUnclosedMarkers(text.slice(0, visibleLength))}
     </ReactMarkdown>
   );
 }
@@ -147,20 +169,20 @@ const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false
   // won't edit them. The last segment is the active tail, still being written.
   //
   // CompletedBlock: React.memo + stable key → immutable, zero re-render cost.
-  // ActiveBlock:    renders the full text per batch-commit cadence (~30 ms) —
-  //                 no per-character reveal to avoid double-animation with the
-  //                 batch timer in use-chat-stream.ts.
+  // ActiveBlock:    keyed by paragraph index so it remounts for each new
+  //                 paragraph and resets its RAF-based reveal from char 0.
   // StreamingDots:  three animated dots (same as pre-message typing indicator).
-  const segments     = content.split('\n\n');
-  const completeSegs = segments.slice(0, -1);
-  const activeTail   = segments[segments.length - 1] ?? '';
+  const segments        = content.split('\n\n');
+  const completeSegs    = segments.slice(0, -1);
+  const activeTail      = segments[segments.length - 1] ?? '';
+  const activeParagraph = segments.length - 1;
 
   return (
     <div className="astro-md leading-[1.65]">
       {completeSegs.map((block, idx) =>
         block.trim() ? <CompletedBlock key={idx} text={block} /> : null
       )}
-      {activeTail.trim() && <ActiveBlock text={activeTail} />}
+      {activeTail.trim() && <ActiveBlock key={activeParagraph} text={activeTail} />}
       <StreamingDots />
     </div>
   );
