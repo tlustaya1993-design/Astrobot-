@@ -241,6 +241,10 @@ export default function Chat() {
   const initialOpenScrolledConversationRef = useRef<number | null>(null);
   /** Если пользователь вручную скроллит/касается во время ответа — автоследование отключаем. */
   const autoScrollEnabledRef = useRef(true);
+  const [revealScrollTick, setRevealScrollTick] = useState(0);
+  const onStreamingRevealProgress = useCallback(() => {
+    setRevealScrollTick((t) => t + 1);
+  }, []);
 
   const lastSendHapticAtRef = useRef(0);
   const pwaInstallRef = useRef<PwaInstallBannerHandle>(null);
@@ -445,7 +449,7 @@ export default function Chat() {
     const container = messagesScrollRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
-  }, [isStreaming, streamingContentLength]);
+  }, [isStreaming, streamingContentLength, revealScrollTick]);
 
   // После завершения стрима — мягко докрутить вниз.
   useEffect(() => {
@@ -910,7 +914,15 @@ export default function Chat() {
                   >
                     {msg.role !== 'user' ? (
                       msg.content?.trim() ? (
-                        <AstroMarkdown content={msg.content} isStreaming={isStreamingMsg} />
+                        <AstroMarkdown
+                          content={msg.content}
+                          isStreaming={isStreamingMsg}
+                          onRevealProgress={
+                            idx === displayMessages.length - 1 && msg.role === 'assistant'
+                              ? onStreamingRevealProgress
+                              : undefined
+                          }
+                        />
                       ) : (
                         <div className="flex space-x-1 py-1 not-prose">
                           <svg className="w-1.5 h-1.5 text-primary typing-dot" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5" /></svg>

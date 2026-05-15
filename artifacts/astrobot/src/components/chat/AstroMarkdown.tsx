@@ -1,13 +1,20 @@
-import React, { memo } from 'react';
+import React, { memo, useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 
 const REMARK_PLUGINS = [remarkGfm];
 
+/** ~14 символов/с — медленное «проявление» слева направо. */
+const REVEAL_MS_PER_CHAR = 72;
+const FINISH_MS_PER_CHAR = 24;
+const FINISH_CHARS_PER_TICK = 4;
+
 interface AstroMarkdownProps {
   content: string;
   isStreaming?: boolean;
+  /** Каждый шаг reveal — для autoscroll в Chat. */
+  onRevealProgress?: () => void;
 }
 
 /**
@@ -89,34 +96,67 @@ function closeUnclosedMarkers(text: string): string {
   return s;
 }
 
-/** Completed markdown block — immutable after first mount. */
-const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) {
-  return (
-    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-      {text}
-    </ReactMarkdown>
-  );
-});
-
 /**
- * In-progress block at the tail of the stream.
- *
- * Renders the full activeTail on every 30ms SSE commit — no character-reveal
- * timer. The natural cadence of SSE commits (~30ms, ~1-3 tokens each) already
- * produces a smooth left-to-right appearance without an extra animation layer.
- *
- * Removing the char-reveal timer eliminates two bugs:
- *   1. ХУЯК jump: visibleLength < text.length → \n\n arrives → CompletedBlock
- *      shows full text instantly → jarring jump from partial to full.
- *   2. Italic flicker: the old strip-trailing-* step caused a one-frame gap
- *      where the opening * was stripped and italic disappeared momentarily.
+ * Медленно «проявляет» буфер SSE посимвольно.
+ * Буфер (target) может обгонять visible — тогда текст догоняет плавно, без скачков.
+ * Не делим на CompletedBlock/ActiveBlock: иначе при \n\n абзац целиком всплывает (ХУЯК).
  */
-function ActiveBlock({ text }: { text: string }) {
-  return (
-    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-      {closeUnclosedMarkers(text)}
-    </ReactMarkdown>
-  );
+function useStreamingReveal(
+  targetLength: number,
+  active: boolean,
+  onRevealProgress?: () => void,
+) {
+  const [visibleLength, setVisibleLength] = useState(0);
+  const targetRef = useRef(targetLength);
+  targetRef.current = targetLength;
+  const onProgressRef = useRef(onRevealProgress);
+  onProgressRef.current = onRevealProgress;
+  const everActiveRef = useRef(false);
+
+  const wasActiveRef = useRef(false);
+  useEffect(() => {
+    if (active && !wasActiveRef.current) {
+      setVisibleLength(0);
+      everActiveRef.current = false;
+    }
+    wasActiveRef.current = active;
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
+    everActiveRef.current = true;
+    const id = window.setInterval(() => {
+      setVisibleLength((prev) => {
+        const target = targetRef.current;
+        if (prev >= target) return prev;
+        const next = prev + 1;
+        onProgressRef.current?.();
+        return next;
+      });
+    }, REVEAL_MS_PER_CHAR);
+    return () => window.clearInterval(id);
+  }, [active]);
+
+  // Стрим закончился — быстро догоняем хвост, затем показываем static.
+  useEffect(() => {
+    if (active || !everActiveRef.current) return;
+    if (visibleLength >= targetLength) {
+      everActiveRef.current = false;
+      return;
+    }
+    const id = window.setInterval(() => {
+      setVisibleLength((prev) => {
+        const target = targetRef.current;
+        if (prev >= target) return prev;
+        const next = Math.min(target, prev + FINISH_CHARS_PER_TICK);
+        onProgressRef.current?.();
+        return next;
+      });
+    }, FINISH_MS_PER_CHAR);
+    return () => window.clearInterval(id);
+  }, [active, targetLength, visibleLength]);
+
+  return visibleLength;
 }
 
 /** Three animated dots — same animation as the pre-message typing indicator. */
@@ -138,9 +178,34 @@ function StreamingDots() {
 
 // Wrap in React.memo so non-streaming historical messages don't re-render
 // on every ~30 ms SSE commit during a streaming response.
-const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false }: AstroMarkdownProps) {
-  // ── Non-streaming: full static render ───────────────────────────────────────
-  if (!isStreaming) {
+const AstroMarkdown = memo(function AstroMarkdown({
+  content,
+  isStreaming = false,
+  onRevealProgress,
+}: AstroMarkdownProps) {
+  const [postStream, setPostStream] = useState(false);
+  const wasStreamingRef = useRef(false);
+
+  useEffect(() => {
+    if (isStreaming) {
+      setPostStream(false);
+    } else if (wasStreamingRef.current) {
+      setPostStream(true);
+    }
+    wasStreamingRef.current = isStreaming;
+  }, [isStreaming]);
+
+  const revealActive = isStreaming || postStream;
+  const visibleLength = useStreamingReveal(content.length, revealActive, onRevealProgress);
+
+  useEffect(() => {
+    if (!postStream) return;
+    if (visibleLength >= content.length) {
+      setPostStream(false);
+    }
+  }, [postStream, visibleLength, content.length]);
+
+  if (!revealActive) {
     return (
       <div className="astro-md leading-[1.65] stream-md-reveal">
         <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
@@ -150,27 +215,16 @@ const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false
     );
   }
 
-  // ── Streaming path ───────────────────────────────────────────────────────────
-  // Split on \n\n.  All segments except the last are "complete" — the model
-  // won't edit them. The last segment is the active tail, still being written.
-  //
-  // CompletedBlock: React.memo + stable key → immutable, zero re-render cost.
-  // ActiveBlock:    keyed by paragraph index so it remounts for each new
-  //                 paragraph and resets its RAF-based reveal from char 0.
-  // StreamingDots:  three animated dots (same as pre-message typing indicator).
-  const segments     = content.split('\n\n');
-  const completeSegs = segments.slice(0, -1);
-  const activeTail   = segments[segments.length - 1] ?? '';
+  const shown = closeUnclosedMarkers(content.slice(0, visibleLength));
 
   return (
     <div className="astro-md leading-[1.65]">
-      {completeSegs.map((block, idx) =>
-        block.trim() ? <CompletedBlock key={idx} text={block} /> : null
-      )}
-      {/* No key={activeParagraph} — ActiveBlock must NOT remount on \n\n.
-          It snaps visibleLength internally when text shrinks. */}
-      {activeTail.trim() && <ActiveBlock text={activeTail} />}
-      <StreamingDots />
+      {shown ? (
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+          {shown}
+        </ReactMarkdown>
+      ) : null}
+      {isStreaming && <StreamingDots />}
     </div>
   );
 });
