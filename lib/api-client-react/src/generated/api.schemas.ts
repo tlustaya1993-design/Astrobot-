@@ -81,7 +81,8 @@ export interface OpenaiMessage {
 }
 
 export interface CreateOpenaiConversationBody {
-  title: string;
+  title?: string;
+  firstMessage?: string;
 }
 
 export interface UpdateOpenaiConversationBody {

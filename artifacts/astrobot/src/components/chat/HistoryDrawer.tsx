@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, MessageSquare, Trash2, CalendarDays, LogIn, Pencil, Check } from 'lucide-react';
-import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { X, Plus, CalendarDays, LogIn } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import {
   useListOpenaiConversations,
@@ -14,7 +12,7 @@ import { getAuthHeaders } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
-import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
+import ConversationHistoryRow from '@/components/chat/ConversationHistoryRow';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
 import { toast } from '@/hooks/use-toast';
 import PaywallSheet from '@/components/billing/PaywallSheet';
@@ -55,8 +53,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     },
   });
 
-  const handleDelete = (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
+  const handleDelete = (id: number) => {
     if (confirm('Удалить диалог?')) deleteMutation.mutate({ id });
   };
 
@@ -65,8 +62,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     setLocation(id ? `/chat/${id}` : '/chat');
   };
 
-  const startEditing = (e: React.MouseEvent, id: number, title: string) => {
-    e.stopPropagation();
+  const startEditing = (id: number, title: string) => {
     setEditingConversationId(id);
     setEditingTitle(title || 'Чтение');
   };
@@ -77,8 +73,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     setEditingTitle('');
   };
 
-  const saveEditing = async (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
+  const saveEditing = async (id: number) => {
     const nextTitle = editingTitle.trim();
     if (!nextTitle) return;
     try {
@@ -196,93 +191,27 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                   <CalendarDays className="w-8 h-8 text-muted-foreground mb-3" />
                   <p className="text-sm font-medium text-foreground/90">Пока без диалогов</p>
                   <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                    Начните с кнопки «Новый диалог» — первый вопрос станет названием чата.
+                    Начните с кнопки «Новый диалог» — название подберётся по смыслу первого вопроса.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-0.5 px-2 pt-1">
-                  {conversations.map((conv) => {
-                    const isEditing = editingConversationId === conv.id;
-                    return (
-                    <button
+                <motion.div className="space-y-0.5 px-2 pt-1">
+                  {conversations.map((conv) => (
+                    <ConversationHistoryRow
                       key={conv.id}
-                      onClick={() => openChat(conv.id)}
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-all group text-left"
-                    >
-                      {conv.contactId != null && conv.contactId > 0 ? (
-                        <SynastryRowAvatars
-                          userConfig={avatarConfig}
-                          contactAvatarConfig={conv.contactAvatarConfig}
-                          contactId={conv.contactId}
-                          contactName={conv.contactName}
-                          size={24}
-                          ringClassName="ring-card"
-                        />
-                      ) : (
-                        <div className="p-1.5 rounded-lg bg-secondary/60 border border-white/5 group-hover:border-primary/20 shrink-0">
-                          <MessageSquare className="w-4 h-4 text-primary" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        {isEditing ? (
-                          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              value={editingTitle}
-                              onChange={(e) => setEditingTitle(e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  void saveEditing(e as unknown as React.MouseEvent, conv.id);
-                                }
-                                if (e.key === 'Escape') cancelEditing();
-                              }}
-                              className="h-8 flex-1 min-w-0 px-2.5 rounded-lg bg-background border border-primary/40 text-sm outline-none focus:border-primary/70"
-                              autoFocus
-                            />
-                            <button
-                              onClick={(e) => void saveEditing(e, conv.id)}
-                              className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/15 transition shrink-0"
-                              title="Сохранить"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={cancelEditing}
-                              className="p-1.5 rounded-lg text-muted-foreground hover:bg-white/5 transition shrink-0"
-                              title="Отмена"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <p className="text-sm font-medium text-foreground line-clamp-1">
-                            {conv.title || 'Чтение'}
-                          </p>
-                        )}
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {format(new Date(conv.createdAt), 'd MMM, HH:mm', { locale: ru })}
-                        </p>
-                      </div>
-                      {!isEditing && (
-                        <button
-                          onClick={(e) => startEditing(e, conv.id, conv.title || 'Чтение')}
-                          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all shrink-0"
-                          title="Переименовать"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => handleDelete(e, conv.id)}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </button>
-                  )})}
-                </div>
+                      conv={conv}
+                      userAvatarConfig={avatarConfig}
+                      isEditing={editingConversationId === conv.id}
+                      editingTitle={editingTitle}
+                      onEditingTitleChange={setEditingTitle}
+                      onOpen={() => openChat(conv.id)}
+                      onSaveEdit={() => void saveEditing(conv.id)}
+                      onCancelEdit={() => cancelEditing()}
+                      onRequestRename={() => startEditing(conv.id, conv.title || 'Чтение')}
+                      onRequestDelete={() => handleDelete(conv.id)}
+                    />
+                  ))}
+                </motion.div>
               )}
             </div>
 

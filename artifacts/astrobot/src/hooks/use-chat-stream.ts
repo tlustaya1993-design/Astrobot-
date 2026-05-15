@@ -141,13 +141,8 @@ export function useChatStream(conversationId?: number) {
 
     try {
       if (!targetId) {
-        const normalizedTitle = content.replace(/\s+/g, ' ').trim();
-        const title =
-          normalizedTitle.length > 72
-            ? `${normalizedTitle.slice(0, 72).trimEnd()}…`
-            : normalizedTitle;
         const conv = await createOpenaiConversation(
-          { title },
+          { firstMessage: content },
           { headers: getAuthHeaders() }
         );
         targetId = conv.id;

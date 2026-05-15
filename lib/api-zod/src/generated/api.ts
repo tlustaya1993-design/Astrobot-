@@ -109,7 +109,8 @@ export const ListOpenaiConversationsResponse = zod.array(
  * @summary Create a new conversation
  */
 export const CreateOpenaiConversationBody = zod.object({
-  title: zod.string(),
+  title: zod.string().optional(),
+  firstMessage: zod.string().optional(),
 });
 
 /**

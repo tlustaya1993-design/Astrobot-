@@ -7,5 +7,6 @@
  */
 
 export interface CreateOpenaiConversationBody {
-  title: string;
+  title?: string;
+  firstMessage?: string;
 }

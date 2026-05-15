@@ -75,6 +75,52 @@ function hasAnthropicProvider(): boolean {
   );
 }
 
+function heuristicConversationTitle(firstMessage: string): string {
+  const normalized = firstMessage.replace(/\s+/g, " ").trim();
+  if (!normalized) return "Новый диалог";
+  const words = normalized
+    .replace(/[?!.…,:;]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 8);
+  let title = words.join(" ");
+  if (title.length > 56) title = `${title.slice(0, 56).trimEnd()}…`;
+  return title || "Новый диалог";
+}
+
+function cleanConversationTitle(raw: string): string {
+  return raw
+    .replace(/^["'«»]+|["'«»]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+}
+
+async function generateConversationTitle(firstMessage: string): Promise<string> {
+  const fallback = heuristicConversationTitle(firstMessage);
+  if (!hasAnthropicProvider()) return fallback;
+
+  try {
+    const response = await anthropic.messages.create({
+      model: ANTHROPIC_MEMORY_MODEL,
+      max_tokens: 48,
+      temperature: 0.2,
+      system: `Ты придумываешь короткое название чата в списке диалогов астрологического бота.
+По смыслу первого вопроса пользователя — не дословная цитата.
+2–6 слов, русский язык, без кавычек и точки в конце.
+Ответь только названием, без пояснений.`,
+      messages: [{ role: "user", content: firstMessage.slice(0, 500) }],
+    });
+    const text =
+      response.content[0]?.type === "text" ? response.content[0].text.trim() : "";
+    const cleaned = cleanConversationTitle(text);
+    return cleaned || fallback;
+  } catch (err) {
+    logger.warn({ err }, "generateConversationTitle failed; using heuristic");
+    return fallback;
+  }
+}
+
 function requireSessionId(
   req: { sessionId?: string },
   res: { status: (code: number) => { json: (payload: unknown) => void } },
@@ -152,11 +198,23 @@ router.get("/conversations", async (req, res) => {
 router.post("/conversations", async (req, res) => {
   const sessionId = requireSessionId(req, res);
   if (!sessionId) return;
-  const { title } = req.body;
+  const body = req.body as { title?: unknown; firstMessage?: unknown };
+  const rawTitle = typeof body.title === "string" ? body.title.trim() : "";
+  const rawFirstMessage =
+    typeof body.firstMessage === "string" ? body.firstMessage.trim() : "";
+
+  let title = rawTitle;
+  if (!title && rawFirstMessage) {
+    title = await generateConversationTitle(rawFirstMessage);
+  }
   if (!title) {
-    res.status(400).json({ error: "title required" });
+    res.status(400).json({ error: "title or firstMessage required" });
     return;
   }
+  if (title.length > 140) {
+    title = title.slice(0, 140).trimEnd();
+  }
+
   const [created] = await db
     .insert(conversations)
     .values({ sessionId, title })

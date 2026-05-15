@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Check, LogIn, MessageSquare, Pencil, Plus, Search, Trash2, X } from 'lucide-react';
-import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { CalendarDays, LogIn, Plus, Search } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import {
   getListOpenaiConversationsQueryKey,
@@ -14,8 +12,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
-import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
+import ConversationHistoryRow from '@/components/chat/ConversationHistoryRow';
 import PaywallSheet from '@/components/billing/PaywallSheet';
+import { toast } from '@/hooks/use-toast';
 
 interface ChatSidebarProps {
   currentConversationId?: number;
@@ -82,13 +81,11 @@ export default function ChatSidebar({
     onNavigate?.();
   };
 
-  const handleDelete = (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
+  const handleDelete = (id: number) => {
     if (confirm('Удалить диалог?')) deleteMutation.mutate({ id });
   };
 
-  const startEditing = (e: React.MouseEvent, id: number, title: string) => {
-    e.stopPropagation();
+  const startEditing = (id: number, title: string) => {
     setEditingConversationId(id);
     setEditingTitle(title || 'Чтение');
   };
@@ -99,8 +96,7 @@ export default function ChatSidebar({
     setEditingTitle('');
   };
 
-  const saveEditing = async (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
+  const saveEditing = async (id: number) => {
     const nextTitle = editingTitle.trim();
     if (!nextTitle) return;
     try {
@@ -108,7 +104,10 @@ export default function ChatSidebar({
       setEditingConversationId(null);
       setEditingTitle('');
     } catch {
-      // Keep editing mode open so user can retry.
+      toast({
+        title: 'Имя чата не сохранилось',
+        description: 'Проверьте связь и попробуйте ещё раз.',
+      });
     }
   };
 
@@ -196,111 +195,29 @@ export default function ChatSidebar({
                 <>
                   <p className="text-sm font-medium text-foreground/90">Пока без диалогов</p>
                   <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                    Нажмите «Новый диалог» вверху списка — и можно сразу писать АстроБоту.
+                    Нажмите «Новый диалог» — название подберётся по смыслу первого вопроса.
                   </p>
                 </>
               )}
             </div>
           ) : (
             <div className="space-y-1">
-              {filteredConversations.map((conv) => {
-                const active = currentConversationId === conv.id;
-                const isEditing = editingConversationId === conv.id;
-                return (
-                  <button
-                    key={conv.id}
-                    onClick={() => openChat(conv.id)}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left group transition ${
-                      active
-                        ? 'bg-primary/15 border border-primary/30'
-                        : 'hover:bg-white/5 border border-transparent'
-                    }`}
-                  >
-                    {conv.contactId != null && conv.contactId > 0 ? (
-                      <SynastryRowAvatars
-                        userConfig={avatarConfig}
-                        contactAvatarConfig={conv.contactAvatarConfig}
-                        contactId={conv.contactId}
-                        contactName={conv.contactName}
-                        size={26}
-                        ringClassName="ring-card"
-                      />
-                    ) : (
-                      <div className="p-1.5 rounded-lg bg-secondary/60 border border-white/5 shrink-0">
-                        <MessageSquare className="w-3.5 h-3.5 text-primary" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      {isEditing ? (
-                        <div
-                          className="flex items-center gap-1.5"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            value={editingTitle}
-                            onChange={(e) => setEditingTitle(e.target.value)}
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                const nextTitle = editingTitle.trim();
-                                if (!nextTitle) return;
-                                void updateMutation
-                                  .mutateAsync({ id: conv.id, data: { title: nextTitle } })
-                                  .then(() => {
-                                    setEditingConversationId(null);
-                                    setEditingTitle('');
-                                  })
-                                  .catch(() => {});
-                              }
-                              if (e.key === 'Escape') cancelEditing();
-                            }}
-                            className="flex-1 min-w-0 h-8 px-2.5 rounded-lg bg-background border border-primary/40 text-sm text-foreground outline-none focus:border-primary/70"
-                            autoFocus
-                          />
-                          <button
-                            onClick={(e) => void saveEditing(e, conv.id)}
-                            className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/15 transition"
-                            title="Сохранить"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={cancelEditing}
-                            className="p-1.5 rounded-lg text-muted-foreground hover:bg-white/5 transition"
-                            title="Отмена"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="text-sm font-medium text-foreground line-clamp-1">
-                          {conv.title || 'Чтение'}
-                        </p>
-                      )}
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {format(new Date(conv.createdAt), 'd MMM, HH:mm', { locale: ru })}
-                      </p>
-                    </div>
-                    {!isEditing && (
-                      <button
-                        onClick={(e) => startEditing(e, conv.id, conv.title || 'Чтение')}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0"
-                        title="Переименовать"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => handleDelete(e, conv.id)}
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </button>
-                );
-              })}
+              {filteredConversations.map((conv) => (
+                <ConversationHistoryRow
+                  key={conv.id}
+                  conv={conv}
+                  active={currentConversationId === conv.id}
+                  userAvatarConfig={avatarConfig}
+                  isEditing={editingConversationId === conv.id}
+                  editingTitle={editingTitle}
+                  onEditingTitleChange={setEditingTitle}
+                  onOpen={() => openChat(conv.id)}
+                  onSaveEdit={() => void saveEditing(conv.id)}
+                  onCancelEdit={() => cancelEditing()}
+                  onRequestRename={() => startEditing(conv.id, conv.title || 'Чтение')}
+                  onRequestDelete={() => handleDelete(conv.id)}
+                />
+              ))}
             </div>
           )}
         </div>

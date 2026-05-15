@@ -434,8 +434,9 @@ components:
       properties:
         title:
           type: string
-      required:
-        - title
+        firstMessage:
+          type: string
+          description: First user message; server derives a semantic title when title is omitted.
 
     UpdateOpenaiConversationBody:
       type: object
