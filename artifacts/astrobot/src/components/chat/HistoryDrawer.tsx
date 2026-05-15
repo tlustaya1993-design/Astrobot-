@@ -231,7 +231,12 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                     Войти / Зарегистрироваться
                   </button>
                 )}
-                <ChatMenuSubscriptionCard onClick={() => setShowPaywall(true)} />
+                <ChatMenuSubscriptionCard
+                  onClick={() => {
+                    onClose();
+                    setShowPaywall(true);
+                  }}
+                />
               </div>
             </motion.div>
           </motion.div>

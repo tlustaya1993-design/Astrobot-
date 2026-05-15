@@ -122,14 +122,14 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 z-[120] bg-black/65 backdrop-blur-sm"
+            className="fixed inset-0 z-[400] bg-black/65 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
           />
           <motion.div
-            className="fixed inset-x-0 bottom-0 z-[130] flex justify-center"
+            className="fixed inset-x-0 bottom-0 z-[410] flex justify-center"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
