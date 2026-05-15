@@ -113,14 +113,14 @@ function ActiveBlock({ text }: { text: string }) {
 
   useEffect(() => {
     setVisibleLength(0);
-    // 5 chars every 50 ms = 100 chars/sec (3× slower than the previous 300 chars/sec)
+    // 1 char every 20 ms = 50 chars/sec — smooth single-char reveal
     const timer = setInterval(() => {
       setVisibleLength(prev => {
         const target = textRef.current.length;
         if (prev >= target) return prev;
-        return Math.min(prev + 5, target);
+        return prev + 1;
       });
-    }, 50);
+    }, 20);
     return () => clearInterval(timer);
   }, []);
 
