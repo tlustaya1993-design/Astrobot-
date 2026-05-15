@@ -140,7 +140,7 @@ export default function ChatSidebar({
         <ChatMenuAtmosphere />
         <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
         {headerRight && (
-          <div className="flex justify-end px-3 pt-2">{headerRight}</motion.div>
+          <div className="flex justify-end px-3 pt-2">{headerRight}</div>
         )}
 
         <ChatMenuHero

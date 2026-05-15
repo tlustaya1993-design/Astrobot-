@@ -59,7 +59,7 @@ export function ChatMenuAtmosphere() {
             'radial-gradient(1px 1px at 14% 24%, rgba(255,255,255,0.35), transparent), radial-gradient(1px 1px at 72% 16%, rgba(255,255,255,0.2), transparent), radial-gradient(1px 1px at 48% 68%, rgba(255,255,255,0.15), transparent)',
         }}
       />
-    </motion.div>
+    </div>
   );
 }
 
