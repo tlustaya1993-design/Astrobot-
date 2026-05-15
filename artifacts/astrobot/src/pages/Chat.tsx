@@ -427,17 +427,15 @@ export default function Chat() {
     alignScrollAfterUserSend(container, prev, last);
   }, [localMessages.length]);
 
-  // Number of completed \n\n-blocks in the currently streaming assistant message.
-  // Derives the number of completed \n\n-blocks in the streaming message.
-  // Even though localMessages now changes every ~30ms, streamingBlockCount is a
-  // NUMBER — the useLayoutEffect below only fires when its value changes (i.e.
-  // when a new \n\n appears), so forced scroll-layout stays at block-boundary
-  // cadence, not 30ms cadence.
-  const streamingBlockCount = useMemo(() => {
+  // Tracks the character length of the streaming assistant message.
+  // Changes every ~30 ms batch-commit, so the scroll useLayoutEffect below
+  // fires at that cadence — giving smooth continuous scroll instead of
+  // ratcheting only at \n\n paragraph boundaries.
+  const streamingContentLength = useMemo(() => {
     if (!isStreaming) return 0;
     const last = localMessages[localMessages.length - 1];
     if (!last || last.role !== 'assistant') return 0;
-    return (last.content || '').split('\n\n').length - 1;
+    return (last.content || '').length;
   }, [isStreaming, localMessages]);
 
   // Во время стрима: синхронный scroll в useLayoutEffect (до paint) — без rAF и throttle.
@@ -446,7 +444,7 @@ export default function Chat() {
     const container = messagesScrollRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
-  }, [isStreaming, streamingBlockCount]);
+  }, [isStreaming, streamingContentLength]);
 
   // После завершения стрима — мягкая финальная корректировка скролла (только если пользователь не прокрутил вверх).
   useEffect(() => {

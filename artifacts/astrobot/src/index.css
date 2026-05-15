@@ -186,47 +186,49 @@ html.keyboard-open [data-bottom-nav] {
   background: hsl(var(--border));
 }
 
-/* Markdown Styles */
-.prose p {
-  @apply mb-4 leading-relaxed;
-}
-.prose p:last-child {
-  @apply mb-0;
-}
-.prose strong {
-  @apply text-primary font-semibold;
-}
-.prose em {
-  @apply text-accent font-medium italic;
-}
-.prose ul {
-  @apply list-disc pl-5 mb-4 space-y-1;
-}
-.prose ol {
-  @apply list-decimal pl-5 mb-4 space-y-1;
-}
-.prose li::marker {
+/* AstroMarkdown styles — single source of truth for chat message rendering.
+   Element-level styles (p, strong, em, ul, ol, table …) are applied via
+   MD_COMPONENTS className props; only pseudo-elements and table overrides
+   that can't be set inline live here. */
+.astro-md li::marker {
   @apply text-primary/70;
 }
 
-/* Chat message table styles (used by AstroMarkdown custom components) */
-.prose table {
+/* Table styles — also applied as className in MD_COMPONENTS but scoped
+   here as a CSS fallback and to keep the spec in one place. */
+.astro-md table {
   @apply w-full border-collapse text-xs my-3;
 }
-.prose thead {
+.astro-md thead {
   @apply bg-primary/10 text-primary/90;
 }
-.prose tbody tr {
+.astro-md tbody tr {
   @apply border-t border-white/5;
 }
-.prose tbody tr:hover {
+.astro-md tbody tr:hover {
   @apply bg-white/[0.03];
 }
-.prose th {
+.astro-md th {
   @apply px-3 py-2 text-left font-semibold whitespace-nowrap;
 }
-.prose td {
+.astro-md td {
   @apply px-3 py-2 align-top;
+}
+
+/* Astro evidence block — italic paragraph starting with ✦
+   Gold vertical bar on the left, subdued text (~55 % white).
+   .astro-em-block em overrides the global text-accent (specificity 0-1-1 > 0-1-0). */
+.astro-em-block {
+  border-left: 2px solid hsl(var(--primary) / 0.65);
+  padding-left: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-style: italic;
+}
+
+.astro-em-block em {
+  color: inherit;
+  font-style: italic;
+  font-weight: 500;
 }
 
 /* Typing Indicator Animation */
