@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, Plus, Star } from 'lucide-react';
 import { Link } from 'wouter';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import type { AvatarConfig } from '@/components/ui/AstroAvatar';
@@ -199,6 +199,10 @@ export function ChatMenuSectionTitle({ children }: { children: React.ReactNode }
 }
 
 export function ChatMenuSubscriptionCard({ onClick }: { onClick: () => void }) {
+  const goldRich = 'rgba(255, 236, 200, 0.95)';
+  const goldFill = 'rgba(255, 224, 150, 0.45)';
+  const borderGold = 'rgba(255, 230, 190, 0.32)';
+
   return (
     <motion.button
       type="button"
@@ -208,65 +212,80 @@ export function ChatMenuSubscriptionCard({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="group relative z-[1] w-full overflow-hidden rounded-[20px] px-4 py-3 text-left transition-all duration-500 active:scale-[0.995]"
       style={{
-        border: `1px solid ${GOLD.border}`,
+        border: `1px solid ${borderGold}`,
         background: [
-          'radial-gradient(ellipse 90% 80% at 50% -20%, rgba(240, 228, 200, 0.09) 0%, transparent 55%)',
-          'linear-gradient(168deg, rgba(240, 228, 200, 0.06) 0%, rgba(255,255,255,0.02) 38%, rgba(12,10,18,0.65) 100%)',
+          'radial-gradient(ellipse 100% 90% at 50% -25%, rgba(255, 230, 190, 0.18) 0%, transparent 58%)',
+          'radial-gradient(ellipse 85% 70% at 100% 100%, rgba(200, 160, 80, 0.12) 0%, transparent 50%)',
+          'linear-gradient(165deg, rgba(255, 220, 165, 0.14) 0%, rgba(255, 212, 140, 0.06) 42%, rgba(18, 14, 28, 0.72) 100%)',
         ].join(', '),
-        boxShadow:
-          'inset 0 1px 0 rgba(240,228,200,0.12), inset 0 -8px 20px rgba(0,0,0,0.1), 0 2px 14px rgba(0,0,0,0.2)',
+        boxShadow: [
+          'inset 0 1px 0 rgba(255, 238, 210, 0.35)',
+          'inset 0 -10px 28px rgba(0,0,0,0.12)',
+          '0 0 0 1px rgba(255, 220, 160, 0.06)',
+          '0 3px 18px rgba(0,0,0,0.22)',
+          '0 0 32px rgba(255, 200, 120, 0.07)',
+        ].join(', '),
       }}
     >
       <span
         className="pointer-events-none absolute inset-0"
         style={{
-          background: `radial-gradient(ellipse 70% 55% at 0% 0%, ${GOLD.glow} 0%, transparent 55%)`,
+          background:
+            'radial-gradient(ellipse 75% 60% at 0% 0%, rgba(255, 210, 140, 0.16) 0%, transparent 55%)',
         }}
       />
       <span
         className="pointer-events-none absolute inset-x-0 top-0 h-px"
         style={{
           background:
-            'linear-gradient(90deg, transparent, rgba(240,228,200,0.2), transparent)',
+            'linear-gradient(90deg, transparent, rgba(255, 236, 200, 0.45), transparent)',
         }}
       />
       <motion.span
-        className="pointer-events-none absolute -left-8 -top-8 h-24 w-24 rounded-full"
+        className="pointer-events-none absolute -left-10 -top-10 h-28 w-28 rounded-full"
         style={{
-          background: `radial-gradient(circle, ${GOLD.glow} 0%, transparent 70%)`,
+          background:
+            'radial-gradient(circle, rgba(255, 215, 140, 0.22) 0%, transparent 72%)',
         }}
-        animate={{ opacity: [0.5, 0.75, 0.5] }}
+        animate={{ opacity: [0.55, 0.85, 0.55] }}
         transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
       />
       <span className="relative flex items-center gap-3">
         <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[12px] ring-1 ring-white/[0.08]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
           style={{
-            background: 'linear-gradient(145deg, rgba(240,228,200,0.1) 0%, rgba(0,0,0,0.35) 100%)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
+            background:
+              'radial-gradient(circle at 30% 25%, rgba(255, 248, 220, 0.35) 0%, rgba(200, 150, 60, 0.2) 55%, rgba(40, 32, 20, 0.5) 100%)',
+            boxShadow:
+              'inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 6px rgba(120, 80, 20, 0.15)',
+            border: '1px solid rgba(255, 220, 170, 0.35)',
           }}
         >
-          <img
-            src={`${import.meta.env.BASE_URL}images/avatar-bot.png`}
-            alt=""
-            className="h-full w-full object-cover"
-            width={32}
-            height={32}
-            loading="lazy"
-            decoding="async"
+          <Star
+            className="h-[17px] w-[17px]"
+            strokeWidth={1.35}
+            fill={goldFill}
+            style={{ color: goldRich }}
+            aria-hidden
           />
         </span>
         <span className="min-w-0 flex-1 py-0">
-          <p className="text-[13px] font-medium tracking-tight" style={{ color: GOLD.text }}>
+          <p
+            className="text-[13px] font-medium tracking-tight"
+            style={{ color: 'rgba(255, 242, 215, 0.98)' }}
+          >
             Хочу больше разборов
           </p>
-          <p className="mt-0.5 text-[10px] font-normal leading-snug" style={{ color: GOLD.textMuted }}>
+          <p
+            className="mt-0.5 text-[10px] font-normal leading-snug"
+            style={{ color: 'rgba(255, 220, 185, 0.55)' }}
+          >
             Подписка откроет все возможности
           </p>
         </span>
         <ChevronRight
           className="h-4 w-4 shrink-0 transition-all duration-300 group-hover:translate-x-0.5"
-          style={{ color: GOLD.textMuted }}
+          style={{ color: 'rgba(255, 220, 175, 0.5)' }}
           strokeWidth={1.75}
         />
       </span>
