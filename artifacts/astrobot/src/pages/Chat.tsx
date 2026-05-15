@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, Copy, CircleHelp, X, RotateCcw, MessageSquare, User } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, ChevronDown, ChevronUp, Copy, CircleHelp, X, RotateCcw, MessageSquare, User } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTutorial, isTutorialDone } from '@/context/TutorialContext';
@@ -231,6 +231,8 @@ export default function Chat() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [contextSwitchTargetId, setContextSwitchTargetId] = useState<number | null | undefined>(undefined);
   const [showContactModeHint, setShowContactModeHint] = useState(false);
+  /** Сворачивание плашки режима разбора (чекбокс); состояние галочки не сбрасывается. */
+  const [contactSynastryBarExpanded, setContactSynastryBarExpanded] = useState(true);
   const [contactsCount, setContactsCount] = useState<number | null>(null);
   const [onboardingPhase, setOnboardingPhase] = useState<ChatOnboardingPhase | null>(null);
   const [contactRelationById, setContactRelationById] = useState<Record<number, string>>({});
@@ -1020,87 +1022,125 @@ export default function Chat() {
           <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border">
           <div className="px-4 pt-2 pb-2">
             {selectedContactId !== null && (
-              <div className="space-y-2 mb-2 px-1">
-                <div className="relative flex items-center gap-2 text-xs text-primary/70">
-                  <span className="text-base leading-none shrink-0">⚯</span>
-                  <span className="font-medium">Режим разбора</span>
-                  <button
-                    type="button"
-                    aria-label="Подсказка по режимам разбора"
-                    onClick={() => setShowContactModeHint((v) => !v)}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-primary/30 text-primary/80 hover:bg-primary/10 transition"
-                  >
-                    <CircleHelp className="w-3.5 h-3.5" />
-                  </button>
-
-                  <AnimatePresence>
-                    {showContactModeHint && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                        transition={{ duration: 0.2 }}
-                        className="absolute left-0 right-0 bottom-full mb-2 rounded-xl border border-primary/20 bg-card/95 backdrop-blur-sm p-3 text-xs text-foreground shadow-xl z-20"
+              <div className="mb-2 px-1">
+                {contactSynastryBarExpanded ? (
+                  <div id="contact-synastry-mode-panel" className="space-y-2">
+                    <div className="relative flex w-full min-w-0 max-w-full items-center gap-2 pr-11 text-xs text-primary/70">
+                      <span className="text-base leading-none shrink-0">⚯</span>
+                      <span className="min-w-0 flex-1 truncate font-medium">Режим разбора</span>
+                      <button
+                        type="button"
+                        aria-label="Подсказка по режимам разбора"
+                        onClick={() => setShowContactModeHint((v) => !v)}
+                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-primary/30 text-primary/80 hover:bg-primary/10 transition"
                       >
-                        <button
-                          type="button"
-                          onClick={() => setShowContactModeHint(false)}
-                          className="absolute right-2 top-2 p-1 rounded-md hover:bg-white/5 text-muted-foreground"
-                          aria-label="Закрыть подсказку"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                        <p className="pr-6">
-                          По умолчанию Астробот разбирает характер человека и вашу связь прямо сейчас. За каждый вопрос спишется 1 запрос.
-                        </p>
-                        <p className="mt-1.5 pr-6 text-muted-foreground">
-                          Но АстроБот может больше - включите галочку в чате с человеком и вы получите прогноз на несколько лет, углубленный анализ, детали. Каждый вопрос = 2 или 3 запроса (в зависимости от объема).
-                        </p>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    className="rounded border-border bg-background accent-primary shrink-0"
-                    checked={contactExtendedMode}
-                    onChange={async (e) => {
-                      const next = e.target.checked;
-                      setContactExtendedMode(next);
-                      if (conversationId) {
-                        try {
-                          await fetch(`/api/openai/conversations/${conversationId}`, {
-                            method: 'PUT',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              ...getAuthHeaders(),
-                            },
-                            body: JSON.stringify({
-                              title: conversation?.title?.trim() || 'Чат',
-                              contactExtendedMode: next,
-                            }),
-                          });
-                          await queryClient.invalidateQueries({
-                            queryKey: getGetOpenaiConversationQueryKey(conversationId),
-                          });
-                          await queryClient.invalidateQueries({
-                            queryKey: getListOpenaiConversationsQueryKey(),
-                          });
-                        } catch {
-                          /* ignore */
-                        }
-                      }
-                    }}
-                  />
-                  <span>
-                    Углубить разбор контакта —{' '}
-                    <span className="text-primary/80 font-medium">
-                      2 запроса за сообщение
+                        <CircleHelp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-expanded={true}
+                        aria-controls="contact-synastry-mode-panel"
+                        aria-label="Свернуть настройки режима разбора"
+                        title="Свернуть"
+                        onClick={() => {
+                          setContactSynastryBarExpanded(false);
+                          setShowContactModeHint(false);
+                        }}
+                        className="absolute right-0 top-1/2 z-[25] inline-flex h-9 w-9 -translate-y-1/2 shrink-0 items-center justify-center rounded-lg border border-primary/35 bg-background/95 text-primary shadow-sm shadow-black/20 backdrop-blur-sm hover:bg-primary/15 active:bg-primary/20"
+                      >
+                        <ChevronUp className="h-5 w-5 stroke-2" aria-hidden />
+                      </button>
+
+                      <AnimatePresence>
+                        {showContactModeHint && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                            transition={{ duration: 0.2 }}
+                            className="absolute left-0 right-0 bottom-full mb-2 rounded-xl border border-primary/20 bg-card/95 backdrop-blur-sm p-3 text-xs text-foreground shadow-xl z-20"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setShowContactModeHint(false)}
+                              className="absolute right-2 top-2 p-1 rounded-md hover:bg-white/5 text-muted-foreground"
+                              aria-label="Закрыть подсказку"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                            <p className="pr-6">
+                              По умолчанию Астробот разбирает характер человека и вашу связь прямо сейчас. За каждый вопрос спишется 1 запрос.
+                            </p>
+                            <p className="mt-1.5 pr-6 text-muted-foreground">
+                              Но АстроБот может больше - включите галочку в чате с человеком и вы получите прогноз на несколько лет, углубленный анализ, детали. Каждый вопрос = 2 или 3 запроса (в зависимости от объема).
+                            </p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="rounded border-border bg-background accent-primary shrink-0"
+                        checked={contactExtendedMode}
+                        onChange={async (e) => {
+                          const next = e.target.checked;
+                          setContactExtendedMode(next);
+                          if (conversationId) {
+                            try {
+                              await fetch(`/api/openai/conversations/${conversationId}`, {
+                                method: 'PUT',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  ...getAuthHeaders(),
+                                },
+                                body: JSON.stringify({
+                                  title: conversation?.title?.trim() || 'Чат',
+                                  contactExtendedMode: next,
+                                }),
+                              });
+                              await queryClient.invalidateQueries({
+                                queryKey: getGetOpenaiConversationQueryKey(conversationId),
+                              });
+                              await queryClient.invalidateQueries({
+                                queryKey: getListOpenaiConversationsQueryKey(),
+                              });
+                            } catch {
+                              /* ignore */
+                            }
+                          }
+                        }}
+                      />
+                      <span>
+                        Углубить разбор контакта —{' '}
+                        <span className="text-primary/80 font-medium">
+                          2 запроса за сообщение
+                        </span>
+                        <span className="text-muted-foreground"> (очень длинное — 3)</span>
+                      </span>
+                    </label>
+                  </div>
+                ) : (
+                  <div className="flex w-full min-w-0 max-w-full items-center gap-2 rounded-lg border border-primary/20 bg-primary/[0.04] px-2 py-1.5 text-xs">
+                    <button
+                      type="button"
+                      aria-expanded={false}
+                      aria-label="Развернуть настройки режима разбора"
+                      title="Развернуть"
+                      onClick={() => setContactSynastryBarExpanded(true)}
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/35 bg-background/80 text-primary shadow-sm hover:bg-primary/15 active:bg-primary/20"
+                    >
+                      <ChevronDown className="h-5 w-5 stroke-2" aria-hidden />
+                    </button>
+                    <span className="text-base leading-none shrink-0">⚯</span>
+                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                      Режим:{' '}
+                      <span className="font-medium text-foreground">
+                        {contactExtendedMode ? 'углублённый' : 'базовый'}
+                      </span>
                     </span>
-                    <span className="text-muted-foreground"> (очень длинное — 3)</span>
-                  </span>
-                </label>
+                  </div>
+                )}
               </div>
             )}
             {inputValue.length > CHAR_COUNTER_THRESHOLD && (
