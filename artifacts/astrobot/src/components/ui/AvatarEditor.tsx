@@ -69,23 +69,27 @@ function ColorRow({
     <div className="space-y-2">
       <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">{label}</p>
       <div className="flex gap-2.5 flex-wrap">
-        {colors.map((c) => (
+        {colors.map((c) => {
+          const isSelected = selected.trim().toLowerCase() === c.hex.trim().toLowerCase();
+          return (
           <button
             key={c.id}
+            type="button"
             title={c.label}
             onClick={() => onSelect(c.hex)}
             className="relative w-8 h-8 rounded-full border-2 transition-all"
             style={{
               backgroundColor: c.hex,
-              borderColor: selected === c.hex ? '#D4AF37' : 'transparent',
-              boxShadow: selected === c.hex ? `0 0 8px ${c.hex}80` : 'none',
+              borderColor: isSelected ? '#D4AF37' : 'transparent',
+              boxShadow: isSelected ? `0 0 8px ${c.hex}80` : 'none',
             }}
           >
-            {selected === c.hex && (
+            {isSelected && (
               <span className="absolute inset-0 flex items-center justify-center text-white text-xs font-bold">✓</span>
             )}
           </button>
-        ))}
+        );
+        })}
       </div>
     </div>
   );
@@ -119,10 +123,8 @@ export default function AvatarEditor({
   const archetype = current.archetype ?? DEFAULT_AVATAR.archetype ?? 'mage';
   const hairStyles = HAIR_STYLES.filter((s) => ['short', 'medium', 'long', 'curly'].includes(s.id));
   const isGalactic = archetype === 'galactic';
-  const isMage = archetype === 'mage';
-  const isCosmonaut = archetype === 'cosmonaut';
-  /** У космонавтки один растровый пресет — причёска/цвет не меняют картинку */
-  const showHairControls = !isCosmonaut;
+  const isMage = archetype === 'mage' || archetype === 'cosmonaut';
+  const showHairControls = isGalactic || isMage;
   const visibleHairStyles = isGalactic || isMage
     ? hairStyles.filter((s) =>
         (isGalactic ? GALACTIC_ALLOWED_HAIR_STYLES : MAGE_ALLOWED_HAIR_STYLES).includes(
@@ -140,11 +142,7 @@ export default function AvatarEditor({
 
   const presets = AVATAR_PRESETS.map((preset) => ({
     id: preset.id,
-    label: preset.id === 'galactic_default'
-      ? 'Мисс Галактика'
-      : preset.id === 'cosmonaut_default'
-      ? 'Космонавтка'
-      : 'Волшебница',
+    label: preset.label,
     cfg: {
       ...current,
       ...preset.config,
@@ -155,12 +153,13 @@ export default function AvatarEditor({
     <div className="space-y-5">
       <div className="space-y-2">
         <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">Готовые персонажи</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {presets.map((p) => {
             const selected = archetype === p.cfg.archetype;
             return (
               <button
                 key={p.id}
+                type="button"
                 onClick={() => {
                   onChange(p.cfg);
                   if (p.cfg.archetype === 'galactic') {
@@ -206,6 +205,7 @@ export default function AvatarEditor({
               {visibleHairStyles.map((s) => (
                 <button
                   key={s.id}
+                  type="button"
                   onClick={() => onChange({ ...current, hairStyle: s.id })}
                   className={`py-2 px-1 rounded-xl text-xs font-medium border transition-all ${
                     current.hairStyle === s.id
@@ -230,6 +230,7 @@ export default function AvatarEditor({
 
       {onSave && !hideSaveButton && (
         <button
+          type="button"
           onClick={onSave}
           disabled={saving}
           className="w-full py-3 rounded-2xl bg-gradient-to-r from-primary to-accent text-primary-foreground font-semibold text-sm shadow-md inline-flex items-center justify-center gap-2 disabled:opacity-60"

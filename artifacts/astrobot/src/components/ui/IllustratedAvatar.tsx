@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import type { AvatarConfig } from '@/components/ui/AstroAvatar';
+import AstroAvatar, { type AvatarConfig } from '@/components/ui/AstroAvatar';
 import { cn } from '@/lib/utils';
 
-const PRESET_IMAGE_BY_ARCHETYPE: Record<string, string> = {
-  galactic: '/avatar-presets/miss-galactica/galactic-curly-brunette.webp',
-  cosmonaut: '/avatar-presets/cosmonautka.png',
-};
+function normalizeHairColorHex(hex?: string | null): string {
+  return (hex ?? '').trim().toLowerCase();
+}
+
+/** Растровые арты: miss-galactica/*.webp, mage/*.png (см. public/avatar-presets/). */
+const DEFAULT_GALACTIC_SRC =
+  '/avatar-presets/miss-galactica/galactic-medium-brunette.webp';
+const DEFAULT_MAGE_SRC = '/avatar-presets/mage/mage-medium-brunette.png';
 
 const GALACTIC_STYLE_BY_HAIR_STYLE: Record<string, 'short' | 'medium' | 'long' | 'curly'> = {
   short: 'short',
@@ -21,17 +25,26 @@ const GALACTIC_COLOR_BY_HEX: Record<string, 'blonde' | 'brunette' | 'red'> = {
 };
 
 function resolveGalacticVariantImage(config?: AvatarConfig | null): string {
-  const normalizedHairColor = (config?.hairColor ?? '').trim().toLowerCase();
+  const normalizedHairColor = normalizeHairColorHex(config?.hairColor);
   const color = GALACTIC_COLOR_BY_HEX[normalizedHairColor] ?? 'brunette';
   const style = GALACTIC_STYLE_BY_HAIR_STYLE[config?.hairStyle ?? ''] ?? 'medium';
   return `/avatar-presets/miss-galactica/galactic-${style}-${color}.webp`;
 }
 
 function resolveMageVariantImage(config?: AvatarConfig | null): string {
-  const normalizedHairColor = (config?.hairColor ?? '').trim().toLowerCase();
+  const normalizedHairColor = normalizeHairColorHex(config?.hairColor);
   const color = GALACTIC_COLOR_BY_HEX[normalizedHairColor] ?? 'brunette';
   const style = GALACTIC_STYLE_BY_HAIR_STYLE[config?.hairStyle ?? ''] ?? 'medium';
   return `/avatar-presets/mage/mage-${style}-${color}.png`;
+}
+
+export function avatarPortraitKey(config?: AvatarConfig | null): string {
+  const archetype = config?.archetype ?? 'mage';
+  return [
+    archetype,
+    config?.hairStyle ?? '',
+    normalizeHairColorHex(config?.hairColor),
+  ].join('|');
 }
 
 /** Должно совпадать с `--canvas` / `--target-r` в scripts/normalize_avatar_circles.py */
@@ -51,25 +64,26 @@ export function getAvatarCropStyle(archetype?: string | null): { objectPosition:
   switch (archetype) {
     case 'mage':
     case 'galactic':
-      return { objectPosition: '50% 50%', scale: NORMALIZED_PRESET_FILL_SCALE };
     case 'cosmonaut':
-      return { objectPosition: '50% 36%', scale: 1.14 };
+      return { objectPosition: '50% 50%', scale: NORMALIZED_PRESET_FILL_SCALE };
     default:
-      return { objectPosition: '50% 38%', scale: 1.1 };
+      return { objectPosition: '50% 50%', scale: NORMALIZED_PRESET_FILL_SCALE };
   }
 }
 
 export function fallbackAvatarSrc(archetype?: string | null): string {
-  if (archetype === 'galactic') return '/avatar-presets/miss-galactica/galactic-medium-brunette.webp';
-  if (archetype === 'mage') return '/avatar-presets/mage/mage-medium-brunette.png';
-  return '/avatar-presets/cosmonautka.png';
+  if (archetype === 'galactic') return DEFAULT_GALACTIC_SRC;
+  if (archetype === 'mage' || archetype === 'cosmonaut') return DEFAULT_MAGE_SRC;
+  return DEFAULT_MAGE_SRC;
 }
 
 export function resolveAvatarImage(config?: AvatarConfig | null): string {
   const archetype = config?.archetype ?? 'mage';
   if (archetype === 'galactic') return resolveGalacticVariantImage(config);
   if (archetype === 'mage') return resolveMageVariantImage(config);
-  return PRESET_IMAGE_BY_ARCHETYPE[archetype] ?? '/avatar-presets/cosmonautka.png';
+  /** Старые сохранённые cosmonaut — те же варианты, что у mage (отдельного арта нет). */
+  if (archetype === 'cosmonaut') return resolveMageVariantImage(config);
+  return resolveMageVariantImage(config);
 }
 
 /** Полноразмерное фото в круге: crop + запасной файл при ошибке загрузки. */
@@ -88,20 +102,38 @@ export function AvatarPortraitImage({
 }) {
   const archetype = config?.archetype ?? 'mage';
   const primary = resolveAvatarImage(config);
+  const portraitKey = avatarPortraitKey(config);
   const [src, setSrc] = useState(primary);
+  const [useSvgFallback, setUseSvgFallback] = useState(false);
   const crop = cropOverride ?? getAvatarCropStyle(archetype);
   const fallback = fallbackAvatarSrc(archetype);
 
   useEffect(() => {
     setSrc(primary);
-  }, [primary]);
+    setUseSvgFallback(false);
+  }, [portraitKey, primary]);
 
   const onRasterError = () => {
-    if (src !== fallback) setSrc(fallback);
+    if (src !== fallback) {
+      setSrc(fallback);
+      return;
+    }
+    setUseSvgFallback(true);
   };
+
+  if (useSvgFallback && config) {
+    return (
+      <AstroAvatar
+        config={config}
+        fillParent
+        className={cn('block', className, imageClassName)}
+      />
+    );
+  }
 
   return (
     <img
+      key={portraitKey}
       src={src}
       alt="Аватар"
       className={cn('block', className, imageClassName)}
@@ -136,8 +168,8 @@ export default function IllustratedAvatar({
   const baseCrop = getAvatarCropStyle(archetype);
   const crop = relaxedCrop
     ? {
-        objectPosition: archetype === 'cosmonaut' ? '50% 40%' : baseCrop.objectPosition,
-        scale: Math.max(baseCrop.scale, archetype === 'cosmonaut' ? 1.08 : 1.16),
+        objectPosition: baseCrop.objectPosition,
+        scale: Math.max(baseCrop.scale, 1.16),
       }
     : baseCrop;
 

@@ -15,7 +15,10 @@ import {
 } from "lucide-react";
 import { useTutorial } from "@/context/TutorialContext";
 import { type AvatarConfig, DEFAULT_AVATAR } from "@/components/ui/AstroAvatar";
-import IllustratedAvatar, { AvatarPortraitImage } from "@/components/ui/IllustratedAvatar";
+import IllustratedAvatar, {
+  AvatarPortraitImage,
+  avatarPortraitKey,
+} from "@/components/ui/IllustratedAvatar";
 import AvatarEditor from "@/components/ui/AvatarEditor";
 import { getAuthHeaders } from "@/lib/session";
 import { useAuth } from "@/context/AuthContext";
@@ -144,8 +147,16 @@ export default function ProfileSheet({
   const [editBirthLng, setEditBirthLng] = useState("");
 
   useEffect(() => {
-    setLocalAvatar(avatarConfig);
-  }, [avatarConfig]);
+    if (section !== "avatar") {
+      setLocalAvatar(avatarConfig);
+    }
+  }, [avatarConfig, section]);
+
+  useEffect(() => {
+    if (section === "avatar") {
+      setLocalAvatar(avatarConfig);
+    }
+  }, [section]);
 
   const applyUserPayload = useCallback(
     (raw: Record<string, unknown>) => {
@@ -724,9 +735,10 @@ export default function ProfileSheet({
                     <div className="flex justify-center">
                       <div className="relative mx-auto rounded-full border-[4px] border-primary/75 shadow-[0_0_44px_rgba(212,175,55,0.36)] bg-[#08081a] w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] md:w-[260px] md:h-[260px] overflow-hidden shrink-0">
                         <AvatarPortraitImage
+                          key={avatarPortraitKey(localAvatar)}
                           config={localAvatar}
                           className="w-full h-full object-cover"
-                          loading="lazy"
+                          loading="eager"
                           cropOverride={{ objectPosition: "50% 42%", scale: 1 }}
                         />
                         <div className="absolute inset-0 rounded-full ring-1 ring-white/10 pointer-events-none" />
@@ -738,7 +750,7 @@ export default function ProfileSheet({
                       </p>
                     )}
                     <AvatarEditor
-                      avatarConfig={localAvatar}
+                      value={localAvatar}
                       onChange={setLocalAvatar}
                       onSave={() => void handleSaveAvatar()}
                       saving={avatarSaving}

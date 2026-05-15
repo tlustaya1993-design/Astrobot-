@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MessageSquare, Check, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
@@ -29,7 +30,6 @@ type Props = {
 };
 
 const LONG_PRESS_MS = 520;
-
 export default function ConversationHistoryRow({
   conv,
   active = false,
@@ -44,8 +44,15 @@ export default function ConversationHistoryRow({
   onRequestDelete,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  const closeMenu = () => setMenuOpen(false);
 
   const clearPress = () => {
     if (pressTimer.current) {
@@ -54,13 +61,16 @@ export default function ConversationHistoryRow({
     }
   };
 
+  const openMenu = () => {
+    window.getSelection()?.removeAllRanges();
+    didLongPress.current = true;
+    setMenuOpen(true);
+  };
+
   const startPress = () => {
     didLongPress.current = false;
     clearPress();
-    pressTimer.current = setTimeout(() => {
-      didLongPress.current = true;
-      setMenuOpen(true);
-    }, LONG_PRESS_MS);
+    pressTimer.current = setTimeout(openMenu, LONG_PRESS_MS);
   };
 
   const handleClick = () => {
@@ -73,6 +83,60 @@ export default function ConversationHistoryRow({
 
   const displayTitle = conv.title?.trim() || 'Чтение';
 
+  const actionMenu =
+    menuOpen && portalReady
+      ? createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[280] bg-black/55 touch-none"
+              style={{ WebkitTapHighlightColor: 'transparent' }}
+              onClick={closeMenu}
+              aria-hidden
+            />
+            <div
+              className="fixed left-3 right-3 bottom-4 z-[281] rounded-2xl border border-border bg-card p-2 shadow-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+              role="dialog"
+              aria-label="Действия с диалогом"
+            >
+              <div className="flex items-start gap-2 px-2 py-1.5 border-b border-border/40 mb-1">
+                <p className="flex-1 min-w-0 text-sm font-medium text-foreground line-clamp-2 pr-1">
+                  {displayTitle}
+                </p>
+                <button
+                  type="button"
+                  onClick={closeMenu}
+                  className="shrink-0 p-2 -m-1 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition touch-manipulation"
+                  aria-label="Закрыть"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <button
+                type="button"
+                className="w-full text-left px-3 py-3 rounded-xl text-sm hover:bg-white/5 transition touch-manipulation"
+                onClick={() => {
+                  closeMenu();
+                  onRequestRename();
+                }}
+              >
+                Переименовать
+              </button>
+              <button
+                type="button"
+                className="w-full text-left px-3 py-3 rounded-xl text-sm text-destructive hover:bg-destructive/10 transition touch-manipulation"
+                onClick={() => {
+                  closeMenu();
+                  onRequestDelete();
+                }}
+              >
+                Удалить диалог
+              </button>
+            </div>
+          </>,
+          document.body,
+        )
+      : null;
+
   return (
     <>
       <button
@@ -80,7 +144,7 @@ export default function ConversationHistoryRow({
         onClick={handleClick}
         onContextMenu={(e) => {
           e.preventDefault();
-          setMenuOpen(true);
+          openMenu();
         }}
         onTouchStart={startPress}
         onTouchEnd={clearPress}
@@ -92,7 +156,7 @@ export default function ConversationHistoryRow({
         }}
         onMouseUp={clearPress}
         onMouseLeave={clearPress}
-        className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition ${
+        className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition select-none [-webkit-touch-callout:none] [-webkit-tap-highlight-color:transparent] touch-manipulation ${
           active
             ? 'bg-primary/15 border border-primary/30'
             : 'hover:bg-white/5 border border-transparent'
@@ -127,7 +191,7 @@ export default function ConversationHistoryRow({
                   }
                   if (e.key === 'Escape') onCancelEdit();
                 }}
-                className="h-9 flex-1 min-w-0 px-2.5 rounded-lg bg-background border border-primary/40 text-base outline-none focus:border-primary/70"
+                className="h-9 flex-1 min-w-0 px-2.5 rounded-lg bg-background border border-primary/40 text-base outline-none focus:border-primary/70 select-text"
                 autoFocus
               />
               <button
@@ -155,10 +219,10 @@ export default function ConversationHistoryRow({
             </div>
           ) : (
             <>
-              <p className="text-base font-semibold text-foreground leading-snug line-clamp-2 pr-1">
+              <p className="text-base font-semibold text-foreground leading-snug line-clamp-2 pr-1 pointer-events-none">
                 {displayTitle}
               </p>
-              <p className="text-[11px] text-muted-foreground mt-1">
+              <p className="text-[11px] text-muted-foreground mt-1 pointer-events-none">
                 {format(new Date(conv.createdAt), 'd MMM, HH:mm', { locale: ru })}
               </p>
             </>
@@ -166,44 +230,7 @@ export default function ConversationHistoryRow({
         </div>
       </button>
 
-      {menuOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-[55] bg-black/40"
-            onClick={() => setMenuOpen(false)}
-          />
-          <div className="fixed left-3 right-3 bottom-4 z-[56] rounded-2xl border border-border bg-card p-2 shadow-2xl">
-            <p className="px-3 py-2 text-xs text-muted-foreground line-clamp-2">{displayTitle}</p>
-            <button
-              type="button"
-              className="w-full text-left px-3 py-3 rounded-xl text-sm hover:bg-white/5 transition"
-              onClick={() => {
-                setMenuOpen(false);
-                onRequestRename();
-              }}
-            >
-              Переименовать
-            </button>
-            <button
-              type="button"
-              className="w-full text-left px-3 py-3 rounded-xl text-sm text-destructive hover:bg-destructive/10 transition"
-              onClick={() => {
-                setMenuOpen(false);
-                onRequestDelete();
-              }}
-            >
-              Удалить диалог
-            </button>
-            <button
-              type="button"
-              className="w-full text-center px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-white/5 transition"
-              onClick={() => setMenuOpen(false)}
-            >
-              Отмена
-            </button>
-          </div>
-        </>
-      )}
+      {actionMenu}
     </>
   );
 }

@@ -72,18 +72,6 @@ export const AVATAR_PRESETS: Array<{
     },
   },
   {
-    id: 'cosmonaut_default',
-    label: 'Космонавтка',
-    config: {
-      ...DEFAULT_AVATAR,
-      archetype: 'cosmonaut',
-      hairStyle: 'medium',
-      hairColor: HAIR_COLORS[1].hex,
-      robeColor: ROBE_COLORS[2].hex,
-      eyeColor: EYE_COLORS[1].hex,
-    },
-  },
-  {
     id: 'mage_default',
     label: 'Волшебница',
     config: {
