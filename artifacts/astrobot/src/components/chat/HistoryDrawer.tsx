@@ -44,7 +44,6 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
   const [showPaywall, setShowPaywall] = useState(false);
   const [editingConversationId, setEditingConversationId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
-  const [portalReady, setPortalReady] = useState(false);
 
   const { data: conversations, isLoading } = useListOpenaiConversations({
     request: { headers: getAuthHeaders() },
@@ -65,10 +64,6 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
       onSuccess: () => queryClient.invalidateQueries({ queryKey: getListOpenaiConversationsQueryKey() }),
     },
   });
-
-  useEffect(() => {
-    setPortalReady(true);
-  }, []);
 
   const handleDelete = (id: number) => {
     if (confirm('Удалить диалог?')) deleteMutation.mutate({ id });
@@ -136,7 +131,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
         <>
           <motion.div
             key="history-drawer-backdrop"
-            className="fixed inset-0 z-[80] bg-black/55 backdrop-blur-[3px]"
+            className="fixed inset-0 z-[150] bg-black/55 backdrop-blur-[3px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -145,17 +140,17 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
             aria-hidden
           />
 
-          <motion.aside
+          <motion.div
             key="history-drawer-panel"
             role="dialog"
             aria-modal="true"
             aria-label="Меню чатов"
-            className={`fixed top-0 left-0 z-[81] w-[min(340px,86vw)] ${MENU_PANEL_CLASS} pt-safe`}
+            className={`fixed top-0 left-0 z-[151] flex min-h-0 w-[min(340px,86vw)] max-w-[90vw] will-change-transform ${MENU_PANEL_CLASS} pt-safe`}
             style={{ bottom: DRAWER_BOTTOM }}
-            initial={{ x: '-100%' }}
+            initial={false}
             animate={{ x: 0 }}
             exit={{ x: '-100%' }}
-            transition={{ duration: 0.36, ease: MENU_EASE }}
+            transition={{ duration: 0.32, ease: MENU_EASE }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
@@ -239,15 +234,17 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                 <ChatMenuSubscriptionCard onClick={() => setShowPaywall(true)} />
               </div>
             </motion.div>
-          </motion.aside>
+          </motion.div>
         </>
       )}
     </AnimatePresence>
   );
 
+  const body = typeof document !== 'undefined' ? document.body : null;
+
   return (
     <>
-      {portalReady ? createPortal(drawer, document.body) : null}
+      {body ? createPortal(drawer, body) : null}
       <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
     </>
   );
