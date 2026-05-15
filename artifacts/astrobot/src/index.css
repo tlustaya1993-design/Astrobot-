@@ -219,16 +219,39 @@ html.keyboard-open [data-bottom-nav] {
    Gold vertical bar on the left, subdued text (~55 % white).
    .astro-em-block em overrides the global text-accent (specificity 0-1-1 > 0-1-0). */
 .astro-em-block {
-  border-left: 2px solid hsl(var(--primary) / 0.65);
+  border-left: 2px solid rgba(201, 162, 39, 0.45);
   padding-left: 0.75rem;
   color: rgba(255, 255, 255, 0.55);
   font-style: italic;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .astro-em-block em {
   color: inherit;
   font-style: italic;
   font-weight: 500;
+}
+
+/* Astro section divider — thin line + ✦ centred in gold.
+   Rendered via the hr MD component. */
+.astro-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 16px 0;
+}
+.astro-divider::before,
+.astro-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.astro-divider-symbol {
+  color: rgba(201, 162, 39, 0.8);
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 /* Typing Indicator Animation */

@@ -888,8 +888,8 @@ export default function Chat() {
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 {msg.role !== 'user' && (
-                  <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden relative">
-                    <Sparkles className="w-4 h-4 text-primary/50 absolute" />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/25 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden relative">
+                    <Sparkles className="w-4 h-4 text-primary/60 absolute" />
                     <img
                       src={`${import.meta.env.BASE_URL}images/avatar-bot.png`}
                       alt="Bot"
@@ -902,10 +902,10 @@ export default function Chat() {
                   <div
                     className={`min-w-0 ${
                       msg.role === 'user'
-                        ? 'rounded-2xl p-4 shadow-lg bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/30 text-foreground rounded-tr-sm break-words overflow-x-hidden'
-                        : 'rounded-2xl px-4 py-4 bg-gradient-to-br from-white/[0.04] to-white/[0.02] border border-white/[0.07] shadow-sm break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto streaming-message-content'
+                        ? 'rounded-2xl p-4 bg-[rgba(201,162,39,0.12)] border border-[rgba(201,162,39,0.2)] text-foreground rounded-tr-sm break-words overflow-x-hidden'
+                        : 'rounded-2xl p-5 bg-white/[0.04] border border-white/[0.06] shadow-[0_2px_12px_rgba(0,0,0,0.15)] break-words overflow-x-hidden [&_pre]:max-w-full [&_pre]:overflow-x-auto streaming-message-content'
                     }`}
-                    style={{ fontSize: '17.5px', lineHeight: 1.6, fontWeight: 400 }}
+                    style={{ fontSize: '16px', lineHeight: 1.65, fontWeight: 400 }}
                   >
                     {msg.role !== 'user' ? (
                       msg.content?.trim() ? (
@@ -962,8 +962,8 @@ export default function Chat() {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex justify-start"
               >
-                <div className="w-8 h-8 rounded-full bg-secondary border border-primary/30 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden relative">
-                  <Sparkles className="w-4 h-4 text-primary/50 absolute" />
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/25 flex items-center justify-center mr-3 mt-1 shrink-0 overflow-hidden relative">
+                  <Sparkles className="w-4 h-4 text-primary/60 absolute" />
                   <img
                     src={`${import.meta.env.BASE_URL}images/avatar-bot.png`}
                     alt="Bot"

@@ -38,22 +38,26 @@ function isAstroEmBlock(children: React.ReactNode): boolean {
 const MD_COMPONENTS: Components = {
   p: ({ children }) => {
     if (isAstroEmBlock(children)) {
-      return <p className="astro-em-block mb-4 last:mb-0 leading-[1.6]">{children}</p>;
+      return <p className="astro-em-block mb-3 last:mb-0">{children}</p>;
     }
-    return <p className="mb-4 last:mb-0 leading-[1.6]">{children}</p>;
+    return <p className="mb-3 last:mb-0 leading-[1.65]">{children}</p>;
   },
   strong: ({ children }) => <strong className="text-primary font-semibold">{children}</strong>,
   em:     ({ children }) => <em className="text-accent font-medium italic">{children}</em>,
-  h1:     ({ children }) => <h1 className="text-primary font-semibold text-xl mb-3 mt-2 leading-snug">{children}</h1>,
-  h2:     ({ children }) => <h2 className="text-primary font-semibold text-lg mb-3 mt-2 leading-snug">{children}</h2>,
-  h3:     ({ children }) => <h3 className="text-primary font-semibold text-base mb-2 mt-2 leading-snug">{children}</h3>,
-  h4:     ({ children }) => <h4 className="text-primary/90 font-semibold text-sm mb-2 mt-2">{children}</h4>,
-  h5:     ({ children }) => <h5 className="text-primary/80 font-semibold text-sm mb-1 mt-1">{children}</h5>,
-  h6:     ({ children }) => <h6 className="text-primary/70 font-semibold text-sm mb-1 mt-1">{children}</h6>,
-  ul:     ({ children }) => <ul className="list-disc pl-5 mb-4 space-y-1.5">{children}</ul>,
-  ol:     ({ children }) => <ol className="list-decimal pl-5 mb-4 space-y-1.5">{children}</ol>,
-  li:     ({ children }) => <li className="leading-[1.6]">{children}</li>,
-  hr:     ()              => <hr className="border-white/10 my-4" />,
+  h1:     ({ children }) => <h1 className="text-white font-semibold text-xl mb-3 mt-2 leading-snug">{children}</h1>,
+  h2:     ({ children }) => <h2 className="text-white font-semibold text-lg mb-3 mt-2 leading-snug">{children}</h2>,
+  h3:     ({ children }) => <h3 className="text-primary/90 font-semibold text-[12px] tracking-[0.08em] uppercase mb-2 mt-4 leading-snug">{children}</h3>,
+  h4:     ({ children }) => <h4 className="text-primary/80 font-semibold text-[11px] tracking-[0.06em] uppercase mb-2 mt-3">{children}</h4>,
+  h5:     ({ children }) => <h5 className="text-primary/70 font-semibold text-xs mb-1 mt-1">{children}</h5>,
+  h6:     ({ children }) => <h6 className="text-primary/60 font-semibold text-xs mb-1 mt-1">{children}</h6>,
+  ul:     ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>,
+  ol:     ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1.5">{children}</ol>,
+  li:     ({ children }) => <li className="leading-[1.65]">{children}</li>,
+  hr:     ()              => (
+    <div className="astro-divider" role="separator">
+      <span className="astro-divider-symbol">✦</span>
+    </div>
+  ),
   table: ({ children }) => (
     <div className="overflow-x-auto my-3 rounded-lg border border-white/10">
       <table className="w-full border-collapse text-xs">{children}</table>
@@ -130,7 +134,7 @@ const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false
   // ── Non-streaming: full static render ───────────────────────────────────────
   if (!isStreaming) {
     return (
-      <div className="astro-md leading-[1.6] stream-md-reveal">
+      <div className="astro-md leading-[1.65] stream-md-reveal">
         <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
           {content}
         </ReactMarkdown>
@@ -152,7 +156,7 @@ const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false
   const activeTail   = segments[segments.length - 1] ?? '';
 
   return (
-    <div className="astro-md leading-[1.6]">
+    <div className="astro-md leading-[1.65]">
       {completeSegs.map((block, idx) =>
         block.trim() ? <CompletedBlock key={idx} text={block} /> : null
       )}
