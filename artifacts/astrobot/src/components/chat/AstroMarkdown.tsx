@@ -87,24 +87,20 @@ function closeUnclosedMarkers(text: string): string {
 /** Completed markdown block — immutable after first mount. */
 const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) {
   return (
-    <div className="stream-block-reveal">
-      <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-        {text}
-      </ReactMarkdown>
-    </div>
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
   );
 });
 
 /**
  * In-progress block at the tail of the stream.
  *
- * Uses requestAnimationFrame to reveal 5 chars per frame (~300 chars/sec at
- * 60 fps). The loop runs independently of the 30 ms batch timer so there is
- * no double-animation conflict. Formatting via ReactMarkdown is applied on
- * every frame, so bold/italic/headers appear correctly from the first char.
- *
- * The component is keyed by paragraph index in the parent so it remounts
- * cleanly for each new paragraph, resetting visibleLength to 0.
+ * Reveals 1 char per 30ms tick (≈33 chars/sec). Never resets to zero —
+ * when `text` grows, visibleLength catches up; when `text` shrinks (new
+ * paragraph started), snaps to the new length so old content doesn't flash.
+ * This avoids the key={paragraph} remount that caused the visible flash at
+ * every \n\n boundary.
  */
 function ActiveBlock({ text }: { text: string }) {
   const [visibleLength, setVisibleLength] = useState(0);
@@ -112,15 +108,15 @@ function ActiveBlock({ text }: { text: string }) {
   textRef.current = text;
 
   useEffect(() => {
-    setVisibleLength(0);
-    // 1 char every 20 ms = 50 chars/sec — smooth single-char reveal
     const timer = setInterval(() => {
       setVisibleLength(prev => {
         const target = textRef.current.length;
+        // If text shrank (new paragraph), snap immediately — no flash.
+        if (prev > target) return target;
         if (prev >= target) return prev;
         return prev + 1;
       });
-    }, 20);
+    }, 30);
     return () => clearInterval(timer);
   }, []);
 
@@ -170,17 +166,18 @@ const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false
   // ActiveBlock:    keyed by paragraph index so it remounts for each new
   //                 paragraph and resets its RAF-based reveal from char 0.
   // StreamingDots:  three animated dots (same as pre-message typing indicator).
-  const segments        = content.split('\n\n');
-  const completeSegs    = segments.slice(0, -1);
-  const activeTail      = segments[segments.length - 1] ?? '';
-  const activeParagraph = segments.length - 1;
+  const segments     = content.split('\n\n');
+  const completeSegs = segments.slice(0, -1);
+  const activeTail   = segments[segments.length - 1] ?? '';
 
   return (
     <div className="astro-md leading-[1.65]">
       {completeSegs.map((block, idx) =>
         block.trim() ? <CompletedBlock key={idx} text={block} /> : null
       )}
-      {activeTail.trim() && <ActiveBlock key={activeParagraph} text={activeTail} />}
+      {/* No key={activeParagraph} — ActiveBlock must NOT remount on \n\n.
+          It snaps visibleLength internally when text shrinks. */}
+      {activeTail.trim() && <ActiveBlock text={activeTail} />}
       <StreamingDots />
     </div>
   );
