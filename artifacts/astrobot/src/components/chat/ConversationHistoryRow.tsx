@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MessageSquare, Check, X } from 'lucide-react';
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
+import { MessageSquare, Check, X, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { DEFAULT_AVATAR, type AvatarConfig } from '@/components/ui/AstroAvatar';
 import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
+import { MENU_EASE } from '@/components/chat/menu/ChatMenuPrimitives';
 
 export type ConversationListItem = {
   id: number;
@@ -27,9 +29,12 @@ type Props = {
   onCancelEdit: () => void;
   onRequestRename: () => void;
   onRequestDelete: () => void;
+  index?: number;
 };
 
 const LONG_PRESS_MS = 520;
+const SWIPE_OPEN = -96;
+
 export default function ConversationHistoryRow({
   conv,
   active = false,
@@ -42,17 +47,30 @@ export default function ConversationHistoryRow({
   onCancelEdit,
   onRequestRename,
   onRequestDelete,
+  index = 0,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
+  const [swipeOpen, setSwipeOpen] = useState(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const dragging = useRef(false);
+
+  const dragX = useMotionValue(0);
+  const rowOpacity = useTransform(dragX, [SWIPE_OPEN, 0], [0.92, 1]);
 
   useEffect(() => {
     setPortalReady(true);
   }, []);
 
   const closeMenu = () => setMenuOpen(false);
+
+  const snapSwipe = (open: boolean) => {
+    setSwipeOpen(open);
+    animate(dragX, open ? SWIPE_OPEN : 0, { duration: 0.28, ease: MENU_EASE });
+  };
 
   const clearPress = () => {
     if (pressTimer.current) {
@@ -64,6 +82,7 @@ export default function ConversationHistoryRow({
   const openMenu = () => {
     window.getSelection()?.removeAllRanges();
     didLongPress.current = true;
+    snapSwipe(false);
     setMenuOpen(true);
   };
 
@@ -78,42 +97,78 @@ export default function ConversationHistoryRow({
       didLongPress.current = false;
       return;
     }
+    if (swipeOpen) {
+      snapSwipe(false);
+      return;
+    }
     onOpen();
   };
 
   const displayTitle = conv.title?.trim() || 'Чтение';
+
+  const onRowTouchStart = (e: React.TouchEvent) => {
+    if (isEditing) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    dragging.current = false;
+    startPress();
+  };
+
+  const onRowTouchMove = (e: React.TouchEvent) => {
+    clearPress();
+    if (isEditing || menuOpen) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (!dragging.current && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      dragging.current = true;
+    }
+    if (!dragging.current) return;
+    const next = Math.min(0, Math.max(SWIPE_OPEN, dx));
+    dragX.set(next);
+  };
+
+  const onRowTouchEnd = () => {
+    clearPress();
+    if (!dragging.current) return;
+    dragging.current = false;
+    const current = dragX.get();
+    snapSwipe(current < SWIPE_OPEN / 2);
+  };
 
   const actionMenu =
     menuOpen && portalReady
       ? createPortal(
           <>
             <div
-              className="fixed inset-0 z-[280] bg-black/55 touch-none"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
+              className="fixed inset-0 z-[280] bg-black/50 backdrop-blur-[2px] touch-none"
               onClick={closeMenu}
               aria-hidden
             />
-            <div
-              className="fixed left-3 right-3 bottom-4 z-[281] rounded-2xl border border-border bg-card p-2 shadow-2xl pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.32, ease: MENU_EASE }}
+              className="fixed left-4 right-4 bottom-4 z-[281] rounded-[22px] border border-white/[0.06] bg-[#12101c]/95 p-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)] pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl"
               role="dialog"
               aria-label="Действия с диалогом"
             >
-              <div className="flex items-start gap-2 px-2 py-1.5 border-b border-border/40 mb-1">
-                <p className="flex-1 min-w-0 text-sm font-medium text-foreground line-clamp-2 pr-1">
+              <motion.div className="flex items-start gap-2 px-2 py-2 border-b border-white/[0.05] mb-1">
+                <p className="flex-1 min-w-0 text-sm font-medium text-foreground/90 line-clamp-2 pr-1">
                   {displayTitle}
                 </p>
                 <button
                   type="button"
                   onClick={closeMenu}
-                  className="shrink-0 p-2 -m-1 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition touch-manipulation"
+                  className="shrink-0 rounded-full p-2 text-foreground/40 hover:bg-white/[0.06] hover:text-foreground/70 transition touch-manipulation"
                   aria-label="Закрыть"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="w-5 h-5" strokeWidth={1.75} />
                 </button>
-              </div>
+              </motion.div>
               <button
                 type="button"
-                className="w-full text-left px-3 py-3 rounded-xl text-sm hover:bg-white/5 transition touch-manipulation"
+                className="w-full text-left px-3 py-3 rounded-xl text-sm text-foreground/85 hover:bg-white/[0.04] transition touch-manipulation"
                 onClick={() => {
                   closeMenu();
                   onRequestRename();
@@ -123,7 +178,7 @@ export default function ConversationHistoryRow({
               </button>
               <button
                 type="button"
-                className="w-full text-left px-3 py-3 rounded-xl text-sm text-destructive hover:bg-destructive/10 transition touch-manipulation"
+                className="w-full text-left px-3 py-3 rounded-xl text-sm text-red-300/90 hover:bg-red-500/[0.08] transition touch-manipulation"
                 onClick={() => {
                   closeMenu();
                   onRequestDelete();
@@ -131,7 +186,7 @@ export default function ConversationHistoryRow({
               >
                 Удалить диалог
               </button>
-            </div>
+            </motion.div>
           </>,
           document.body,
         )
@@ -139,96 +194,143 @@ export default function ConversationHistoryRow({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={handleClick}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          openMenu();
-        }}
-        onTouchStart={startPress}
-        onTouchEnd={clearPress}
-        onTouchMove={clearPress}
-        onTouchCancel={clearPress}
-        onMouseDown={(e) => {
-          if (e.button !== 0) return;
-          startPress();
-        }}
-        onMouseUp={clearPress}
-        onMouseLeave={clearPress}
-        className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition select-none [-webkit-touch-callout:none] [-webkit-tap-highlight-color:transparent] touch-manipulation ${
-          active
-            ? 'bg-primary/15 border border-primary/30'
-            : 'hover:bg-white/5 border border-transparent'
-        }`}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.38, ease: MENU_EASE, delay: 0.04 + index * 0.03 }}
+        className="relative overflow-hidden rounded-[22px]"
       >
-        {conv.contactId != null && conv.contactId > 0 ? (
-          <SynastryRowAvatars
-            userConfig={userAvatarConfig ?? DEFAULT_AVATAR}
-            contactAvatarConfig={conv.contactAvatarConfig}
-            contactId={conv.contactId}
-            contactName={conv.contactName}
-            size={26}
-            ringClassName="ring-card"
-          />
-        ) : (
-          <div className="p-1.5 rounded-lg bg-secondary/60 border border-white/5 shrink-0">
-            <MessageSquare className="w-4 h-4 text-primary" />
-          </div>
-        )}
-        <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-              <input
-                value={editingTitle}
-                onChange={(e) => onEditingTitleChange(e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
+        <motion.div
+          className="absolute inset-y-0 right-0 flex items-stretch gap-1 pr-1"
+          aria-hidden={!swipeOpen}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              snapSwipe(false);
+              onRequestRename();
+            }}
+            className="flex w-11 items-center justify-center rounded-xl bg-white/[0.06] text-foreground/55"
+            aria-label="Переименовать"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              snapSwipe(false);
+              onRequestDelete();
+            }}
+            className="flex w-11 items-center justify-center rounded-xl bg-red-500/[0.12] text-red-300/80"
+            aria-label="Удалить"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </motion.div>
+
+        <motion.button
+          type="button"
+          style={{ x: dragX, opacity: rowOpacity }}
+          onClick={handleClick}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            openMenu();
+          }}
+          onTouchStart={onRowTouchStart}
+          onTouchEnd={onRowTouchEnd}
+          onTouchMove={onRowTouchMove}
+          onTouchCancel={() => {
+            clearPress();
+            if (dragging.current) snapSwipe(false);
+          }}
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
+            startPress();
+          }}
+          onMouseUp={clearPress}
+          onMouseLeave={clearPress}
+          className={`relative z-[1] flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors duration-300 select-none [-webkit-touch-callout:none] [-webkit-tap-highlight-color:transparent] touch-manipulation ${
+            active
+              ? 'bg-[rgba(255,215,120,0.08)] ring-1 ring-[rgba(255,215,120,0.14)]'
+              : 'bg-white/[0.025] ring-1 ring-white/[0.04] hover:bg-white/[0.04]'
+          } rounded-[22px]`}
+        >
+          {conv.contactId != null && conv.contactId > 0 ? (
+            <SynastryRowAvatars
+              userConfig={userAvatarConfig ?? DEFAULT_AVATAR}
+              contactAvatarConfig={conv.contactAvatarConfig}
+              contactId={conv.contactId}
+              contactName={conv.contactName}
+              size={28}
+              ringClassName="ring-[#12101c]"
+            />
+          ) : (
+            <motion.div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(120,90,180,0.18)] ring-1 ring-[rgba(160,120,220,0.12)]">
+              <MessageSquare className="w-[18px] h-[18px] text-[rgba(190,160,240,0.75)]" strokeWidth={1.75} />
+            </motion.div>
+          )}
+
+          <motion.div className="min-w-0 flex-1 pr-1">
+            {isEditing ? (
+              <motion.div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <input
+                  value={editingTitle}
+                  onChange={(e) => onEditingTitleChange(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSaveEdit();
+                    }
+                    if (e.key === 'Escape') onCancelEdit();
+                  }}
+                  className="h-9 flex-1 min-w-0 px-2.5 rounded-xl bg-[#0c0b12] border border-[rgba(255,215,120,0.25)] text-[15px] outline-none focus:border-[rgba(255,215,120,0.4)] select-text"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={(e) => {
                     e.stopPropagation();
                     onSaveEdit();
-                  }
-                  if (e.key === 'Escape') onCancelEdit();
-                }}
-                className="h-9 flex-1 min-w-0 px-2.5 rounded-lg bg-background border border-primary/40 text-base outline-none focus:border-primary/70 select-text"
-                autoFocus
-              />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSaveEdit();
-                }}
-                className="p-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/15 transition shrink-0"
-                aria-label="Сохранить"
-              >
-                <Check className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCancelEdit();
-                }}
-                className="p-1.5 rounded-lg text-muted-foreground hover:bg-white/5 transition shrink-0"
-                aria-label="Отмена"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ) : (
-            <>
-              <p className="text-base font-semibold text-foreground leading-snug line-clamp-2 pr-1 pointer-events-none">
-                {displayTitle}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-1 pointer-events-none">
-                {format(new Date(conv.createdAt), 'd MMM, HH:mm', { locale: ru })}
-              </p>
-            </>
+                  }}
+                  className="p-1.5 rounded-lg text-emerald-400/90 hover:bg-emerald-500/10 transition shrink-0"
+                  aria-label="Сохранить"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancelEdit();
+                  }}
+                  className="p-1.5 rounded-lg text-foreground/45 hover:bg-white/5 transition shrink-0"
+                  aria-label="Отмена"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </motion.div>
+            ) : (
+              <>
+                <p className="text-[15px] font-medium leading-snug text-foreground/92 line-clamp-3 pointer-events-none">
+                  {displayTitle}
+                </p>
+                <p className="text-[12px] text-foreground/45 mt-1 pointer-events-none">
+                  {format(new Date(conv.createdAt), 'd MMM, HH:mm', { locale: ru })}
+                </p>
+              </>
+            )}
+          </motion.div>
+
+          {!isEditing && (
+            <ChevronRight
+              className="w-4 h-4 shrink-0 text-foreground/20 pointer-events-none"
+              strokeWidth={1.75}
+            />
           )}
-        </div>
-      </button>
+        </motion.button>
+      </motion.div>
 
       {actionMenu}
     </>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, LogIn, Plus, Search } from 'lucide-react';
-import { Link, useLocation } from 'wouter';
+import { CalendarDays, LogIn, Search } from 'lucide-react';
+import { useLocation } from 'wouter';
 import {
   getListOpenaiConversationsQueryKey,
   useDeleteOpenaiConversation,
@@ -10,11 +10,16 @@ import {
 import { getAuthHeaders } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
 import ConversationHistoryRow from '@/components/chat/ConversationHistoryRow';
 import PaywallSheet from '@/components/billing/PaywallSheet';
 import { toast } from '@/hooks/use-toast';
+import {
+  ChatMenuHero,
+  ChatMenuNewChatButton,
+  ChatMenuSectionTitle,
+  ChatMenuSubscriptionCard,
+} from '@/components/chat/menu/ChatMenuPrimitives';
 
 interface ChatSidebarProps {
   currentConversationId?: number;
@@ -127,116 +132,109 @@ export default function ChatSidebar({
 
   return (
     <>
-      <aside className={`h-full w-full border-r border-border/60 bg-card/40 backdrop-blur-sm flex flex-col ${className ?? ''}`}>
-        <div className="p-3 border-b border-border/50">
-          {headerRight && (
-            <div className="mb-2 flex justify-end">
-              {headerRight}
-            </div>
-          )}
-          <Link
-            href="/profile"
-            className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition"
-          >
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
-              <IllustratedAvatar config={avatarConfig} size={40} relaxedCrop />
-            </div>
-            <div className="text-left min-w-0 flex-1">
-              <p className="text-sm font-semibold leading-tight truncate">{profileName || 'Профиль'}</p>
-              <p className="text-[11px] text-muted-foreground truncate">
-                {isLoggedIn ? email : 'Гостевой профиль'}
-              </p>
-              {!isLoggedIn && (
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Зарегистрируйся — и AstroBot будет помнить, о чём вы говорили.
-                </p>
-              )}
-            </div>
-          </Link>
-        </div>
+      <aside
+        className={`flex h-full w-full flex-col overflow-hidden border-r border-white/[0.05] bg-[#0a0a12] ${className ?? ''}`}
+      >
+        {headerRight && (
+          <div className="flex justify-end px-3 pt-2">{headerRight}</div>
+        )}
 
-        <div className="p-3 border-b border-border/40 space-y-2">
+        <ChatMenuHero
+          profileName={profileName}
+          email={email}
+          isLoggedIn={isLoggedIn}
+          avatarConfig={avatarConfig}
+          onNavigate={onNavigate}
+        />
+
+        <div className="space-y-2 px-5 pb-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/30"
+              strokeWidth={1.75}
+            />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Поиск чатов..."
-              className="w-full bg-background border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:border-primary/50"
+              placeholder="Поиск диалогов..."
+              className="w-full rounded-[18px] border border-white/[0.06] bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-foreground/90 outline-none transition-colors placeholder:text-foreground/30 focus:border-[rgba(255,215,120,0.2)]"
             />
           </div>
-          <button
-            onClick={() => openChat()}
-            className="w-full flex items-center gap-2 py-2.5 px-3 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-medium hover:bg-primary/25 transition"
-          >
-            <Plus className="w-4 h-4" />
-            Новый диалог
-          </button>
+          <ChatMenuNewChatButton embedded onClick={() => openChat()} />
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2">
-          {isLoading && hasConversations ? (
-            <div className="space-y-1 pt-1">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-14 rounded-xl bg-white/5 animate-pulse" />
-              ))}
-            </div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 px-4 text-center">
-              <CalendarDays className="w-8 h-8 text-muted-foreground mb-3" />
-              {search.trim() ? (
-                <>
-                  <p className="text-sm font-medium text-foreground/90">По запросу ничего не нашлось</p>
-                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                    Сбросьте поиск или попробуйте другое слово из названия чата.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm font-medium text-foreground/90">Пока без диалогов</p>
-                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                    Нажмите «Новый диалог» — название подберётся по смыслу первого вопроса.
-                  </p>
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {filteredConversations.map((conv) => (
-                <ConversationHistoryRow
-                  key={conv.id}
-                  conv={conv}
-                  active={currentConversationId === conv.id}
-                  userAvatarConfig={avatarConfig}
-                  isEditing={editingConversationId === conv.id}
-                  editingTitle={editingTitle}
-                  onEditingTitleChange={setEditingTitle}
-                  onOpen={() => openChat(conv.id)}
-                  onSaveEdit={() => void saveEditing(conv.id)}
-                  onCancelEdit={() => cancelEditing()}
-                  onRequestRename={() => startEditing(conv.id, conv.title || 'Чтение')}
-                  onRequestDelete={() => handleDelete(conv.id)}
-                />
-              ))}
-            </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {hasConversations && !search.trim() && (
+            <ChatMenuSectionTitle>Недавние диалоги</ChatMenuSectionTitle>
           )}
+          {search.trim() ? (
+            <p className="px-5 pb-2 pt-2 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground/45">
+              Результаты
+            </p>
+          ) : null}
+
+          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+            {isLoading && hasConversations ? (
+              <div className="space-y-3 pt-1">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-[72px] rounded-[22px] bg-white/[0.03] animate-pulse" />
+                ))}
+              </div>
+            ) : filteredConversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center px-2 py-16 text-center">
+                <CalendarDays className="mb-3 h-8 w-8 text-foreground/25" strokeWidth={1.5} />
+                {search.trim() ? (
+                  <>
+                    <p className="text-sm font-medium text-foreground/85">По запросу ничего не нашлось</p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-foreground/40">
+                      Сбросьте поиск или попробуйте другое слово из названия.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-foreground/85">Пока без диалогов</p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-foreground/40">
+                      Нажмите «Новый диалог» — название подберётся по смыслу первого вопроса.
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredConversations.map((conv, index) => (
+                  <ConversationHistoryRow
+                    key={conv.id}
+                    index={index}
+                    conv={conv}
+                    active={currentConversationId === conv.id}
+                    userAvatarConfig={avatarConfig}
+                    isEditing={editingConversationId === conv.id}
+                    editingTitle={editingTitle}
+                    onEditingTitleChange={setEditingTitle}
+                    onOpen={() => openChat(conv.id)}
+                    onSaveEdit={() => void saveEditing(conv.id)}
+                    onCancelEdit={() => cancelEditing()}
+                    onRequestRename={() => startEditing(conv.id, conv.title || 'Чтение')}
+                    onRequestDelete={() => handleDelete(conv.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="p-3 border-t border-border/50 space-y-2">
+
+        <div className="shrink-0 space-y-2.5 border-t border-white/[0.05] px-4 py-4">
           {!isLoggedIn && (
             <button
+              type="button"
               onClick={onLoginClick}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-primary/30 text-primary text-xs font-medium hover:bg-primary/10 transition"
+              className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-white/[0.08] py-2.5 text-[13px] font-medium text-foreground/70 transition-colors hover:bg-white/[0.04]"
             >
-              <LogIn className="w-3.5 h-3.5" />
+              <LogIn className="h-4 w-4" strokeWidth={1.75} />
               Войти / Зарегистрироваться
             </button>
           )}
-          <button
-            onClick={() => setShowPaywall(true)}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary/15 border border-primary/30 text-primary text-sm font-medium hover:bg-primary/25 transition"
-          >
-            Хочу больше разборов
-          </button>
+          <ChatMenuSubscriptionCard onClick={() => setShowPaywall(true)} />
         </div>
       </aside>
       <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />

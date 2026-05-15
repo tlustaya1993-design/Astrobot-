@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, CalendarDays, LogIn } from 'lucide-react';
-import { Link, useLocation } from 'wouter';
+import { CalendarDays, LogIn } from 'lucide-react';
+import { useLocation } from 'wouter';
 import {
   useListOpenaiConversations,
   useDeleteOpenaiConversation,
@@ -11,11 +11,18 @@ import {
 import { getAuthHeaders } from '@/lib/session';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/AuthContext';
-import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import ConversationHistoryRow from '@/components/chat/ConversationHistoryRow';
 import { useAvatarSync } from '@/context/AvatarSyncContext';
 import { toast } from '@/hooks/use-toast';
 import PaywallSheet from '@/components/billing/PaywallSheet';
+import {
+  ChatMenuHero,
+  ChatMenuNewChatButton,
+  ChatMenuSectionTitle,
+  ChatMenuSubscriptionCard,
+  ChatMenuCloseButton,
+  MENU_EASE,
+} from '@/components/chat/menu/ChatMenuPrimitives';
 
 interface Props {
   open: boolean;
@@ -86,7 +93,6 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
         title: 'Имя чата не сохранилось',
         description: 'Проверьте связь и попробуйте ещё раз — иногда мешает короткий сбой сети.',
       });
-      // keep edit mode so user can retry
     }
   };
 
@@ -105,9 +111,10 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     void loadName();
   }, [open]);
 
-  // Swipe-left to close
   const touchX = useRef(0);
-  const handleTouchStart = (e: React.TouchEvent) => { touchX.current = e.touches[0].clientX; };
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchX.current = e.touches[0].clientX;
+  };
   const handleTouchEnd = (e: React.TouchEvent) => {
     const dx = e.changedTouches[0].clientX - touchX.current;
     if (dx < -60) onClose();
@@ -117,123 +124,108 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
           <motion.div
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[3px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.32, ease: MENU_EASE }}
             onClick={onClose}
           />
 
-          {/* Drawer */}
-          <motion.div
-            className="fixed top-0 left-0 z-50 w-[82%] max-w-sm flex flex-col bg-card border-r border-border shadow-2xl pt-safe"
+          <motion.aside
+            className="fixed top-0 left-0 z-50 flex w-[86%] max-w-[340px] flex-col overflow-hidden border-r border-white/[0.05] bg-[#0a0a12] shadow-[24px_0_80px_rgba(0,0,0,0.45)] pt-safe"
             style={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+            initial={{ x: '-100%', opacity: 0.6 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: '-100%', opacity: 0.5 }}
+            transition={{ duration: 0.38, ease: MENU_EASE }}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-4 border-b border-border/50 gap-2">
-              <Link
-                href="/profile"
-                onClick={() => onClose()}
-                className="flex items-center gap-3 min-w-0 flex-1 rounded-xl p-1 -m-1 hover:bg-white/5 transition"
+            <ChatMenuCloseButton onClose={onClose} />
+
+            <ChatMenuHero
+              profileName={profileName}
+              email={email}
+              isLoggedIn={isLoggedIn}
+              avatarConfig={avatarConfig}
+              onNavigate={onClose}
+            />
+
+            <ChatMenuNewChatButton onClick={() => openChat()} />
+
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {hasConversations && <ChatMenuSectionTitle>Недавние диалоги</ChatMenuSectionTitle>}
+
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.35, ease: MENU_EASE, delay: 0.1 }}
+                className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4"
               >
-                <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/30 shrink-0">
-                  <IllustratedAvatar config={avatarConfig} size={40} relaxedCrop />
-                </div>
-                <div className="min-w-0 text-left">
-                  <p className="text-sm font-semibold leading-tight truncate">{profileName || 'Профиль'}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">
-                    {isLoggedIn ? email : 'Гостевой профиль'}
-                  </p>
-                  {!isLoggedIn && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
-                      Зарегистрируйся — и AstroBot будет помнить, о чём вы говорили.
+                {isLoading && hasConversations ? (
+                  <motion.div className="space-y-3 pt-1">
+                    {[1, 2, 3, 4].map((i) => (
+                      <motion.div
+                        key={i}
+                        className="h-[72px] rounded-[22px] bg-white/[0.03] animate-pulse"
+                      />
+                    ))}
+                  </motion.div>
+                ) : !conversations?.length ? (
+                  <motion.div className="flex flex-col items-center justify-center px-2 py-16 text-center">
+                    <CalendarDays className="mb-3 h-8 w-8 text-foreground/25" strokeWidth={1.5} />
+                    <p className="text-sm font-medium text-foreground/85">Пока без диалогов</p>
+                    <p className="mt-1.5 max-w-[220px] text-xs leading-relaxed text-foreground/40">
+                      Начните с «Новый диалог» — название подберётся по смыслу первого вопроса.
                     </p>
-                  )}
-                </div>
-              </Link>
-              <button
-                onClick={onClose}
-                className="p-1.5 rounded-full hover:bg-white/5 text-muted-foreground transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
+                  </motion.div>
+                ) : (
+                  <motion.div className="space-y-3">
+                    {conversations.map((conv, index) => (
+                      <ConversationHistoryRow
+                        key={conv.id}
+                        index={index}
+                        conv={conv}
+                        userAvatarConfig={avatarConfig}
+                        isEditing={editingConversationId === conv.id}
+                        editingTitle={editingTitle}
+                        onEditingTitleChange={setEditingTitle}
+                        onOpen={() => openChat(conv.id)}
+                        onSaveEdit={() => void saveEditing(conv.id)}
+                        onCancelEdit={() => cancelEditing()}
+                        onRequestRename={() => startEditing(conv.id, conv.title || 'Чтение')}
+                        onRequestDelete={() => handleDelete(conv.id)}
+                      />
+                    ))}
+                  </motion.div>
+                )}
+              </motion.div>
             </div>
 
-            {/* New chat button */}
-            <div className="px-3 py-3 border-b border-border/30">
-              <button
-                onClick={() => openChat()}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl bg-primary/15 border border-primary/30 hover:bg-primary/25 transition-all text-primary text-sm font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                Новый диалог
-              </button>
-            </div>
-
-            {/* Conversations list */}
-            <div className="flex-1 overflow-y-auto py-1">
-              {isLoading && hasConversations ? (
-                <div className="space-y-1 px-2 pt-2">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="h-16 rounded-xl bg-white/5 animate-pulse" />
-                  ))}
-                </div>
-              ) : !conversations?.length ? (
-                <div className="flex flex-col items-center justify-center h-48 px-4 text-center">
-                  <CalendarDays className="w-8 h-8 text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium text-foreground/90">Пока без диалогов</p>
-                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                    Начните с кнопки «Новый диалог» — название подберётся по смыслу первого вопроса.
-                  </p>
-                </div>
-              ) : (
-                <motion.div className="space-y-0.5 px-2 pt-1">
-                  {conversations.map((conv) => (
-                    <ConversationHistoryRow
-                      key={conv.id}
-                      conv={conv}
-                      userAvatarConfig={avatarConfig}
-                      isEditing={editingConversationId === conv.id}
-                      editingTitle={editingTitle}
-                      onEditingTitleChange={setEditingTitle}
-                      onOpen={() => openChat(conv.id)}
-                      onSaveEdit={() => void saveEditing(conv.id)}
-                      onCancelEdit={() => cancelEditing()}
-                      onRequestRename={() => startEditing(conv.id, conv.title || 'Чтение')}
-                      onRequestDelete={() => handleDelete(conv.id)}
-                    />
-                  ))}
-                </motion.div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-4 py-4 border-t border-border/50 space-y-2">
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: MENU_EASE, delay: 0.14 }}
+              className="shrink-0 space-y-2.5 border-t border-white/[0.05] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+            >
               {!isLoggedIn && (
                 <button
-                  onClick={() => { onClose(); onLoginClick(); }}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-primary/30 text-primary text-sm font-medium hover:bg-primary/10 transition"
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onLoginClick();
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-white/[0.08] py-2.5 text-[13px] font-medium text-foreground/70 transition-colors hover:bg-white/[0.04]"
                 >
-                  <LogIn className="w-4 h-4" />
+                  <LogIn className="h-4 w-4" strokeWidth={1.75} />
                   Войти / Зарегистрироваться
                 </button>
               )}
-              <button
-                onClick={() => setShowPaywall(true)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary/15 border border-primary/30 hover:bg-primary/25 transition-all text-primary text-sm font-medium"
-              >
-                Хочу больше разборов
-              </button>
-            </div>
-          </motion.div>
+              <ChatMenuSubscriptionCard onClick={() => setShowPaywall(true)} />
+            </motion.div>
+          </motion.aside>
         </>
       )}
       <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
