@@ -10,8 +10,38 @@ interface AstroMarkdownProps {
   isStreaming?: boolean;
 }
 
+/**
+ * Returns true when a <p> node is an "astro evidence block":
+ * the paragraph either starts with a bare ✦ string, or its
+ * first child is an <em> element whose text begins with ✦.
+ * Both patterns are used by the LLM:
+ *   *✦ italic text*     → <p><em>✦ italic text</em></p>
+ *   ✦ *italic text*     → <p>✦ <em>italic text</em></p>
+ */
+function isAstroEmBlock(children: React.ReactNode): boolean {
+  const arr = React.Children.toArray(children);
+  if (arr.length === 0) return false;
+  const first = arr[0];
+  if (typeof first === 'string' && first.trimStart().startsWith('✦')) return true;
+  if (React.isValidElement(first)) {
+    const el = first as React.ReactElement<{ children?: React.ReactNode }>;
+    if (el.type === 'em') {
+      const text = React.Children.toArray(el.props.children)
+        .map(c => (typeof c === 'string' ? c : ''))
+        .join('');
+      return text.trimStart().startsWith('✦');
+    }
+  }
+  return false;
+}
+
 const MD_COMPONENTS: Components = {
-  p:      ({ children }) => <p className="mb-4 last:mb-0 leading-[1.6]">{children}</p>,
+  p: ({ children }) => {
+    if (isAstroEmBlock(children)) {
+      return <p className="astro-em-block mb-4 last:mb-0 leading-[1.6]">{children}</p>;
+    }
+    return <p className="mb-4 last:mb-0 leading-[1.6]">{children}</p>;
+  },
   strong: ({ children }) => <strong className="text-primary font-semibold">{children}</strong>,
   em:     ({ children }) => <em className="text-accent font-medium italic">{children}</em>,
   h1:     ({ children }) => <h1 className="text-primary font-semibold text-xl mb-3 mt-2 leading-snug">{children}</h1>,

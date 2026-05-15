@@ -229,6 +229,22 @@ html.keyboard-open [data-bottom-nav] {
   @apply px-3 py-2 align-top;
 }
 
+/* Astro evidence block — italic paragraph starting with ✦
+   Gold vertical bar on the left, subdued text (~55 % white).
+   .astro-em-block em overrides the global text-accent (specificity 0-1-1 > 0-1-0). */
+.astro-em-block {
+  border-left: 2px solid hsl(var(--primary) / 0.65);
+  padding-left: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-style: italic;
+}
+
+.astro-em-block em {
+  color: inherit;
+  font-style: italic;
+  font-weight: 500;
+}
+
 /* Typing Indicator Animation */
 .typing-dot {
   animation: typing 1.4s infinite ease-in-out;
