@@ -273,6 +273,13 @@ html.keyboard-open [data-bottom-nav] {
   contain: layout style;
 }
 
+/* Streaming bot bubble: smooth height growth driven by JS freeze→expand in useLayoutEffect.
+   overflow:hidden clips the brief freeze frame; transition animates the expand. */
+.assistant-bubble {
+  overflow: hidden;
+  transition: height 0.15s ease-out;
+}
+
 /* New text chunk fades in smoothly during streaming */
 .stream-chunk-in {
   animation: streamChunkIn 0.14s ease-out both;
