@@ -5,10 +5,8 @@ import type { Components } from 'react-markdown';
 
 const REMARK_PLUGINS = [remarkGfm];
 
-/** ~14 символов/с — медленное «проявление» слева направо. */
-const REVEAL_MS_PER_CHAR = 72;
-const FINISH_MS_PER_CHAR = 24;
-const FINISH_CHARS_PER_TICK = 4;
+/** ~12 символов/с — ровное проявление слева направо. */
+const REVEAL_MS_PER_CHAR = 85;
 
 interface AstroMarkdownProps {
   content: string;
@@ -125,35 +123,29 @@ function useStreamingReveal(
   useEffect(() => {
     if (!active) return;
     everActiveRef.current = true;
-    const id = window.setInterval(() => {
-      setVisibleLength((prev) => {
-        const target = targetRef.current;
-        if (prev >= target) return prev;
-        const next = prev + 1;
-        onProgressRef.current?.();
-        return next;
-      });
-    }, REVEAL_MS_PER_CHAR);
-    return () => window.clearInterval(id);
+    let rafId = 0;
+    let lastTick = 0;
+    const step = (now: number) => {
+      if (now - lastTick >= REVEAL_MS_PER_CHAR) {
+        lastTick = now;
+        setVisibleLength((prev) => {
+          const target = targetRef.current;
+          if (prev >= target) return prev;
+          onProgressRef.current?.();
+          return prev + 1;
+        });
+      }
+      rafId = requestAnimationFrame(step);
+    };
+    rafId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafId);
   }, [active]);
 
-  // Стрим закончился — быстро догоняем хвост, затем показываем static.
   useEffect(() => {
     if (active || !everActiveRef.current) return;
     if (visibleLength >= targetLength) {
       everActiveRef.current = false;
-      return;
     }
-    const id = window.setInterval(() => {
-      setVisibleLength((prev) => {
-        const target = targetRef.current;
-        if (prev >= target) return prev;
-        const next = Math.min(target, prev + FINISH_CHARS_PER_TICK);
-        onProgressRef.current?.();
-        return next;
-      });
-    }, FINISH_MS_PER_CHAR);
-    return () => window.clearInterval(id);
   }, [active, targetLength, visibleLength]);
 
   return visibleLength;
@@ -215,14 +207,15 @@ const AstroMarkdown = memo(function AstroMarkdown({
     );
   }
 
-  const shown = closeUnclosedMarkers(content.slice(0, visibleLength));
+  // Plain text while revealing: ReactMarkdown on every char reflows layout → «куски».
+  const shown = content.slice(0, visibleLength);
 
   return (
     <div className="astro-md leading-[1.65]">
       {shown ? (
-        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+        <p className="whitespace-pre-wrap break-words mb-0 leading-[1.65] text-foreground/95">
           {shown}
-        </ReactMarkdown>
+        </p>
       ) : null}
       {isStreaming && <StreamingDots />}
     </div>
