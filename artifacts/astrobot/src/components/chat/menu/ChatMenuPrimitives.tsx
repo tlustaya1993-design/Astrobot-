@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Plus, Settings, Star } from 'lucide-react';
+import { ChevronRight, Plus, Settings } from 'lucide-react';
 import { Link } from 'wouter';
 import IllustratedAvatar from '@/components/ui/IllustratedAvatar';
 import type { AvatarConfig } from '@/components/ui/AstroAvatar';
@@ -110,11 +110,17 @@ export function ChatMenuHero({
         <Link
           href={settingsHref}
           onClick={onNavigate}
-          className="min-w-0 flex-1 text-left"
+          className="min-w-0 flex-1 text-left group/link"
+          aria-label="Профиль и настройки"
         >
-          <p className="truncate text-[17px] font-semibold tracking-tight text-foreground/95">
-            {profileName || 'Профиль'}
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="min-w-0 flex-1 truncate text-[17px] font-semibold tracking-tight text-foreground/95">
+              {profileName || 'Профиль'}
+            </p>
+            <span className="shrink-0 rounded-lg p-1 text-foreground/38 transition-colors duration-300 group-hover/link:bg-white/[0.03] group-hover/link:text-foreground/65">
+              <Settings className="h-[17px] w-[17px]" strokeWidth={1.75} aria-hidden />
+            </span>
+          </div>
           <p className="mt-0.5 truncate text-[13px] text-foreground/42">
             {isLoggedIn ? email : 'Гостевой профиль'}
           </p>
@@ -123,15 +129,6 @@ export function ChatMenuHero({
               Войдите — и AstroBot запомнит ваши диалоги
             </p>
           )}
-        </Link>
-
-        <Link
-          href={settingsHref}
-          onClick={onNavigate}
-          className="shrink-0 rounded-xl p-2.5 text-foreground/38 transition-colors duration-300 hover:bg-white/[0.03] hover:text-foreground/65"
-          aria-label="Настройки профиля"
-        >
-          <Settings className="h-[18px] w-[18px]" strokeWidth={1.75} />
         </Link>
       </div>
     </motion.div>
@@ -249,14 +246,21 @@ export function ChatMenuSubscriptionCard({ onClick }: { onClick: () => void }) {
       />
       <span className="relative flex items-center gap-3">
         <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-[12px] ring-1 ring-white/[0.08]"
           style={{
-            background:
-              'linear-gradient(145deg, rgba(240,228,200,0.14) 0%, rgba(240,228,200,0.04) 100%)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+            background: 'linear-gradient(145deg, rgba(240,228,200,0.1) 0%, rgba(0,0,0,0.35) 100%)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
           }}
         >
-          <Star className="h-[15px] w-[15px]" style={{ color: GOLD.icon }} strokeWidth={1.4} fill="rgba(240,228,200,0.2)" />
+          <img
+            src={`${import.meta.env.BASE_URL}images/avatar-bot.png`}
+            alt=""
+            className="h-full w-full object-cover"
+            width={32}
+            height={32}
+            loading="lazy"
+            decoding="async"
+          />
         </span>
         <span className="min-w-0 flex-1 py-0">
           <p className="text-[13px] font-medium tracking-tight" style={{ color: GOLD.text }}>
