@@ -5,8 +5,10 @@ import type { Components } from 'react-markdown';
 
 const REMARK_PLUGINS = [remarkGfm];
 
-/** ~12 символов/с — ровное проявление слева направо. */
-const REVEAL_MS_PER_CHAR = 85;
+/** ~24 символов/с; при отставании от буфера — до 2 символов за тик. */
+const REVEAL_MS_PER_CHAR = 42;
+const CATCH_UP_LAG_CHARS = 48;
+const MAX_CHARS_PER_TICK = 2;
 
 interface AstroMarkdownProps {
   content: string;
@@ -94,10 +96,73 @@ function closeUnclosedMarkers(text: string): string {
   return s;
 }
 
+type ParagraphRange = { start: number; end: number; text: string };
+
+function paragraphRanges(content: string): ParagraphRange[] {
+  if (!content) return [];
+  const ranges: ParagraphRange[] = [];
+  let i = 0;
+  while (i <= content.length) {
+    const next = content.indexOf('\n\n', i);
+    if (next === -1) {
+      ranges.push({ start: i, end: content.length, text: content.slice(i) });
+      break;
+    }
+    ranges.push({ start: i, end: next, text: content.slice(i, next) });
+    i = next + 2;
+  }
+  return ranges;
+}
+
+const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+      {text}
+    </ReactMarkdown>
+  );
+});
+
+function ActiveBlock({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+      {closeUnclosedMarkers(text)}
+    </ReactMarkdown>
+  );
+}
+
+function StreamingMarkdownBody({
+  content,
+  visibleLength,
+}: {
+  content: string;
+  visibleLength: number;
+}) {
+  const ranges = paragraphRanges(content);
+  const nodes: React.ReactNode[] = [];
+
+  for (let idx = 0; idx < ranges.length; idx++) {
+    const { start, end, text } = ranges[idx];
+    if (visibleLength >= end) {
+      if (text.length > 0) {
+        nodes.push(<CompletedBlock key={`p-${idx}-${end}`} text={text} />);
+      }
+      continue;
+    }
+    if (visibleLength > start) {
+      const partial = content.slice(start, visibleLength);
+      if (partial.length > 0) {
+        nodes.push(<ActiveBlock key={`p-${idx}-active`} text={partial} />);
+      }
+      break;
+    }
+    break;
+  }
+
+  return <>{nodes}</>;
+}
+
 /**
- * Медленно «проявляет» буфер SSE посимвольно.
- * Буфер (target) может обгонять visible — тогда текст догоняет плавно, без скачков.
- * Не делим на CompletedBlock/ActiveBlock: иначе при \n\n абзац целиком всплывает (ХУЯК).
+ * «Проявляет» буфер SSE посимвольно; буфер может обгонять visible.
  */
 function useStreamingReveal(
   targetLength: number,
@@ -131,8 +196,10 @@ function useStreamingReveal(
         setVisibleLength((prev) => {
           const target = targetRef.current;
           if (prev >= target) return prev;
+          const lag = target - prev;
+          const step = lag > CATCH_UP_LAG_CHARS ? MAX_CHARS_PER_TICK : 1;
           onProgressRef.current?.();
-          return prev + 1;
+          return Math.min(target, prev + step);
         });
       }
       rafId = requestAnimationFrame(step);
@@ -207,16 +274,9 @@ const AstroMarkdown = memo(function AstroMarkdown({
     );
   }
 
-  // Plain text while revealing: ReactMarkdown on every char reflows layout → «куски».
-  const shown = content.slice(0, visibleLength);
-
   return (
     <div className="astro-md leading-[1.65]">
-      {shown ? (
-        <p className="whitespace-pre-wrap break-words mb-0 leading-[1.65] text-foreground/95">
-          {shown}
-        </p>
-      ) : null}
+      <StreamingMarkdownBody content={content} visibleLength={visibleLength} />
       {isStreaming && <StreamingDots />}
     </div>
   );
