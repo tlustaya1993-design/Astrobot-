@@ -919,7 +919,7 @@ export default function Chat() {
                       )
                     ) : msg.content}
                   </div>
-                  {msg.content?.trim() && (
+                  {msg.content?.trim() && !isStreamingMsg && (
                     <div className={`mt-1.5 flex gap-1.5 ${msg.role === 'user' ? 'self-end' : 'self-start'}`}>
                       <button
                         type="button"
