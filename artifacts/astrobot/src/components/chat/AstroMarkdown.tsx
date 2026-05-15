@@ -1,4 +1,4 @@
-import React, { memo, useState, useRef, useEffect } from 'react';
+import React, { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
@@ -71,11 +71,16 @@ const MD_COMPONENTS: Components = {
 };
 
 /**
- * Close any trailing unclosed inline markers so ReactMarkdown never receives
- * a dangling ** or * that would render as a raw symbol.
+ * Close any unclosed inline markers so ReactMarkdown never sees a dangling
+ * ** or * that would render as a raw symbol.
+ *
+ * Does NOT strip trailing markers first — stripping caused a one-frame
+ * flicker: when LLM emitted the opening `*` and visibleLength landed on it,
+ * the strip removed it and italic disappeared for one tick.
+ * Instead we simply add a closing marker when the count is odd.
  */
 function closeUnclosedMarkers(text: string): string {
-  let s = text.replace(/[*_]{1,3}$/, '');
+  let s = text;
   const boldCount = (s.match(/\*\*/g) ?? []).length;
   if (boldCount % 2 !== 0) s += '**';
   const withoutBold = s.replace(/\*\*/g, '');
@@ -96,33 +101,20 @@ const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) 
 /**
  * In-progress block at the tail of the stream.
  *
- * Reveals 1 char per 30ms tick (≈33 chars/sec). Never resets to zero —
- * when `text` grows, visibleLength catches up; when `text` shrinks (new
- * paragraph started), snaps to the new length so old content doesn't flash.
- * This avoids the key={paragraph} remount that caused the visible flash at
- * every \n\n boundary.
+ * Renders the full activeTail on every 30ms SSE commit — no character-reveal
+ * timer. The natural cadence of SSE commits (~30ms, ~1-3 tokens each) already
+ * produces a smooth left-to-right appearance without an extra animation layer.
+ *
+ * Removing the char-reveal timer eliminates two bugs:
+ *   1. ХУЯК jump: visibleLength < text.length → \n\n arrives → CompletedBlock
+ *      shows full text instantly → jarring jump from partial to full.
+ *   2. Italic flicker: the old strip-trailing-* step caused a one-frame gap
+ *      where the opening * was stripped and italic disappeared momentarily.
  */
 function ActiveBlock({ text }: { text: string }) {
-  const [visibleLength, setVisibleLength] = useState(0);
-  const textRef = useRef(text);
-  textRef.current = text;
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setVisibleLength(prev => {
-        const target = textRef.current.length;
-        // If text shrank (new paragraph), snap immediately — no flash.
-        if (prev > target) return target;
-        if (prev >= target) return prev;
-        return prev + 1;
-      });
-    }, 30);
-    return () => clearInterval(timer);
-  }, []);
-
   return (
     <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-      {closeUnclosedMarkers(text.slice(0, visibleLength))}
+      {closeUnclosedMarkers(text)}
     </ReactMarkdown>
   );
 }
