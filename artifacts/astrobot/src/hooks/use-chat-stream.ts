@@ -69,6 +69,25 @@ function userFacingChatError(error: unknown): string {
   return raw.trim() || 'сервис сейчас отвечает медленнее обычного. Подождите минуту или обновите страницу.';
 }
 
+/**
+ * Returns true when `pending` ends at a natural text boundary worth flushing
+ * immediately rather than waiting for the 30 ms fallback timer.
+ * — \n\n  paragraph break
+ * — !  ?  strong sentence ends
+ * — .   sentence end only when preceded by a Cyrillic/Latin letter (avoids
+ *         "3.14", "e.g." and similar false positives)
+ */
+function shouldFlushNow(text: string): boolean {
+  if (!text) return false;
+  if (text.endsWith('\n\n')) return true;
+  const last = text[text.length - 1];
+  if (last === '!' || last === '?') return true;
+  if (last === '.' && text.length >= 2) {
+    return /[а-яёА-ЯЁa-zA-Z»"']/.test(text[text.length - 2]);
+  }
+  return false;
+}
+
 function appendInterruptedResponseNotice(content: string, message: string): string {
   const trimmed = content.trimEnd();
   const notice = `Ответ оборвался и может быть неполным: ${message}`;
@@ -282,7 +301,10 @@ export function useChatStream(conversationId?: number) {
               const data = JSON.parse(dataStr);
               if (data.content) {
                 pendingContent += data.content;
-                if (!flushTimer) {
+                if (shouldFlushNow(pendingContent)) {
+                  if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+                  flushPending();
+                } else if (!flushTimer) {
                   flushTimer = setTimeout(flushPending, 30);
                 }
               }

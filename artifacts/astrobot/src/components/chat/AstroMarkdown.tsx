@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState } from 'react';
+import React, { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
@@ -94,37 +94,15 @@ const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) 
 /**
  * In-progress block at the tail of the stream.
  *
- * Maintains a local `visIdx` that advances at ~220 chars/sec (≈ 4 chars
- * every 18 ms). This makes text flow smoothly from left to right as it is
- * generated — the user sees a continuous reveal, not sudden large chunks.
- *
- * When the parent's `text` prop grows faster than the reveal speed (burst
- * from the LLM), `visIdx` catches up gradually, which is the desired
- * typewriter-flow effect. When `text` stops growing (stream end), `visIdx`
- * reaches `text.length` and the interval clears itself.
+ * Renders the full `text` prop directly — the 30 ms batch cadence from
+ * use-chat-stream.ts already provides smooth visual rhythm. A separate
+ * per-character interval fought the batch timer and created a jerky
+ * double-animation effect, so it has been removed.
  */
 function ActiveBlock({ text }: { text: string }) {
-  // How many characters of `text` are currently visible.
-  const [visIdx, setVisIdx] = useState(0);
-  // Always-fresh ref so the interval callback can read the latest text
-  // without being stale-closed over an old value.
-  const latestText = useRef(text);
-  latestText.current = text;
-
-  // Reveal ~1 char per tick at 30 ms intervals ≈ 33 chars/sec ≈ 6 words/sec.
-  // Deliberate pace — the user can comfortably read as text appears.
-  useEffect(() => {
-    const id = setInterval(() => {
-      setVisIdx(prev => Math.min(prev + 1, latestText.current.length));
-    }, 30);
-    return () => clearInterval(id);
-  }, []);
-
-  const displayText = closeUnclosedMarkers(text.slice(0, visIdx));
-
   return (
     <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-      {displayText}
+      {closeUnclosedMarkers(text)}
     </ReactMarkdown>
   );
 }
@@ -152,7 +130,7 @@ const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false
   // ── Non-streaming: full static render ───────────────────────────────────────
   if (!isStreaming) {
     return (
-      <div className="leading-[1.6] stream-md-reveal">
+      <div className="astro-md leading-[1.6] stream-md-reveal">
         <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
           {content}
         </ReactMarkdown>
@@ -165,15 +143,16 @@ const AstroMarkdown = memo(function AstroMarkdown({ content, isStreaming = false
   // won't edit them. The last segment is the active tail, still being written.
   //
   // CompletedBlock: React.memo + stable key → immutable, zero re-render cost.
-  // ActiveBlock:    maintains a visIdx that advances 4 chars / 16 ms, giving
-  //                 a smooth left-to-right text-flow effect.
+  // ActiveBlock:    renders the full text per batch-commit cadence (~30 ms) —
+  //                 no per-character reveal to avoid double-animation with the
+  //                 batch timer in use-chat-stream.ts.
   // StreamingDots:  three animated dots (same as pre-message typing indicator).
   const segments     = content.split('\n\n');
   const completeSegs = segments.slice(0, -1);
   const activeTail   = segments[segments.length - 1] ?? '';
 
   return (
-    <div className="leading-[1.6]">
+    <div className="astro-md leading-[1.6]">
       {completeSegs.map((block, idx) =>
         block.trim() ? <CompletedBlock key={idx} text={block} /> : null
       )}
