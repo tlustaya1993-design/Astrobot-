@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
-import { MessageSquare, Check, X, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { MessageSquare, Check, X, ChevronRight } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { DEFAULT_AVATAR, type AvatarConfig } from '@/components/ui/AstroAvatar';
@@ -33,7 +33,6 @@ type Props = {
 };
 
 const LONG_PRESS_MS = 520;
-const SWIPE_OPEN = -96;
 
 export default function ConversationHistoryRow({
   conv,
@@ -51,26 +50,14 @@ export default function ConversationHistoryRow({
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
-  const [swipeOpen, setSwipeOpen] = useState(false);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
-  const dragging = useRef(false);
-
-  const dragX = useMotionValue(0);
-  const rowOpacity = useTransform(dragX, [SWIPE_OPEN, 0], [0.92, 1]);
 
   useEffect(() => {
     setPortalReady(true);
   }, []);
 
   const closeMenu = () => setMenuOpen(false);
-
-  const snapSwipe = (open: boolean) => {
-    setSwipeOpen(open);
-    animate(dragX, open ? SWIPE_OPEN : 0, { duration: 0.28, ease: MENU_EASE });
-  };
 
   const clearPress = () => {
     if (pressTimer.current) {
@@ -82,7 +69,6 @@ export default function ConversationHistoryRow({
   const openMenu = () => {
     window.getSelection()?.removeAllRanges();
     didLongPress.current = true;
-    snapSwipe(false);
     setMenuOpen(true);
   };
 
@@ -97,49 +83,16 @@ export default function ConversationHistoryRow({
       didLongPress.current = false;
       return;
     }
-    if (swipeOpen) {
-      snapSwipe(false);
-      return;
-    }
     onOpen();
   };
 
   const displayTitle = conv.title?.trim() || 'Чтение';
 
-  const onRowTouchStart = (e: React.TouchEvent) => {
-    if (isEditing) return;
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    dragging.current = false;
-    startPress();
-  };
-
-  const onRowTouchMove = (e: React.TouchEvent) => {
-    clearPress();
-    if (isEditing || menuOpen) return;
-    const dx = e.touches[0].clientX - touchStartX.current;
-    const dy = e.touches[0].clientY - touchStartY.current;
-    if (!dragging.current && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-      dragging.current = true;
-    }
-    if (!dragging.current) return;
-    const next = Math.min(0, Math.max(SWIPE_OPEN, dx));
-    dragX.set(next);
-  };
-
-  const onRowTouchEnd = () => {
-    clearPress();
-    if (!dragging.current) return;
-    dragging.current = false;
-    const current = dragX.get();
-    snapSwipe(current < SWIPE_OPEN / 2);
-  };
-
   const actionMenu =
     menuOpen && portalReady
       ? createPortal(
           <>
-            <div
+            <motion.div
               className="fixed inset-0 z-[280] bg-black/50 backdrop-blur-[2px] touch-none"
               onClick={closeMenu}
               aria-hidden
@@ -153,7 +106,7 @@ export default function ConversationHistoryRow({
               role="dialog"
               aria-label="Действия с диалогом"
             >
-              <motion.div className="flex items-start gap-2 px-2 py-2 border-b border-white/[0.05] mb-1">
+              <div className="flex items-start gap-2 px-2 py-2 border-b border-white/[0.05] mb-1">
                 <p className="flex-1 min-w-0 text-sm font-medium text-foreground/90 line-clamp-2 pr-1">
                   {displayTitle}
                 </p>
@@ -165,7 +118,7 @@ export default function ConversationHistoryRow({
                 >
                   <X className="w-5 h-5" strokeWidth={1.75} />
                 </button>
-              </motion.div>
+              </div>
               <button
                 type="button"
                 className="w-full text-left px-3 py-3 rounded-xl text-sm text-foreground/85 hover:bg-white/[0.04] transition touch-manipulation"
@@ -198,58 +151,27 @@ export default function ConversationHistoryRow({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.38, ease: MENU_EASE, delay: 0.04 + index * 0.03 }}
-        className="relative overflow-hidden rounded-[22px]"
       >
-        <motion.div
-          className="absolute inset-y-0 right-0 flex items-stretch gap-1 pr-1"
-          aria-hidden={!swipeOpen}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              snapSwipe(false);
-              onRequestRename();
-            }}
-            className="flex w-11 items-center justify-center rounded-xl bg-white/[0.06] text-foreground/55"
-            aria-label="Переименовать"
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              snapSwipe(false);
-              onRequestDelete();
-            }}
-            className="flex w-11 items-center justify-center rounded-xl bg-red-500/[0.12] text-red-300/80"
-            aria-label="Удалить"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </motion.div>
-
-        <motion.button
+        <button
           type="button"
-          style={{ x: dragX, opacity: rowOpacity }}
           onClick={handleClick}
           onContextMenu={(e) => {
             e.preventDefault();
             openMenu();
           }}
-          onTouchStart={onRowTouchStart}
-          onTouchEnd={onRowTouchEnd}
-          onTouchMove={onRowTouchMove}
-          onTouchCancel={() => {
-            clearPress();
-            if (dragging.current) snapSwipe(false);
+          onTouchStart={() => {
+            if (!isEditing) startPress();
           }}
+          onTouchEnd={clearPress}
+          onTouchMove={clearPress}
+          onTouchCancel={clearPress}
           onMouseDown={(e) => {
-            if (e.button !== 0) return;
+            if (e.button !== 0 || isEditing) return;
             startPress();
           }}
           onMouseUp={clearPress}
           onMouseLeave={clearPress}
-          className={`relative z-[1] flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors duration-300 select-none [-webkit-touch-callout:none] [-webkit-tap-highlight-color:transparent] touch-manipulation ${
+          className={`flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors duration-300 select-none [-webkit-touch-callout:none] [-webkit-tap-highlight-color:transparent] touch-manipulation ${
             active
               ? 'bg-[rgba(255,215,120,0.08)] ring-1 ring-[rgba(255,215,120,0.14)]'
               : 'bg-white/[0.025] ring-1 ring-white/[0.04] hover:bg-white/[0.04]'
@@ -265,14 +187,14 @@ export default function ConversationHistoryRow({
               ringClassName="ring-[#12101c]"
             />
           ) : (
-            <motion.div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(120,90,180,0.18)] ring-1 ring-[rgba(160,120,220,0.12)]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(120,90,180,0.18)] ring-1 ring-[rgba(160,120,220,0.12)]">
               <MessageSquare className="w-[18px] h-[18px] text-[rgba(190,160,240,0.75)]" strokeWidth={1.75} />
-            </motion.div>
+            </div>
           )}
 
-          <motion.div className="min-w-0 flex-1 pr-1">
+          <div className="min-w-0 flex-1 pr-1">
             {isEditing ? (
-              <motion.div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                 <input
                   value={editingTitle}
                   onChange={(e) => onEditingTitleChange(e.target.value)}
@@ -310,7 +232,7 @@ export default function ConversationHistoryRow({
                 >
                   <X className="w-4 h-4" />
                 </button>
-              </motion.div>
+              </div>
             ) : (
               <>
                 <p className="text-[15px] font-medium leading-snug text-foreground/92 line-clamp-3 pointer-events-none">
@@ -321,7 +243,7 @@ export default function ConversationHistoryRow({
                 </p>
               </>
             )}
-          </motion.div>
+          </div>
 
           {!isEditing && (
             <ChevronRight
@@ -329,7 +251,7 @@ export default function ConversationHistoryRow({
               strokeWidth={1.75}
             />
           )}
-        </motion.button>
+        </button>
       </motion.div>
 
       {actionMenu}
