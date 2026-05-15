@@ -1236,4 +1236,6 @@ ${memoriesSection}
 ${toneInstructions}`;
 }
 
+export { buildSystemPrompt, safeBuildSystemPrompt };
+
 export default router;
