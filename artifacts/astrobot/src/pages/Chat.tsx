@@ -918,7 +918,7 @@ export default function Chat() {
                 )}
                 <div className={msg.role === 'user' ? 'max-w-[82%] min-w-0 flex flex-col' : 'flex-1 min-w-0 flex flex-col'}>
                   <div
-                    ref={isStreamingMsg ? (el: HTMLDivElement | null) => { streamingBubbleRef.current = el; } : undefined}
+                    ref={isStreamingMsg ? (el: HTMLDivElement | null) => { if (el === null && streamingBubbleRef.current) { streamingBubbleRef.current.style.height = ''; } streamingBubbleRef.current = el; } : undefined}
                     className={`min-w-0 ${
                       msg.role === 'user'
                         ? 'rounded-2xl p-4 bg-[rgba(201,162,39,0.12)] border border-[rgba(201,162,39,0.2)] text-foreground rounded-tr-sm break-words overflow-x-hidden'
