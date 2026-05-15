@@ -215,13 +215,15 @@ export function ChatMenuSubscriptionCard({ onClick }: { onClick: () => void }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.45, ease: MENU_EASE, delay: 0.12 }}
       onClick={onClick}
-      className="group relative z-[1] w-full overflow-hidden rounded-[24px] px-5 py-[18px] text-left transition-all duration-500 active:scale-[0.995]"
+      className="group relative z-[1] w-full overflow-hidden rounded-[20px] px-4 py-3 text-left transition-all duration-500 active:scale-[0.995]"
       style={{
-        border: `1px solid rgba(255,255,255,0.04)`,
-        background:
-          'linear-gradient(168deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.018) 42%, rgba(12,11,18,0.6) 100%)',
+        border: `1px solid ${GOLD.border}`,
+        background: [
+          'radial-gradient(ellipse 90% 80% at 50% -20%, rgba(240, 228, 200, 0.09) 0%, transparent 55%)',
+          'linear-gradient(168deg, rgba(240, 228, 200, 0.06) 0%, rgba(255,255,255,0.02) 38%, rgba(12,10,18,0.65) 100%)',
+        ].join(', '),
         boxShadow:
-          'inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -12px 24px rgba(0,0,0,0.12), 0 4px 20px rgba(0,0,0,0.2)',
+          'inset 0 1px 0 rgba(240,228,200,0.12), inset 0 -8px 20px rgba(0,0,0,0.1), 0 2px 14px rgba(0,0,0,0.2)',
       }}
     >
       <span
@@ -232,36 +234,41 @@ export function ChatMenuSubscriptionCard({ onClick }: { onClick: () => void }) {
       />
       <span
         className="pointer-events-none absolute inset-x-0 top-0 h-px"
-        style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)' }}
+        style={{
+          background:
+            'linear-gradient(90deg, transparent, rgba(240,228,200,0.2), transparent)',
+        }}
       />
       <motion.span
-        className="pointer-events-none absolute -left-8 -top-8 h-28 w-28 rounded-full"
+        className="pointer-events-none absolute -left-8 -top-8 h-24 w-24 rounded-full"
         style={{
           background: `radial-gradient(circle, ${GOLD.glow} 0%, transparent 70%)`,
         }}
         animate={{ opacity: [0.5, 0.75, 0.5] }}
         transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
       />
-      <span className="relative flex items-center gap-4">
+      <span className="relative flex items-center gap-3">
         <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px]"
           style={{
-            background: 'linear-gradient(145deg, rgba(240,228,200,0.1) 0%, rgba(255,255,255,0.03) 100%)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07)',
+            background:
+              'linear-gradient(145deg, rgba(240,228,200,0.14) 0%, rgba(240,228,200,0.04) 100%)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
           }}
         >
-          <Star className="h-[17px] w-[17px]" style={{ color: GOLD.icon }} strokeWidth={1.4} fill="rgba(240,228,200,0.18)" />
+          <Star className="h-[15px] w-[15px]" style={{ color: GOLD.icon }} strokeWidth={1.4} fill="rgba(240,228,200,0.2)" />
         </span>
-        <span className="min-w-0 flex-1 py-0.5">
-          <p className="text-[14px] font-medium tracking-tight text-foreground/88">
+        <span className="min-w-0 flex-1 py-0">
+          <p className="text-[13px] font-medium tracking-tight" style={{ color: GOLD.text }}>
             Хочу больше разборов
           </p>
-          <p className="mt-1 text-[11px] font-normal leading-relaxed text-foreground/38">
+          <p className="mt-0.5 text-[10px] font-normal leading-snug" style={{ color: GOLD.textMuted }}>
             Подписка откроет все возможности
           </p>
         </span>
         <ChevronRight
-          className="h-4 w-4 shrink-0 text-foreground/22 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-foreground/35"
+          className="h-4 w-4 shrink-0 transition-all duration-300 group-hover:translate-x-0.5"
+          style={{ color: GOLD.textMuted }}
           strokeWidth={1.75}
         />
       </span>
