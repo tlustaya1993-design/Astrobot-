@@ -113,17 +113,15 @@ function ActiveBlock({ text }: { text: string }) {
 
   useEffect(() => {
     setVisibleLength(0);
-    let rafId: number;
-    const step = () => {
+    // 5 chars every 50 ms = 100 chars/sec (3× slower than the previous 300 chars/sec)
+    const timer = setInterval(() => {
       setVisibleLength(prev => {
         const target = textRef.current.length;
         if (prev >= target) return prev;
         return Math.min(prev + 5, target);
       });
-      rafId = requestAnimationFrame(step);
-    };
-    rafId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafId);
+    }, 50);
+    return () => clearInterval(timer);
   }, []);
 
   return (
