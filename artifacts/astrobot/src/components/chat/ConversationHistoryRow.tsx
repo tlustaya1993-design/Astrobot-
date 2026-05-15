@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { DEFAULT_AVATAR, type AvatarConfig } from '@/components/ui/AstroAvatar';
 import { SynastryRowAvatars } from '@/components/chat/SynastryRowAvatars';
-import { MENU_EASE } from '@/components/chat/menu/ChatMenuPrimitives';
+import { MENU_EASE, conversationRowSurfaceStyle } from '@/components/chat/menu/ChatMenuPrimitives';
 
 export type ConversationListItem = {
   id: number;
@@ -171,12 +171,17 @@ export default function ConversationHistoryRow({
           }}
           onMouseUp={clearPress}
           onMouseLeave={clearPress}
-          className={`flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors duration-300 select-none [-webkit-touch-callout:none] [-webkit-tap-highlight-color:transparent] touch-manipulation ${
-            active
-              ? 'bg-[rgba(255,215,120,0.08)] ring-1 ring-[rgba(255,215,120,0.14)]'
-              : 'bg-white/[0.025] ring-1 ring-white/[0.04] hover:bg-white/[0.04]'
-          } rounded-[22px]`}
+          className="group relative w-full overflow-hidden rounded-[22px] text-left transition-all duration-300 select-none [-webkit-touch-callout:none] [-webkit-tap-highlight-color:transparent] touch-manipulation hover:brightness-[1.03] active:brightness-[0.98]"
+          style={conversationRowSurfaceStyle(active)}
         >
+          <span
+            className="pointer-events-none absolute inset-0 rounded-[22px] opacity-70"
+            style={{
+              background:
+                'radial-gradient(ellipse 90% 55% at 50% 0%, rgba(255,255,255,0.05) 0%, transparent 62%)',
+            }}
+          />
+          <span className="relative z-[1] flex w-full items-center gap-3.5 px-4 py-3.5">
           {conv.contactId != null && conv.contactId > 0 ? (
             <SynastryRowAvatars
               userConfig={userAvatarConfig ?? DEFAULT_AVATAR}
@@ -187,8 +192,14 @@ export default function ConversationHistoryRow({
               ringClassName="ring-[#12101c]"
             />
           ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(120,90,180,0.18)] ring-1 ring-[rgba(160,120,220,0.12)]">
-              <MessageSquare className="w-[18px] h-[18px] text-[rgba(190,160,240,0.75)]" strokeWidth={1.75} />
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
+              style={{
+                background: 'linear-gradient(145deg, rgba(90,75,120,0.2) 0%, rgba(60,52,85,0.15) 100%)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+              }}
+            >
+              <MessageSquare className="w-[18px] h-[18px] text-[rgba(175,165,200,0.7)]" strokeWidth={1.75} />
             </div>
           )}
 
@@ -251,6 +262,7 @@ export default function ConversationHistoryRow({
               strokeWidth={1.75}
             />
           )}
+          </span>
         </button>
       </motion.div>
 

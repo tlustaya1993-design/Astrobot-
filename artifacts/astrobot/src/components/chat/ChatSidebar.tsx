@@ -19,6 +19,8 @@ import {
   ChatMenuNewChatButton,
   ChatMenuSectionTitle,
   ChatMenuSubscriptionCard,
+  ChatMenuAtmosphere,
+  MENU_PANEL_CLASS,
 } from '@/components/chat/menu/ChatMenuPrimitives';
 
 interface ChatSidebarProps {
@@ -133,10 +135,12 @@ export default function ChatSidebar({
   return (
     <>
       <aside
-        className={`flex h-full w-full flex-col overflow-hidden border-r border-white/[0.05] bg-[#0a0a12] ${className ?? ''}`}
+        className={`h-full w-full ${MENU_PANEL_CLASS} ${className ?? ''}`}
       >
+        <ChatMenuAtmosphere />
+        <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
         {headerRight && (
-          <div className="flex justify-end px-3 pt-2">{headerRight}</div>
+          <div className="flex justify-end px-3 pt-2">{headerRight}</motion.div>
         )}
 
         <ChatMenuHero
@@ -157,7 +161,11 @@ export default function ChatSidebar({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Поиск диалогов..."
-              className="w-full rounded-[18px] border border-white/[0.06] bg-white/[0.03] py-2.5 pl-9 pr-3 text-sm text-foreground/90 outline-none transition-colors placeholder:text-foreground/30 focus:border-[rgba(255,215,120,0.2)]"
+              className="w-full rounded-[18px] border border-white/[0.04] py-2.5 pl-9 pr-3 text-sm text-foreground/90 outline-none transition-colors placeholder:text-foreground/28 focus:border-[rgba(240,228,200,0.18)]"
+              style={{
+                background: 'linear-gradient(165deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.012) 100%)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
+              }}
             />
           </div>
           <ChatMenuNewChatButton embedded onClick={() => openChat()} />

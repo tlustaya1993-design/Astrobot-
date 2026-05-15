@@ -21,7 +21,9 @@ import {
   ChatMenuSectionTitle,
   ChatMenuSubscriptionCard,
   ChatMenuCloseButton,
+  ChatMenuAtmosphere,
   MENU_EASE,
+  MENU_PANEL_CLASS,
 } from '@/components/chat/menu/ChatMenuPrimitives';
 
 interface Props {
@@ -134,7 +136,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
           />
 
           <motion.aside
-            className="fixed top-0 left-0 z-50 flex w-[86%] max-w-[340px] flex-col overflow-hidden border-r border-white/[0.05] bg-[#0a0a12] shadow-[24px_0_80px_rgba(0,0,0,0.45)] pt-safe"
+            className={`fixed top-0 left-0 z-50 w-[86%] max-w-[340px] ${MENU_PANEL_CLASS} pt-safe`}
             style={{ bottom: 'calc(2.5rem + env(safe-area-inset-bottom, 0px))' }}
             initial={{ x: '-100%', opacity: 0.6 }}
             animate={{ x: 0, opacity: 1 }}
@@ -143,8 +145,10 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
+            <ChatMenuAtmosphere />
             <ChatMenuCloseButton onClose={onClose} />
 
+            <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
             <ChatMenuHero
               profileName={profileName}
               email={email}
@@ -169,7 +173,12 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
                     {[1, 2, 3, 4].map((i) => (
                       <motion.div
                         key={i}
-                        className="h-[72px] rounded-[22px] bg-white/[0.03] animate-pulse"
+                        className="h-[72px] rounded-[22px] animate-pulse"
+                        style={{
+                          background:
+                            'linear-gradient(168deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)',
+                          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                        }}
                       />
                     ))}
                   </motion.div>
@@ -208,7 +217,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, ease: MENU_EASE, delay: 0.14 }}
-              className="shrink-0 space-y-2.5 border-t border-white/[0.05] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+              className="relative z-[1] shrink-0 space-y-2.5 border-t border-white/[0.03] px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
             >
               {!isLoggedIn && (
                 <button
@@ -225,6 +234,7 @@ export default function HistoryDrawer({ open, onClose, onLoginClick }: Props) {
               )}
               <ChatMenuSubscriptionCard onClick={() => setShowPaywall(true)} />
             </motion.div>
+            </div>
           </motion.aside>
         </>
       )}
