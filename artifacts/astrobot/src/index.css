@@ -216,19 +216,20 @@ html.keyboard-open [data-bottom-nav] {
 }
 
 /* Astro evidence block — italic paragraph starting with ✦
-   Horizontal gold rule at the top, then subdued italic text. */
+   Vertical gold bar on the left, subdued italic text.
+   .astro-em-block em: !important overrides text-primary/90 set in MD_COMPONENTS
+   so key phrases inside the block inherit the muted-white body colour;
+   **bold** (strong) still gets text-primary (gold) via its own class. */
 .astro-em-block {
-  border-top: 1px solid rgba(201, 162, 39, 0.5);
-  padding-top: 0.6rem;
-  margin-top: 0.25rem;
-  color: rgba(255, 255, 255, 0.72);
+  border-left: 2px solid rgba(201, 162, 39, 0.5);
+  padding-left: 0.75rem;
+  color: rgba(255, 255, 255, 0.65);
   font-style: italic;
   font-size: 14px;
   line-height: 1.65;
 }
 
 .astro-em-block em {
-  /* !important overrides Tailwind utility text-accent on <em> elements */
   color: inherit !important;
   font-style: italic;
   font-weight: 500;

@@ -48,7 +48,7 @@ const MD_COMPONENTS: Components = {
     return <p className="mb-3 last:mb-0 leading-[1.65]">{children}</p>;
   },
   strong: ({ children }) => <strong className="text-primary font-semibold">{children}</strong>,
-  em:     ({ children }) => <em className="font-medium italic">{children}</em>,
+  em:     ({ children }) => <em className="text-primary/90 font-medium italic">{children}</em>,
   h1:     ({ children }) => <h1 className="text-white font-semibold text-xl mb-3 mt-2 leading-snug">{children}</h1>,
   h2:     ({ children }) => <h2 className="text-white font-semibold text-lg mb-3 mt-2 leading-snug">{children}</h2>,
   h3:     ({ children }) => <h3 className="text-primary/90 font-semibold text-[12px] tracking-[0.08em] uppercase mb-2 mt-4 leading-snug">{children}</h3>,
@@ -79,19 +79,25 @@ const MD_COMPONENTS: Components = {
  * Close any unclosed inline markers so ReactMarkdown never sees a dangling
  * ** or * that would render as a raw symbol.
  *
- * Does NOT strip trailing markers first — stripping caused a one-frame
- * flicker: when LLM emitted the opening `*` and visibleLength landed on it,
- * the strip removed it and italic disappeared for one tick.
- * Instead we simply add a closing marker when the count is odd.
+ * Closing markers are inserted BEFORE trailing whitespace, not after.
+ * CommonMark forbids a closing delimiter preceded by Unicode whitespace, so
+ * appending `*` after a trailing space makes the em element vanish for one
+ * frame and reappear on the next non-space character — visible flicker.
+ * By inserting before the whitespace the <em> DOM node is always present
+ * once the opening `*` appears; only its text content updates each tick.
  */
 function closeUnclosedMarkers(text: string): string {
-  let s = text;
-  const boldCount = (s.match(/\*\*/g) ?? []).length;
-  if (boldCount % 2 !== 0) s += '**';
-  const withoutBold = s.replace(/\*\*/g, '');
+  const trailingWs = text.match(/(\s*)$/)?.[1] ?? '';
+  let core = text.slice(0, text.length - trailingWs.length);
+
+  const boldCount = (core.match(/\*\*/g) ?? []).length;
+  if (boldCount % 2 !== 0) core += '**';
+
+  const withoutBold = core.replace(/\*\*/g, '');
   const italicCount = (withoutBold.match(/\*/g) ?? []).length;
-  if (italicCount % 2 !== 0) s += '*';
-  return s;
+  if (italicCount % 2 !== 0) core += '*';
+
+  return core + trailingWs;
 }
 
 type ParagraphRange = { start: number; end: number; text: string };
@@ -112,21 +118,26 @@ function paragraphRanges(content: string): ParagraphRange[] {
   return ranges;
 }
 
-const CompletedBlock = memo(function CompletedBlock({ text }: { text: string }) {
+/**
+ * Single paragraph renderer used for both in-progress and completed paragraphs.
+ * Using the same component type + stable key `p-{idx}` means React reuses the
+ * existing DOM nodes when the paragraph transitions from partial → complete,
+ * instead of unmounting ActiveBlock and mounting CompletedBlock (which caused
+ * a brief repaint flash at every paragraph boundary).
+ */
+const ParagraphBlock = memo(function ParagraphBlock({
+  text,
+  active,
+}: {
+  text: string;
+  active: boolean;
+}) {
   return (
     <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-      {text}
+      {active ? closeUnclosedMarkers(text) : text}
     </ReactMarkdown>
   );
 });
-
-function ActiveBlock({ text }: { text: string }) {
-  return (
-    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
-      {closeUnclosedMarkers(text)}
-    </ReactMarkdown>
-  );
-}
 
 function StreamingMarkdownBody({
   content,
@@ -142,14 +153,14 @@ function StreamingMarkdownBody({
     const { start, end, text } = ranges[idx];
     if (visibleLength >= end) {
       if (text.length > 0) {
-        nodes.push(<CompletedBlock key={`p-${idx}-${end}`} text={text} />);
+        nodes.push(<ParagraphBlock key={`p-${idx}`} text={text} active={false} />);
       }
       continue;
     }
     if (visibleLength > start) {
       const partial = content.slice(start, visibleLength);
       if (partial.length > 0) {
-        nodes.push(<ActiveBlock key={`p-${idx}-active`} text={partial} />);
+        nodes.push(<ParagraphBlock key={`p-${idx}`} text={partial} active={true} />);
       }
       break;
     }
