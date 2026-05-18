@@ -5,10 +5,8 @@ import type { Components } from 'react-markdown';
 
 const REMARK_PLUGINS = [remarkGfm];
 
-/** ~24 символов/с; при отставании от буфера — до 2 символов за тик. */
-const REVEAL_MS_PER_CHAR = 42;
-const CATCH_UP_LAG_CHARS = 48;
-const MAX_CHARS_PER_TICK = 2;
+/** Reveal one line per tick (~12 lines/sec). */
+const REVEAL_MS_PER_LINE = 80;
 
 interface AstroMarkdownProps {
   content: string;
@@ -50,7 +48,7 @@ const MD_COMPONENTS: Components = {
     return <p className="mb-3 last:mb-0 leading-[1.65]">{children}</p>;
   },
   strong: ({ children }) => <strong className="text-primary font-semibold">{children}</strong>,
-  em:     ({ children }) => <em className="text-accent font-medium italic">{children}</em>,
+  em:     ({ children }) => <em className="font-medium italic">{children}</em>,
   h1:     ({ children }) => <h1 className="text-white font-semibold text-xl mb-3 mt-2 leading-snug">{children}</h1>,
   h2:     ({ children }) => <h2 className="text-white font-semibold text-lg mb-3 mt-2 leading-snug">{children}</h2>,
   h3:     ({ children }) => <h3 className="text-primary/90 font-semibold text-[12px] tracking-[0.08em] uppercase mb-2 mt-4 leading-snug">{children}</h3>,
@@ -162,16 +160,20 @@ function StreamingMarkdownBody({
 }
 
 /**
- * «Проявляет» буфер SSE посимвольно; буфер может обгонять visible.
+ * Reveals buffered SSE content line-by-line (one \n boundary per tick).
+ * Consecutive blank lines are skipped in a single tick so paragraph
+ * transitions don't stall. If no newline exists yet in the buffer the
+ * rest of the incomplete line is shown immediately (no flicker: the
+ * incomplete tail is still passed through closeUnclosedMarkers).
  */
 function useStreamingReveal(
-  targetLength: number,
+  content: string,
   active: boolean,
   onRevealProgress?: () => void,
 ) {
   const [visibleLength, setVisibleLength] = useState(0);
-  const targetRef = useRef(targetLength);
-  targetRef.current = targetLength;
+  const contentRef = useRef(content);
+  contentRef.current = content;
   const onProgressRef = useRef(onRevealProgress);
   onProgressRef.current = onRevealProgress;
   const everActiveRef = useRef(false);
@@ -191,15 +193,22 @@ function useStreamingReveal(
     let rafId = 0;
     let lastTick = 0;
     const step = (now: number) => {
-      if (now - lastTick >= REVEAL_MS_PER_CHAR) {
+      if (now - lastTick >= REVEAL_MS_PER_LINE) {
         lastTick = now;
         setVisibleLength((prev) => {
-          const target = targetRef.current;
-          if (prev >= target) return prev;
-          const lag = target - prev;
-          const step = lag > CATCH_UP_LAG_CHARS ? MAX_CHARS_PER_TICK : 1;
+          const text = contentRef.current;
+          if (prev >= text.length) return prev;
+          const nl = text.indexOf('\n', prev);
+          if (nl === -1) {
+            // No complete line yet — show the rest of the incomplete tail.
+            onProgressRef.current?.();
+            return text.length;
+          }
+          let next = nl + 1;
+          // Skip consecutive blank lines so \n\n paragraph gaps cross in one tick.
+          while (next < text.length && text[next] === '\n') next++;
           onProgressRef.current?.();
-          return Math.min(target, prev + step);
+          return next;
         });
       }
       rafId = requestAnimationFrame(step);
@@ -210,10 +219,10 @@ function useStreamingReveal(
 
   useEffect(() => {
     if (active || !everActiveRef.current) return;
-    if (visibleLength >= targetLength) {
+    if (visibleLength >= content.length) {
       everActiveRef.current = false;
     }
-  }, [active, targetLength, visibleLength]);
+  }, [active, content.length, visibleLength]);
 
   return visibleLength;
 }
@@ -255,7 +264,7 @@ const AstroMarkdown = memo(function AstroMarkdown({
   }, [isStreaming]);
 
   const revealActive = isStreaming || postStream;
-  const visibleLength = useStreamingReveal(content.length, revealActive, onRevealProgress);
+  const visibleLength = useStreamingReveal(content, revealActive, onRevealProgress);
 
   useEffect(() => {
     if (!postStream) return;
