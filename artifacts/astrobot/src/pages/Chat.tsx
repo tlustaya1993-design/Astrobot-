@@ -453,22 +453,6 @@ export default function Chat() {
     container.scrollTop = container.scrollHeight;
   }, [isStreaming, streamingContentLength, revealScrollTick]);
 
-  // После завершения стрима — мягко докрутить вниз.
-  useEffect(() => {
-    if (isStreaming) return;
-    const container = messagesScrollRef.current;
-    if (!container || !autoScrollEnabledRef.current) return;
-    const t = setTimeout(() => {
-      if (!container || !autoScrollEnabledRef.current) return;
-      const distFromBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight;
-      if (distFromBottom < 200) {
-        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-      }
-    }, 350);
-    return () => clearTimeout(t);
-  }, [isStreaming]);
-
   // Если пользователь прокручивает в прошлое — отключаем автоследование; если возвращается к низу — снова включаем.
   useEffect(() => {
     const container = messagesScrollRef.current;
