@@ -48,6 +48,12 @@ router.get("/ephemeris", async (req, res) => {
 // ─── Synastry ─────────────────────────────────────────────────────────────────
 
 router.post("/synastry", (req, res) => {
+  const sessionId = req.headers["x-session-id"] as string | undefined;
+  if (!sessionId) {
+    res.status(400).json({ error: "x-session-id required" });
+    return;
+  }
+
   const { personA, personB } = req.body as {
     personA: { birthDate: string; birthTime?: string; birthLat?: number; birthLng?: number; name?: string };
     personB: { birthDate: string; birthTime?: string; birthLat?: number; birthLng?: number; name?: string };

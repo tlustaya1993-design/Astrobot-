@@ -253,8 +253,9 @@ export function useChatStream(conversationId?: number) {
 
       const reader = res.body?.getReader();
       if (!reader) {
-        setLocalMessages(prev => prev.filter((m) => m.id !== streamingAssistantId));
-        return targetId;
+        throw new Error(
+          'Не удалось открыть поток ответа. Проверьте соединение и попробуйте ещё раз.',
+        );
       }
       const decoder = new TextDecoder();
       let assistantMsg = '';

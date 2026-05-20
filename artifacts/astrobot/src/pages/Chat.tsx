@@ -656,13 +656,14 @@ export default function Chat() {
     });
   };
 
+  const inputTooLong = inputValue.length > MAX_CHAT_MESSAGE_CHARS;
+
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!inputValue.trim() || isStreaming) return;
+    if (!inputValue.trim() || isStreaming || inputTooLong) return;
     trySendHaptic(lastSendHapticAtRef);
     const text = inputValue.trim();
-    const tooLong = text.length > MAX_CHAT_MESSAGE_CHARS;
-    if (!tooLong) setInputValue('');
+    setInputValue('');
     requestAnimationFrame(() => resizeComposer());
     pendingScrollAfterSendRef.current = true;
     // При новом сообщении включаем автоследование заново.
@@ -701,6 +702,8 @@ export default function Chat() {
       setSelectedContactId(nextId);
       return;
     }
+    setShowHistory(false);
+    setShowProfile(false);
     setContextSwitchTargetId(nextId);
   };
 
@@ -1159,9 +1162,9 @@ export default function Chat() {
               />
               <motion.button
                 type="submit"
-                disabled={!inputValue.trim() || isStreaming}
+                disabled={!inputValue.trim() || isStreaming || inputTooLong}
                 onPointerDown={() => {
-                  if (isStreaming || !inputValue.trim()) return;
+                  if (isStreaming || !inputValue.trim() || inputTooLong) return;
                   trySendHaptic(lastSendHapticAtRef);
                 }}
                 whileTap={
@@ -1242,10 +1245,10 @@ export default function Chat() {
       {typeof contextSwitchTargetId !== 'undefined' && (
         <>
           <div
-            className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm"
             onClick={() => setContextSwitchTargetId(undefined)}
           />
-          <div className="fixed left-3 right-3 z-[71] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(7rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
+          <div className="fixed left-3 right-3 z-[201] rounded-2xl border border-border bg-card p-4 shadow-2xl" style={{ bottom: 'calc(7rem + env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
             <p className="text-sm font-medium mb-2">Продолжаем этот же диалог в контексте карты другого человека, или начинаем новый чат?</p>
             <p className="text-xs text-muted-foreground mb-3">
               Выберите удобный вариант для этого переключения.
