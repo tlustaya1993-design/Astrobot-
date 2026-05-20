@@ -523,13 +523,6 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   markInFlight(sessionId);
 
-  const nextBalance = getBalanceAfterCharge(
-    owner.requestsUsed,
-    owner.requestsBalance,
-    requestCost,
-    owner.email,
-  );
-
   balanceBeforeCharge = owner.requestsBalance;
 
   const [insertedUser] = await db
@@ -537,14 +530,6 @@ router.post("/conversations/:id/messages", async (req, res) => {
     .values({ conversationId: id, role: "user", content: normalizedContent })
     .returning({ id: messages.id });
   insertedUserId = insertedUser?.id;
-
-  await db
-    .update(usersTable)
-    .set({
-      requestsBalance: nextBalance,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.sessionId, sessionId));
 
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
     db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
@@ -681,12 +666,19 @@ router.post("/conversations/:id/messages", async (req, res) => {
       // Tag as 'astro' when the response was built with a full natal chart (date+time+coords),
       // meaning it likely contains house/planet assignments that become stale over deploys.
       const hasNatalHouses = !!(userProfile?.birthDate && userProfile?.birthTime && userProfile?.birthLat);
+      const balanceAfterCharge = getBalanceAfterCharge(
+        owner.requestsUsed,
+        owner.requestsBalance,
+        requestCost,
+        owner.email,
+      );
       await Promise.all([
         db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse, messageType: hasNatalHouses ? "astro" : "chat" }),
         db
           .update(usersTable)
           .set({
             requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
+            requestsBalance: balanceAfterCharge,
             updatedAt: new Date(),
           })
           .where(eq(usersTable.sessionId, sessionId)),
