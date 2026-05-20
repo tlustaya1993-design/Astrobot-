@@ -512,6 +512,15 @@ router.post("/conversations/:id/messages", async (req, res) => {
     res.status(429).json({ error: throttle.message, retryAfterSec: throttle.waitSec });
     return;
   }
+
+  // Gate before in-flight lock, balance debit, and user message insert.
+  if (!SWE_AVAILABLE) {
+    res.status(503).json({
+      error: "Астрологический движок временно недоступен. Попробуй позже.",
+    });
+    return;
+  }
+
   markInFlight(sessionId);
 
   const nextBalance = getBalanceAfterCharge(
@@ -557,22 +566,6 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .orderBy(desc(memoriesTable.updatedAt))
       .limit(20),
   ]);
-
-  // ── Astro engine health gate ───────────────────────────────────────────────
-  // If swisseph-v2 failed to load at startup, reject immediately with a
-  // user-visible SSE error instead of attempting (and crashing) a calculation.
-  if (!SWE_AVAILABLE) {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.write(
-      `data: ${JSON.stringify({
-        error: "Астрологический движок временно недоступен. Попробуй позже.",
-      })}\n\n`,
-    );
-    res.end();
-    return;
-  }
 
   const systemPrompt = safeBuildSystemPrompt(userProfile, contactProfile, userMemories, nextExtended);
 
