@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 import {
   formatDbConnectError,
   getDatabaseConnectionDiagnostics,
+  listPublicTables,
 } from "@workspace/db";
 import { logger } from "./logger.js";
 
@@ -106,7 +107,11 @@ export function startDbInitInBackground(
       await withTimeout(runMigrations(pool), MIGRATIONS_TIMEOUT_MS, "DB migrations");
       status = "ready";
       lastError = undefined;
-      logger.info({ db: diag.target }, "Database migrations complete");
+      const tables = await listPublicTables(pool);
+      logger.info(
+        { db: diag.target, tables, usersExists: tables.includes("users") },
+        "Database migrations complete",
+      );
     } catch (err) {
       lastError = err;
       status = "failed";

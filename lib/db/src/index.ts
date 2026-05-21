@@ -54,6 +54,7 @@ export const db: AppDb = (
 
 export * from "./schema";
 export * from "./migrations";
+export { ensureBootstrapSchema, listPublicTables } from "./bootstrap-schema.js";
 export {
   envDatabaseFlags,
   formatDbConnectError,
