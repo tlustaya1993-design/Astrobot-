@@ -639,13 +639,31 @@ router.post("/payments/webhook", async (req, res) => {
     return;
   }
 
-  const nextStatus = notification.object.status;
+  let providerPayment;
+  try {
+    providerPayment = await getYookassaPayment(providerPaymentId);
+  } catch (err) {
+    logger.error({ err, providerPaymentId }, "Failed to verify yookassa webhook payment");
+    res.status(503).json({ error: "Payment verification failed" });
+    return;
+  }
+
+  if (providerPayment.id !== providerPaymentId) {
+    logger.error(
+      { providerPaymentId, verifiedProviderPaymentId: providerPayment.id },
+      "YooKassa webhook verification returned mismatched payment id",
+    );
+    res.status(400).json({ error: "Invalid payment verification" });
+    return;
+  }
+
+  const nextStatus = providerPayment.status;
 
   await db
     .update(paymentsTable)
     .set({
       status: nextStatus,
-      metadata: notification.object as unknown as Record<string, unknown>,
+      metadata: providerPayment as unknown as Record<string, unknown>,
       updatedAt: new Date(),
     })
     .where(eq(paymentsTable.id, paymentRow.id));
