@@ -5,58 +5,70 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { isDatabaseConfigured } from "@workspace/db";
+import { resolveFrontendDist } from "./lib/frontend-dist.js";
 import { logger } from "./lib/logger";
 import { sessionMiddleware } from "./middleware/auth.js";
 import { injectOpenGraphMeta, injectAdminMeta, resolvePublicOrigin } from "./lib/spaHtml";
 
-const app: Express = express();
-
-app.use(
-  pinoHttp({
-    logger,
-    serializers: {
-      req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
+/** Регистрирует API + static SPA на переданном Express (тот же инстанс, что слушает порт). */
+export function configureApp(app: Express): void {
+  app.use(
+    pinoHttp({
+      logger,
+      serializers: {
+        req(req) {
+          return {
+            id: req.id,
+            method: req.method,
+            url: req.url?.split("?")[0],
+          };
+        },
+        res(res) {
+          return {
+            statusCode: res.statusCode,
+          };
+        },
       },
-      res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
-      },
-    },
-  }),
-);
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(sessionMiddleware);
+    }),
+  );
+  app.use(cors());
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+  app.use(sessionMiddleware);
 
-app.use("/api", (req, res, next) => {
-  if (req.path === "/healthz") {
+  app.use("/api", (req, res, next) => {
+    if (req.path === "/healthz") {
+      next();
+      return;
+    }
+    if (!isDatabaseConfigured()) {
+      res.status(503).json({
+        error: "База данных не настроена (DATABASE_URL).",
+      });
+      return;
+    }
     next();
+  });
+
+  app.use("/api", router);
+
+  if (process.env.NODE_ENV !== "production") {
     return;
   }
-  if (!isDatabaseConfigured()) {
-    res.status(503).json({
-      error: "База данных не настроена (DATABASE_URL).",
-    });
+
+  const frontendDist = resolveFrontendDist();
+  if (!frontendDist) {
+    logger.error(
+      {
+        cwd: process.cwd(),
+        FRONTEND_DIST: process.env.FRONTEND_DIST ?? null,
+        dirname: typeof __dirname !== "undefined" ? __dirname : null,
+      },
+      "Frontend dist not found (artifacts/astrobot/dist/public) — GET / will 404",
+    );
     return;
   }
-  next();
-});
 
-app.use("/api", router);
-
-// Serve built frontend in production
-// FRONTEND_DIST env var overrides the default path (needed in Railway where
-// pnpm changes CWD to the package dir, not the repo root)
-const frontendDist = process.env.FRONTEND_DIST ||
-  path.resolve(process.cwd(), "artifacts/astrobot/dist/public");
-if (process.env.NODE_ENV === "production" && fs.existsSync(frontendDist)) {
   const indexPath = path.join(frontendDist, "index.html");
   let cachedIndexHtml: string | null = null;
   function readIndexHtml(): string {
@@ -71,8 +83,10 @@ if (process.env.NODE_ENV === "production" && fs.existsSync(frontendDist)) {
     res.type("html").send(html);
   }
 
-  // index: false — иначе отдаётся сырой index.html без подстановки абсолютного og:image
+  logger.info({ frontendDist, indexPath }, "Serving SPA static files");
+
   app.use(express.static(frontendDist, { index: false }));
+
   function sendAdminIndex(req: express.Request, res: express.Response) {
     const origin = resolvePublicOrigin(req);
     let html = injectOpenGraphMeta(readIndexHtml(), origin);
@@ -82,11 +96,12 @@ if (process.env.NODE_ENV === "production" && fs.existsSync(frontendDist)) {
 
   app.get("/", sendSpaIndex);
   app.get("/index.html", sendSpaIndex);
-  // Admin routes get a separate manifest/icon for PWA home screen shortcut
   app.get("/admin", sendAdminIndex);
   app.get("/admin/{*path}", sendAdminIndex);
-  // SPA fallback — Express 5 requires named wildcard (path-to-regexp v8)
   app.get("/{*path}", sendSpaIndex);
 }
 
-export default app;
+/** @deprecated Используйте configureApp(root) из index.ts */
+const legacyApp = express();
+configureApp(legacyApp);
+export default legacyApp;

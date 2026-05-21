@@ -24,7 +24,6 @@ logger.info(
   "[boot] starting API (health route first)",
 );
 
-/** Минимальный app: bind порта до import("./app") (routes, swisseph, db). */
 const root = express();
 
 root.get("/api/healthz", (_req, res) => {
@@ -44,12 +43,12 @@ server.on("error", (err) => {
 
 async function attachFullApplication(root: Express): Promise<void> {
   try {
-    const [{ default: fullApp }, db] = await Promise.all([
+    const [{ configureApp }, db] = await Promise.all([
       import("./app.js"),
       import("@workspace/db"),
     ]);
 
-    root.use(fullApp);
+    configureApp(root);
 
     if (db.pool) {
       startDbInitInBackground(db.pool, db.runDbMigrations);
@@ -57,7 +56,7 @@ async function attachFullApplication(root: Express): Promise<void> {
       logger.warn("DATABASE_URL missing — skipping background DB init");
     }
 
-    logger.info("Full application routes attached");
+    logger.info("Full application routes attached (API + SPA on same server)");
   } catch (err) {
     logger.error(
       { err },

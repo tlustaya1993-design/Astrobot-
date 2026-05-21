@@ -28,6 +28,7 @@ FROM base AS runner
 WORKDIR /app
 COPY --from=builder /app /app
 ENV NODE_ENV=production
+ENV FRONTEND_DIST=/app/artifacts/astrobot/dist/public
 EXPOSE 3000
 # Прямой node (без pnpm/tsx): быстрый bind порта для Railway healthcheck.
 CMD ["node", "artifacts/api-server/dist/index.cjs"]
