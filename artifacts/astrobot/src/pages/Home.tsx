@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { useQueryClient } from '@tanstack/react-query';
-import { getGetMeQueryKey, useGetMe } from '@workspace/api-client-react';
+import { ApiError, getGetMeQueryKey, useGetMe } from '@workspace/api-client-react';
 import { getAuthHeaders } from '@/lib/session';
 import { Button } from '@/components/ui/button';
 
-const BOOT_TIMEOUT_MS = 12_000;
+const BOOT_TIMEOUT_MS = 60_000;
+
+function isDbWarmupError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 503;
+}
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -15,7 +19,12 @@ export default function Home() {
   const { data: user, isLoading, isFetching, error, refetch } = useGetMe({
     request: { headers: getAuthHeaders() },
     query: {
-      retry: 1,
+      retry(failureCount, err) {
+        return isDbWarmupError(err) && failureCount < 12;
+      },
+      retryDelay(attempt) {
+        return Math.min(attempt * 3000, 5000);
+      },
       staleTime: 0,
     },
   });
@@ -25,7 +34,11 @@ export default function Home() {
     return () => window.clearTimeout(t);
   }, []);
 
-  const bootFailed = Boolean(error) || (bootTimedOut && !user && !isFetching);
+  const warmingUp = isDbWarmupError(error) && (isFetching || isLoading);
+  const bootFailed =
+    Boolean(error) &&
+    !warmingUp &&
+    (bootTimedOut ? !user && !isFetching : true);
   const bootReady = !isLoading && !isFetching;
 
   useEffect(() => {
@@ -77,7 +90,9 @@ export default function Home() {
       <div className="absolute inset-0 z-0 bg-[radial-gradient(circle_at_20%_10%,rgba(131,58,180,0.22),transparent_45%),radial-gradient(circle_at_80%_90%,rgba(255,196,74,0.12),transparent_40%)]" />
       <div className="relative z-10 flex flex-col items-center">
         <div className="w-16 h-16 border-2 border-primary border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-primary tracking-widest font-display animate-pulse uppercase text-sm">Выравниваем звёзды...</p>
+        <p className="text-primary tracking-widest font-display animate-pulse uppercase text-sm">
+          {warmingUp ? 'Подключаем базу данных…' : 'Выравниваем звёзды...'}
+        </p>
       </div>
     </div>
   );

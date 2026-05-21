@@ -5,6 +5,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { isDatabaseConfigured } from "@workspace/db";
+import { getDbInitStatus } from "./lib/db-init.js";
 import { resolveFrontendDist } from "./lib/frontend-dist.js";
 import { logger } from "./lib/logger";
 import { sessionMiddleware } from "./middleware/auth.js";
@@ -37,13 +38,26 @@ export function configureApp(app: Express): void {
   app.use(sessionMiddleware);
 
   app.use("/api", (req, res, next) => {
-    if (req.path === "/healthz") {
+    if (req.path === "/healthz" || req.path === "/readyz") {
       next();
       return;
     }
     if (!isDatabaseConfigured()) {
       res.status(503).json({
         error: "База данных не настроена (DATABASE_URL).",
+        code: "DB_NOT_CONFIGURED",
+      });
+      return;
+    }
+    const dbStatus = getDbInitStatus();
+    if (dbStatus !== "ready") {
+      res.setHeader("Retry-After", "3");
+      res.status(503).json({
+        error:
+          dbStatus === "pending"
+            ? "База данных прогревается. Повторите запрос через несколько секунд."
+            : "База данных временно недоступна.",
+        code: dbStatus === "pending" ? "DB_WARMING_UP" : "DB_INIT_FAILED",
       });
       return;
     }

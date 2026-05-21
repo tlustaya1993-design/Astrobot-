@@ -1,6 +1,6 @@
 import express, { type Express } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
-import { startDbInitInBackground } from "./lib/db-init.js";
+import { getDbInitStatus, startDbInitInBackground } from "./lib/db-init.js";
 import { logger } from "./lib/logger";
 
 const rawPort = process.env["PORT"];
@@ -29,6 +29,19 @@ const root = express();
 root.get("/api/healthz", (_req, res) => {
   const data = HealthCheckResponse.parse({ status: "ok" });
   res.json(data);
+});
+
+root.get("/api/readyz", (_req, res) => {
+  const dbStatus = getDbInitStatus();
+  if (dbStatus === "ready") {
+    res.json({ status: "ready" });
+    return;
+  }
+  res.setHeader("Retry-After", "3");
+  res.status(503).json({
+    status: dbStatus,
+    code: dbStatus === "pending" ? "DB_WARMING_UP" : "DB_INIT_FAILED",
+  });
 });
 
 const server = root.listen(port, host, () => {
