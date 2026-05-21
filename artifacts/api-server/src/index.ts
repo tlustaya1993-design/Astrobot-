@@ -59,7 +59,11 @@ async function attachFullApplication(root: Express): Promise<void> {
     logger.info("Full application routes attached (API + SPA on same server)");
   } catch (err) {
     logger.error(
-      { err },
+      {
+        err,
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      },
       "Failed to attach application (healthcheck still works on /api/healthz)",
     );
   }

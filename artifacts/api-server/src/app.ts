@@ -100,8 +100,3 @@ export function configureApp(app: Express): void {
   app.get("/admin/{*path}", sendAdminIndex);
   app.get("/{*path}", sendSpaIndex);
 }
-
-/** @deprecated Используйте configureApp(root) из index.ts */
-const legacyApp = express();
-configureApp(legacyApp);
-export default legacyApp;

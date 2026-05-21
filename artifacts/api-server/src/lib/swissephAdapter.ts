@@ -7,41 +7,56 @@
  * and the route layer returns a controlled error to the client.
  */
 
-import { createRequire } from "module";
+import { createRequire, type NodeRequire } from "module";
 import path from "path";
 import fs from "fs";
 import { execSync } from "child_process";
 
-// ── Try to load the native addon synchronously ────────────────────────────────
-const _require = createRequire(import.meta.url);
+/** CJS bundle (node dist/index.cjs): __filename. ESM (tsx dev): import.meta.url. */
+function requireBaseForCreateRequire(): string {
+  if (typeof __filename !== "undefined") {
+    return __filename;
+  }
+  if (typeof import.meta !== "undefined" && import.meta.url) {
+    return import.meta.url;
+  }
+  throw new Error("swissephAdapter: no base path for createRequire");
+}
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _require: NodeRequire | null = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _swe: any = null;
 
-function findEphePath(): string | null {
+function findEphePath(req: NodeRequire): string | null {
   const candidates: string[] = [];
   try {
     candidates.push(
-      path.join(path.dirname(_require.resolve("swisseph-v2/package.json")), "ephe"),
+      path.join(path.dirname(req.resolve("swisseph-v2/package.json")), "ephe"),
     );
-  } catch { /* skip */ }
+  } catch {
+    /* skip */
+  }
   try {
     candidates.push(
-      path.join(path.dirname(_require.resolve("swisseph-v2")), "..", "ephe"),
+      path.join(path.dirname(req.resolve("swisseph-v2")), "..", "ephe"),
     );
-  } catch { /* skip */ }
+  } catch {
+    /* skip */
+  }
   candidates.push(
     "/workspace/node_modules/.pnpm/swisseph-v2@1.0.4/node_modules/swisseph-v2/ephe",
   );
-  return candidates.find(c => fs.existsSync(path.join(c, "semo_18.se1"))) ?? null;
+  return candidates.find((c) => fs.existsSync(path.join(c, "semo_18.se1"))) ?? null;
 }
 
 /** True when the native Swiss Ephemeris addon loaded successfully. */
 export let SWE_AVAILABLE = false;
 
 try {
+  _require = createRequire(requireBaseForCreateRequire());
   _swe = _require("swisseph-v2");
-  const ephePath = findEphePath();
+  const ephePath = findEphePath(_require);
   if (!ephePath) throw new Error("bundled ephe/ files not found");
   _swe.swe_set_ephe_path(ephePath);
   SWE_AVAILABLE = true;
@@ -51,23 +66,28 @@ try {
   console.error(`[SwissEph] ❌  failed to load: ${msg}`);
   console.error("[SwissEph]    Astrology functions will return a controlled error.");
 
-  // ── Railway / CI env diagnostic ──────────────────────────────────────────
-  // Check that node-gyp build prerequisites are present. This helps developers
-  // diagnose missing build tools without reading the raw native addon error.
   const tools = ["python3", "gcc", "make"];
   const missing: string[] = [];
   for (const t of tools) {
-    try { execSync(`which ${t}`, { stdio: "ignore" }); }
-    catch { missing.push(t); }
+    try {
+      execSync(`which ${t}`, { stdio: "ignore" });
+    } catch {
+      missing.push(t);
+    }
   }
-  try { _require("node-gyp"); }
-  catch { missing.push("node-gyp (npm package)"); }
+  if (_require) {
+    try {
+      _require("node-gyp");
+    } catch {
+      missing.push("node-gyp (npm package)");
+    }
+  }
 
   if (missing.length > 0) {
     console.error(
       `[SwissEph]    Missing build prerequisites: ${missing.join(", ")}.\n` +
-      `[SwissEph]    On Railway: add a Dockerfile/Nixpacks step to install ` +
-      `build-essential + python3, then run 'npm rebuild swisseph-v2'.`,
+        `[SwissEph]    On Railway: add a Dockerfile/Nixpacks step to install ` +
+        `build-essential + python3, then run 'npm rebuild swisseph-v2'.`,
     );
   }
 }
@@ -79,7 +99,7 @@ export class AstroEngineError extends Error {
   constructor() {
     super(
       "Астрологический движок временно недоступен. " +
-      "Проверь билд-зависимости сервера (swisseph-v2 native addon).",
+        "Проверь билд-зависимости сервера (swisseph-v2 native addon).",
     );
   }
 }
@@ -92,25 +112,25 @@ const FLAGS = SWE_AVAILABLE
 
 const BODY_MAP: Record<string, number> = SWE_AVAILABLE
   ? {
-      sun:       _swe.SE_SUN       as number,
-      moon:      _swe.SE_MOON      as number,
-      Mercury:   _swe.SE_MERCURY   as number,
-      Venus:     _swe.SE_VENUS     as number,
-      Mars:      _swe.SE_MARS      as number,
-      Jupiter:   _swe.SE_JUPITER   as number,
-      Saturn:    _swe.SE_SATURN    as number,
-      Uranus:    _swe.SE_URANUS    as number,
-      Neptune:   _swe.SE_NEPTUNE   as number,
-      Pluto:     _swe.SE_PLUTO     as number,
-      Chiron:    _swe.SE_CHIRON    as number,
+      sun: _swe.SE_SUN as number,
+      moon: _swe.SE_MOON as number,
+      Mercury: _swe.SE_MERCURY as number,
+      Venus: _swe.SE_VENUS as number,
+      Mars: _swe.SE_MARS as number,
+      Jupiter: _swe.SE_JUPITER as number,
+      Saturn: _swe.SE_SATURN as number,
+      Uranus: _swe.SE_URANUS as number,
+      Neptune: _swe.SE_NEPTUNE as number,
+      Pluto: _swe.SE_PLUTO as number,
+      Chiron: _swe.SE_CHIRON as number,
       northNode: _swe.SE_MEAN_NODE as number,
-      lilith:    _swe.SE_MEAN_APOG as number,
+      lilith: _swe.SE_MEAN_APOG as number,
     }
   : {};
 
 export interface SweBodyResult {
   longitude: number;
-  speed:     number;
+  speed: number;
 }
 
 export function sweBody(jd: number, key: string): SweBodyResult {
@@ -118,31 +138,36 @@ export function sweBody(jd: number, key: string): SweBodyResult {
   const id = BODY_MAP[key];
   if (id === undefined) throw new Error(`swissephAdapter: unknown body key "${key}"`);
   const r = _swe.swe_calc_ut(jd, id, FLAGS) as {
-    longitude?: number; longitudeSpeed?: number; error?: string;
+    longitude?: number;
+    longitudeSpeed?: number;
+    error?: string;
   };
   if (r.error) throw new Error(`swe_calc_ut("${key}") → ${r.error}`);
   return {
     longitude: (((r.longitude ?? 0) % 360) + 360) % 360,
-    speed:     r.longitudeSpeed ?? 0,
+    speed: r.longitudeSpeed ?? 0,
   };
 }
 
 export interface SweHouseResult {
-  cusps:     number[];
+  cusps: number[];
   ascendant: number;
-  mc:        number;
+  mc: number;
 }
 
 export function sweHouses(jd: number, lat: number, lon: number): SweHouseResult {
   if (!SWE_AVAILABLE) throw new AstroEngineError();
   const r = _swe.swe_houses(jd, lat, lon, "P") as {
-    house?: number[]; ascendant?: number; mc?: number; error?: string;
+    house?: number[];
+    ascendant?: number;
+    mc?: number;
+    error?: string;
   };
   if (r.error) throw new Error(`swe_houses → ${r.error}`);
   const norm = (v: number) => (((v % 360) + 360) % 360);
   return {
-    cusps:     (r.house ?? []).slice(0, 12).map(norm),
+    cusps: (r.house ?? []).slice(0, 12).map(norm),
     ascendant: norm(r.ascendant ?? 0),
-    mc:        norm(r.mc        ?? 0),
+    mc: norm(r.mc ?? 0),
   };
 }
