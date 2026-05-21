@@ -30,9 +30,16 @@ export function getDbInitError(): unknown {
 
 /** После listen: ping БД + runDbMigrations, без блокировки HTTP bind. */
 export function startDbInitInBackground(
-  pool: Pool,
+  pool: Pool | null,
   runMigrations: (pool: Pool) => Promise<void>,
 ): void {
+  if (!pool) {
+    status = "failed";
+    lastError = new Error("DATABASE_URL not configured");
+    logger.warn("Database init skipped: no connection pool");
+    return;
+  }
+
   void (async () => {
     logger.info("Database init started (background)");
 

@@ -6,9 +6,9 @@
   },
   "deploy": {
     "preDeployCommand": null,
-    "startCommand": "pnpm --filter @workspace/api-server run start",
+    "startCommand": "node artifacts/api-server/dist/index.cjs",
     "healthcheckPath": "/api/healthz",
-    "healthcheckTimeout": 30,
+    "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE"
   },
   "environments": {

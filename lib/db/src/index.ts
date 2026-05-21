@@ -4,20 +4,32 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  console.warn(
+    "[db] DATABASE_URL is not set — HTTP server will start; API database routes will fail until configured",
   );
 }
 
-/** Без connectionTimeoutMillis pg ждёт соединение из пула бесконечно — UI зависает на «Выравниваем звёзды…». */
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  connectionTimeoutMillis: 10_000,
-  idleTimeoutMillis: 30_000,
-  max: 10,
-});
-export const db = drizzle(pool, { schema });
+/** Пул создаётся синхронно, но соединение — только при запросе (connectionTimeoutMillis). */
+export const pool = databaseUrl
+  ? new Pool({
+      connectionString: databaseUrl,
+      connectionTimeoutMillis: 10_000,
+      idleTimeoutMillis: 30_000,
+      max: 10,
+    })
+  : null;
+
+export const isDatabaseConfigured = (): boolean => pool !== null;
+
+type AppDb = ReturnType<typeof drizzle<typeof schema>>;
+
+/** При отсутствии pool значение null в runtime; маршруты защищены middleware + isDatabaseConfigured(). */
+export const db: AppDb = (
+  pool ? drizzle(pool, { schema }) : null
+) as AppDb;
 
 export * from "./schema";
 export * from "./migrations";

@@ -4,6 +4,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import { isDatabaseConfigured } from "@workspace/db";
 import { logger } from "./lib/logger";
 import { sessionMiddleware } from "./middleware/auth.js";
 import { injectOpenGraphMeta, injectAdminMeta, resolvePublicOrigin } from "./lib/spaHtml";
@@ -33,6 +34,20 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(sessionMiddleware);
+
+app.use("/api", (req, res, next) => {
+  if (req.path === "/healthz") {
+    next();
+    return;
+  }
+  if (!isDatabaseConfigured()) {
+    res.status(503).json({
+      error: "База данных не настроена (DATABASE_URL).",
+    });
+    return;
+  }
+  next();
+});
 
 app.use("/api", router);
 

@@ -6,7 +6,7 @@ buildCommand = "pnpm install --frozen-lockfile=false && BASE_PATH=/ pnpm --filte
 # Явно отключаем pre-deploy (null в railway.json). Пустой omit → Railway подставляет значение из Dashboard.
 # no-op перекрывает Dashboard, если null не применился.
 preDeployCommand = ["echo pre-deploy disabled; schema via runDbMigrations at API start"]
-startCommand = "pnpm --filter @workspace/api-server run start"
+startCommand = "node artifacts/api-server/dist/index.cjs"
 healthcheckPath = "/api/healthz"
-healthcheckTimeout = 30
+healthcheckTimeout = 60
 restartPolicyType = "on_failure"

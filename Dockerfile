@@ -29,5 +29,5 @@ WORKDIR /app
 COPY --from=builder /app /app
 ENV NODE_ENV=production
 EXPOSE 3000
-# Без start.sh: миграции только в artifacts/api-server/src/index.ts (runDbMigrations).
-CMD ["pnpm", "--filter", "@workspace/api-server", "run", "start"]
+# Прямой node (без pnpm/tsx): быстрый bind порта для Railway healthcheck.
+CMD ["node", "artifacts/api-server/dist/index.cjs"]
