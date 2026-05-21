@@ -27,8 +27,7 @@ RUN pnpm --filter @workspace/api-server run build
 FROM base AS runner
 WORKDIR /app
 COPY --from=builder /app /app
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["/app/start.sh"]
+# Без start.sh: миграции только в artifacts/api-server/src/index.ts (runDbMigrations).
+CMD ["pnpm", "--filter", "@workspace/api-server", "run", "start"]

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",
-    "push:ci": "drizzle-kit push --force --config ./drizzle.config.ts",
+    "push:ci": "node -e \"console.error('push:ci disabled: use runDbMigrations at API start (see lib/db/src/migrations.ts)'); process.exit(1)\"",
     "push-force": "drizzle-kit push --force --config ./drizzle.config.ts"
   },
   "dependencies": {

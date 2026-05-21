@@ -1,12 +1,15 @@
-import { execSync } from "child_process";
+/**
+ * Локальный one-off: ждёт БД и применяет runDbMigrations (без drizzle-kit push).
+ * На Railway не используется — миграции в src/index.ts при старте API.
+ *
+ * Запуск: DATABASE_URL=... pnpm exec tsx ./src/migrate.ts
+ */
+import { pool, runDbMigrations } from "@workspace/db";
 
-async function waitForDb(url: string, maxRetries = 10, delayMs = 3000): Promise<void> {
-  const { Pool } = (await import("pg")).default;
+async function waitForDb(maxRetries = 10, delayMs = 3000): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const pool = new Pool({ connectionString: url });
       await pool.query("SELECT 1");
-      await pool.end();
       console.log("Database is ready!");
       return;
     } catch {
@@ -17,18 +20,12 @@ async function waitForDb(url: string, maxRetries = 10, delayMs = 3000): Promise<
   throw new Error("Database not ready after max retries");
 }
 
-const dbUrl = process.env.DATABASE_URL;
-if (!dbUrl) {
+if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL not set, skipping migrations");
   process.exit(0);
 }
 
-await waitForDb(dbUrl);
-
-try {
-  execSync("pnpm --filter @workspace/db run push:ci", { stdio: "inherit" });
-  console.log("Migrations complete!");
-} catch (err) {
-  console.error("Migration failed:", err);
-  process.exit(1);
-}
+await waitForDb();
+await runDbMigrations(pool);
+console.log("Migrations complete!");
+await pool.end();

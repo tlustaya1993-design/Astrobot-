@@ -3,8 +3,9 @@ builder = "NIXPACKS"
 buildCommand = "pnpm install --frozen-lockfile=false && BASE_PATH=/ pnpm --filter @workspace/astrobot run build && pnpm --filter @workspace/api-server run build"
 
 [deploy]
-# Схема: runDbMigrations при старте API (lib/db/src/migrations.ts).
-# preDeploy drizzle-kit push убран: на Railway зависает на «Pulling schema from database…» (introspection).
+# Явно отключаем pre-deploy (null в railway.json). Пустой omit → Railway подставляет значение из Dashboard.
+# no-op перекрывает Dashboard, если null не применился.
+preDeployCommand = ["echo pre-deploy disabled; schema via runDbMigrations at API start"]
 startCommand = "pnpm --filter @workspace/api-server run start"
 healthcheckPath = "/api/healthz"
 healthcheckTimeout = 30

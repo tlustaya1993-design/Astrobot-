@@ -1,4 +1,4 @@
 #!/bin/bash
 set -e
 pnpm install --frozen-lockfile
-pnpm --filter db push
+# Схема БД: runDbMigrations при старте API, не drizzle-kit push (Replit post-merge).
