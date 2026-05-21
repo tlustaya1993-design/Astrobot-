@@ -1,35 +1,67 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
+import {
+  envDatabaseFlags,
+  parseDatabaseUrlSafe,
+  resolveDatabaseUrl,
+} from "./connection-diag.js";
 
 const { Pool } = pg;
 
-const databaseUrl = process.env.DATABASE_URL;
+const resolved = resolveDatabaseUrl();
 
-if (!databaseUrl) {
+if (!resolved) {
   console.warn(
-    "[db] DATABASE_URL is not set — HTTP server will start; API database routes will fail until configured",
+    "[db] No DATABASE_URL / DATABASE_PRIVATE_URL / POSTGRES_URL — HTTP starts; API DB routes return 503",
+    JSON.stringify({ env: envDatabaseFlags() }),
   );
 }
 
-/** Пул создаётся синхронно, но соединение — только при запросе (connectionTimeoutMillis). */
-export const pool = databaseUrl
+/** Пул создаётся синхронно; TCP — при первом запросе (connectionTimeoutMillis). */
+export const pool = resolved
   ? new Pool({
-      connectionString: databaseUrl,
+      connectionString: resolved.url,
       connectionTimeoutMillis: 10_000,
       idleTimeoutMillis: 30_000,
       max: 10,
     })
   : null;
 
+export const databaseUrlSource = resolved?.source ?? "none";
+
+export function getDatabaseConnectionDiagnostics(): {
+  env: ReturnType<typeof envDatabaseFlags>;
+  target: ReturnType<typeof parseDatabaseUrlSafe> | null;
+  source: typeof databaseUrlSource;
+} {
+  return {
+    env: envDatabaseFlags(),
+    target: resolved
+      ? parseDatabaseUrlSafe(resolved.url, resolved.source)
+      : null,
+    source: databaseUrlSource,
+  };
+}
+
 export const isDatabaseConfigured = (): boolean => pool !== null;
 
 type AppDb = ReturnType<typeof drizzle<typeof schema>>;
 
-/** При отсутствии pool значение null в runtime; маршруты защищены middleware + isDatabaseConfigured(). */
 export const db: AppDb = (
   pool ? drizzle(pool, { schema }) : null
 ) as AppDb;
 
 export * from "./schema";
 export * from "./migrations";
+export {
+  envDatabaseFlags,
+  formatDbConnectError,
+  parseDatabaseUrlSafe,
+  resolveDatabaseUrl,
+} from "./connection-diag.js";
+export type {
+  DatabaseUrlSource,
+  DbConnectErrorKind,
+  SafeDatabaseTarget,
+} from "./connection-diag.js";

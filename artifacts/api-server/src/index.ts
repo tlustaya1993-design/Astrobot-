@@ -66,7 +66,10 @@ async function attachFullApplication(root: Express): Promise<void> {
     if (db.pool) {
       startDbInitInBackground(db.pool, db.runDbMigrations);
     } else {
-      logger.warn("DATABASE_URL missing — skipping background DB init");
+      logger.warn(
+        { env: db.getDatabaseConnectionDiagnostics().env },
+        "DATABASE_URL missing — skipping background DB init",
+      );
     }
 
     logger.info("Full application routes attached (API + SPA on same server)");
