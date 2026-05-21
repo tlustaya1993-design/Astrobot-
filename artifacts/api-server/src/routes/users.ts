@@ -3,6 +3,7 @@ import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { normalizeAvatarConfig, parseAvatarJson } from "../lib/avatar-config.js";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
+import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
@@ -67,27 +68,32 @@ router.get("/me", async (req, res) => {
 
   const isTest = req.headers['x-is-test'] === 'true';
 
-  let [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.sessionId, sessionId))
-    .limit(1);
-
-  if (!user) {
-    await db.insert(usersTable).values({ sessionId, isTest }).onConflictDoNothing();
-    [user] = await db
+  try {
+    let [user] = await db
       .select()
       .from(usersTable)
       .where(eq(usersTable.sessionId, sessionId))
       .limit(1);
-  }
 
-  if (!user) {
-    res.status(500).json({ error: "Не удалось создать профиль" });
-    return;
-  }
+    if (!user) {
+      await db.insert(usersTable).values({ sessionId, isTest }).onConflictDoNothing();
+      [user] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.sessionId, sessionId))
+        .limit(1);
+    }
 
-  res.json(toApiUser(user));
+    if (!user) {
+      res.status(500).json({ error: "Не удалось создать профиль" });
+      return;
+    }
+
+    res.json(toApiUser(user));
+  } catch (err) {
+    logger.error({ err, sessionId }, "GET /users/me database error");
+    res.status(503).json({ error: "База данных временно недоступна. Попробуйте через минуту." });
+  }
 });
 
 router.put("/me", async (req, res) => {

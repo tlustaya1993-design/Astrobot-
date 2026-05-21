@@ -13,7 +13,7 @@
 | Ветка | `main` → auto-deploy с GitHub |
 | Сервис | Один процесс: API + static SPA (`FRONTEND_DIST` / `artifacts/astrobot/dist/public`) |
 | Health | `GET /api/healthz` |
-| Схема БД | `preDeployCommand`: `pnpm --filter @workspace/db run push:ci` |
+| Схема БД | При старте API: `runDbMigrations` (`lib/db/src/migrations.ts`). **Не** `drizzle-kit push` в preDeploy — зависает на introspection. |
 
 **Legacy (не использовать для prod):** `.replit`, `artifacts/*/.replit-artifact/` — остатки Replit, на Railway не влияют.
 

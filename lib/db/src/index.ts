@@ -10,7 +10,13 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+/** Без connectionTimeoutMillis pg ждёт соединение из пула бесконечно — UI зависает на «Выравниваем звёзды…». */
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 30_000,
+  max: 10,
+});
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
