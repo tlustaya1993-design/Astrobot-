@@ -1,20 +1,7 @@
 import app from "./app";
-import { logger } from "./lib/logger";
 import { pool as dbPool, runDbMigrations } from "@workspace/db";
-
-async function waitForDb(maxRetries = 12, delayMs = 5000): Promise<void> {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      await dbPool.query("SELECT 1");
-      logger.info("Database is ready");
-      return;
-    } catch (err) {
-      logger.warn({ err, attempt: i + 1, maxRetries }, "Waiting for database");
-      await new Promise((r) => setTimeout(r, delayMs));
-    }
-  }
-  throw new Error("Database not ready after max retries");
-}
+import { startDbInitInBackground } from "./lib/db-init.js";
+import { logger } from "./lib/logger";
 
 const rawPort = process.env["PORT"];
 
@@ -30,15 +17,12 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-async function start(): Promise<void> {
-  await waitForDb();
-  await runDbMigrations(dbPool);
-  app.listen(port, () => {
-    logger.info({ port }, "Server listening");
-  });
-}
+const server = app.listen(port, () => {
+  logger.info({ port }, "Server listening (healthcheck ready)");
+  startDbInitInBackground(dbPool, runDbMigrations);
+});
 
-start().catch((err) => {
-  logger.error({ err }, "Failed to start server");
+server.on("error", (err) => {
+  logger.error({ err }, "Failed to bind HTTP port");
   process.exit(1);
 });
