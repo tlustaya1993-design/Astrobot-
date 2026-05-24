@@ -193,7 +193,7 @@ export default function Chat() {
     () => typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function',
     [],
   );
-  const [match, params] = useRoute('/chat/:id');
+  const [match, params] = useRoute('/chat/:id?');
   const [, setLocation] = useLocation();
   const { isLoggedIn, openAuthModal, logout } = useAuth();
   const { step: tutorialStep, isActive: tutorialActive, start: startTutorial } = useTutorial();
@@ -221,7 +221,7 @@ export default function Chat() {
     paywallState,
     closePaywall,
     failureCount,
-  } = useChatStream(conversationId);
+  } = useChatStream();
   const [inputValue, setInputValue] = useState('');
   const [selectedContactId, setSelectedContactId] = useState<number | null>(null);
   /** Расширенный разбор по контакту: каждое сообщение = 2× запроса (см. сервер). */
@@ -278,7 +278,7 @@ export default function Chat() {
 
   // Чтобы “следование за ботом” не мешало читать: если пользователь трогает область сообщений — выключаем.
   const stopAutoScroll = () => {
-    if (!isStreaming) return;
+    if (!isStreamVisibleHere) return;
     autoScrollEnabledRef.current = false;
   };
 
@@ -303,20 +303,14 @@ export default function Chat() {
   const isStreamVisibleHere =
     isStreaming &&
     streamingConversationId != null &&
-    (conversationId === streamingConversationId ||
-      (conversationId == null && streamingConversationId != null));
+    conversationId === streamingConversationId;
 
   const localMessagesForView = useMemo(() => {
     if (conversationId != null) {
       return localMessages.filter((m) => m.conversationId === conversationId);
     }
-    return localMessages.filter(
-      (m) =>
-        m.conversationId === 0 ||
-        (streamingConversationId != null &&
-          m.conversationId === streamingConversationId),
-    );
-  }, [localMessages, conversationId, streamingConversationId]);
+    return localMessages.filter((m) => m.conversationId === 0);
+  }, [localMessages, conversationId]);
 
   const displayMessages = useMemo(() => {
     const persisted = conversation?.messages ?? [];
@@ -363,11 +357,6 @@ export default function Chat() {
     }
   }, [conversationId]);
 
-  useEffect(() => {
-    if (conversationId != null) return;
-    if (streamingConversationId == null || streamingConversationId <= 0) return;
-    setLocation(`/chat/${streamingConversationId}`, { replace: true });
-  }, [conversationId, streamingConversationId, setLocation]);
 
   const finishChatOnboarding = useCallback(() => {
     try {
@@ -652,7 +641,7 @@ export default function Chat() {
     autoScrollEnabledRef.current = true;
     trySendHaptic(lastSendHapticAtRef);
     try {
-      const newConvId = await sendMessage(userContent, selectedContactId, contactExtendedMode);
+      const newConvId = await sendMessage(userContent, selectedContactId, contactExtendedMode, conversationId);
       if (!conversationId && newConvId) {
         setLocation(`/chat/${newConvId}`, { replace: true });
       }
@@ -691,7 +680,7 @@ export default function Chat() {
     // При новом сообщении включаем автоследование заново.
     autoScrollEnabledRef.current = true;
     try {
-      const newConvId = await sendMessage(text, selectedContactId, contactExtendedMode);
+      const newConvId = await sendMessage(text, selectedContactId, contactExtendedMode, conversationId);
       if (!conversationId && newConvId) {
         setLocation(`/chat/${newConvId}`, { replace: true });
       }
@@ -937,9 +926,7 @@ export default function Chat() {
                           content={msg.content}
                           isStreaming={isStreamingMsg}
                           onRevealProgress={
-                            idx === displayMessages.length - 1 && msg.role === 'assistant'
-                              ? onStreamingRevealProgress
-                              : undefined
+                            isStreamingMsg ? onStreamingRevealProgress : undefined
                           }
                         />
                       ) : (
