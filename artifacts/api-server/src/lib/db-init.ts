@@ -12,17 +12,22 @@ let status: DbInitStatus = "pending";
 let lastError: unknown;
 
 const DB_PING_TIMEOUT_MS = 10_000;
-const MIGRATIONS_TIMEOUT_MS = 30_000;
+const MIGRATIONS_WARN_AFTER_MS = 30_000;
 const MAX_WAIT_ATTEMPTS = 12;
 const WAIT_DELAY_MS = 5_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     promise,
     new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+      timeout = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
     }),
-  ]);
+  ]).finally(() => {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  });
 }
 
 export function getDbInitStatus(): DbInitStatus {
@@ -104,7 +109,19 @@ export function startDbInitInBackground(
     }
 
     try {
-      await withTimeout(runMigrations(pool), MIGRATIONS_TIMEOUT_MS, "DB migrations");
+      const slowMigrationWarning = setTimeout(() => {
+        logger.warn(
+          { db: diag.target, warnAfterMs: MIGRATIONS_WARN_AFTER_MS },
+          "Database migrations still running",
+        );
+      }, MIGRATIONS_WARN_AFTER_MS);
+
+      try {
+        await runMigrations(pool);
+      } finally {
+        clearTimeout(slowMigrationWarning);
+      }
+
       status = "ready";
       lastError = undefined;
       const tables = await listPublicTables(pool);
