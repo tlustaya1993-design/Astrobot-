@@ -65,6 +65,7 @@ describe("startDbInitInBackground", () => {
     } as unknown as Pool;
 
     startDbInitInBackground(pool, runMigrations);
+    await vi.advanceTimersByTimeAsync(0);
     await flushMicrotasks();
 
     expect(runMigrations).toHaveBeenCalledTimes(1);
@@ -79,6 +80,7 @@ describe("startDbInitInBackground", () => {
     );
 
     migration.resolve();
+    await vi.advanceTimersByTimeAsync(0);
     await flushMicrotasks();
 
     expect(getDbInitStatus()).toBe("ready");
