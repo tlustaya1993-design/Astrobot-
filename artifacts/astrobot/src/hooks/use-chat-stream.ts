@@ -98,6 +98,8 @@ function appendInterruptedResponseNotice(content: string, message: string): stri
 export function useChatStream(conversationId?: number) {
   const [localMessages, setLocalMessages] = useState<OpenaiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  /** Conversation that owns the in-flight fetch; survives route changes without abort. */
+  const [streamingConversationId, setStreamingConversationId] = useState<number | null>(null);
   const [paywallState, setPaywallState] = useState<PaywallState | null>(null);
   const [failureCount, setFailureCount] = useState(0);
   const queryClient = useQueryClient();
@@ -127,6 +129,7 @@ export function useChatStream(conversationId?: number) {
     };
     setLocalMessages(prev => [...prev, tempUserMsg, tempAssistantMsg]);
     setIsStreaming(true);
+    setStreamingConversationId(targetId ?? null);
 
     let hadSendError = false;
     let requestTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -146,6 +149,14 @@ export function useChatStream(conversationId?: number) {
           { headers: getAuthHeaders() }
         );
         targetId = conv.id;
+        setStreamingConversationId(targetId);
+        setLocalMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempUserMsg.id || m.id === streamingAssistantId
+              ? { ...m, conversationId: targetId! }
+              : m,
+          ),
+        );
         queryClient.invalidateQueries({ queryKey: getListOpenaiConversationsQueryKey() });
       }
 
@@ -365,6 +376,11 @@ export function useChatStream(conversationId?: number) {
               : m,
           );
         }
+        // If navigation cleared the optimistic pair, this failure belongs to a
+        // chat that is no longer on screen; do not leak its error into another thread.
+        const hasOriginalUser = prev.some((m) => m.id === tempUserMsg.id);
+        if (!hasOriginalUser) return prev;
+
         const tempAssistantError: OpenaiMessage = {
           id: Date.now() + 1,
           conversationId: targetId || 0,
@@ -377,6 +393,7 @@ export function useChatStream(conversationId?: number) {
     } finally {
       clearRequestTimeout();
       setIsStreaming(false);
+      setStreamingConversationId(null);
     }
 
     return hadSendError ? undefined : targetId;
@@ -408,6 +425,7 @@ export function useChatStream(conversationId?: number) {
   return {
     localMessages,
     isStreaming,
+    streamingConversationId,
     paywallState,
     failureCount,
     closePaywall,

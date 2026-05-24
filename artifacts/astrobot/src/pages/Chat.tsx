@@ -215,8 +215,8 @@ export default function Chat() {
   const {
     localMessages,
     isStreaming,
+    streamingConversationId,
     sendMessage,
-    clearLocalMessages,
     removeLocalMessages,
     paywallState,
     closePaywall,
@@ -300,20 +300,30 @@ export default function Chat() {
   // Memoised so the O(n×m) filter + array allocation doesn't run on every
   // ~30ms re-render during streaming. Re-runs only when persisted messages
   // or localMessages actually change.
+  const isStreamVisibleHere =
+    isStreaming &&
+    streamingConversationId != null &&
+    conversationId === streamingConversationId;
+
+  const localMessagesForView = useMemo(() => {
+    if (conversationId != null) {
+      return localMessages.filter((m) => m.conversationId === conversationId);
+    }
+    return localMessages.filter((m) => m.conversationId === 0);
+  }, [localMessages, conversationId]);
+
   const displayMessages = useMemo(() => {
     const persisted = conversation?.messages ?? [];
-    if (localMessages.length === 0) return persisted;
-    if (persisted.length === 0) return localMessages;
-    const pendingLocal = localMessages.filter(
+    if (localMessagesForView.length === 0) return persisted;
+    if (persisted.length === 0) return localMessagesForView;
+    const pendingLocal = localMessagesForView.filter(
       (lm) => !persisted.some((pm) => isLikelySameMessage(pm, lm)),
     );
     return [...persisted, ...pendingLocal];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversation?.messages, localMessages]);
+  }, [conversation?.messages, localMessagesForView]);
 
-  useEffect(() => {
-    clearLocalMessages();
-  }, [conversationId]);
+  // Do not clear local stream state on navigation — fetch continues; filter by conversationId above.
 
   const lastSyncedConversationId = useRef<number | undefined>(undefined);
   useEffect(() => {
@@ -432,26 +442,26 @@ export default function Chat() {
     }
     pendingScrollAfterSendRef.current = false;
     alignScrollAfterUserSend(container, prev, last);
-  }, [localMessages.length]);
+  }, [localMessagesForView.length]);
 
   // Tracks the character length of the streaming assistant message.
   // Changes every ~30 ms batch-commit, so the scroll useLayoutEffect below
   // fires at that cadence — giving smooth continuous scroll instead of
   // ratcheting only at \n\n paragraph boundaries.
   const streamingContentLength = useMemo(() => {
-    if (!isStreaming) return 0;
-    const last = localMessages[localMessages.length - 1];
+    if (!isStreamVisibleHere) return 0;
+    const last = localMessagesForView[localMessagesForView.length - 1];
     if (!last || last.role !== 'assistant') return 0;
     return (last.content || '').length;
-  }, [isStreaming, localMessages]);
+  }, [isStreamVisibleHere, localMessagesForView]);
 
   // Во время стрима: простой scroll до низа при каждом обновлении контента.
   useLayoutEffect(() => {
-    if (!isStreaming || !autoScrollEnabledRef.current) return;
+    if (!isStreamVisibleHere || !autoScrollEnabledRef.current) return;
     const container = messagesScrollRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
-  }, [isStreaming, streamingContentLength, revealScrollTick]);
+  }, [isStreamVisibleHere, streamingContentLength, revealScrollTick]);
 
   // Если пользователь прокручивает в прошлое — отключаем автоследование; если возвращается к низу — снова включаем.
   useEffect(() => {
@@ -721,6 +731,9 @@ export default function Chat() {
 
   // IDs of messages added during this session (not loaded from DB) — they get a fade-in entry
   const localMsgIdSet = useMemo(() => new Set(localMessages.map((m) => m.id)), [localMessages]);
+  const streamingLocalMessageId = isStreamVisibleHere
+    ? localMessagesForView[localMessagesForView.length - 1]?.id
+    : undefined;
 
   const isNew = !conversationId && displayMessages.length === 0;
   const selectedRelation = selectedContactId != null ? (contactRelationById[selectedContactId] || '') : '';
@@ -871,7 +884,12 @@ export default function Chat() {
               const precedingUserMsg = isErrMsg
                 ? displayMessages.slice(0, idx).reverse().find(m => m.role === 'user') ?? null
                 : null;
-              const isStreamingMsg = isStreaming && idx === displayMessages.length - 1 && msg.role === 'assistant';
+              const isStreamingMsg =
+                isStreamVisibleHere &&
+                msg.role === 'assistant' &&
+                msg.id === streamingLocalMessageId &&
+                localMsgIdSet.has(msg.id) &&
+                idx === displayMessages.length - 1;
               return (
               <motion.div
                 key={msg.id || idx}
