@@ -17,6 +17,7 @@ import { recordSessionStart } from "@/lib/pwa-hints";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
 import { AuthProvider } from "@/context/AuthContext";
 import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
+import { ChatStreamProvider } from "@/hooks/use-chat-stream";
 import { TutorialProvider } from "@/context/TutorialContext";
 import { TutorialOverlay } from "@/components/tutorial/TutorialOverlay";
 import { toast } from "@/hooks/use-toast";
@@ -67,8 +68,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/onboarding" component={Onboarding} />
-      <Route path="/chat" component={Chat} />
-      <Route path="/chat/:id" component={Chat} />
+      <Route path="/chat/:id?" component={Chat} />
       <Route path="/profile" component={ProfilePage} />
       <Route path="/history" component={History} />
       <Route path="/admin" component={AdminPage} />
@@ -113,10 +113,12 @@ function App() {
         <TutorialProvider>
           <TooltipProvider>
             <WouterRouter base={viteBaseForRouter()}>
-              <AvatarSyncProvider>
-                <SilentReconcile />
-                <Router />
-              </AvatarSyncProvider>
+              <ChatStreamProvider>
+                <AvatarSyncProvider>
+                  <SilentReconcile />
+                  <Router />
+                </AvatarSyncProvider>
+              </ChatStreamProvider>
             </WouterRouter>
             <Toaster />
             <TutorialOverlay />

@@ -1,0 +1,477 @@
+import React, { createContext, useCallback, useContext, useState } from "react";
+import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import { getSessionId, getAuthHeaders } from "@/lib/session";
+import { recordAiSuccess } from "@/lib/pwa-hints";
+import {
+  createOpenaiConversation,
+  getListOpenaiConversationsQueryKey,
+  getGetOpenaiConversationQueryKey,
+  OpenaiMessage,
+} from "@workspace/api-client-react";
+
+type PaywallState = {
+  open: boolean;
+  message: string;
+  freeRemaining?: number;
+  required?: number;
+  balance?: number;
+  wantsAuth?: boolean;
+};
+
+const GENERIC_TEMP_ERROR =
+  "Астробот сейчас временно недоступен. Попробуй повторить запрос через минуту 💫";
+
+function isProviderLeak(s: string): boolean {
+  const l = s.toLowerCase();
+  return (
+    l.includes("request_id") ||
+    l.includes("invalid_request_error") ||
+    l.includes("api_error") ||
+    l.includes("overloaded_error") ||
+    l.includes("credit balance") ||
+    l.includes("plans & billing") ||
+    l.includes("anthropic") ||
+    l.includes('"type":"error"') ||
+    l.includes('"type": "error"') ||
+    /^\d{3}\s*[{\[]/.test(s.trimStart())
+  );
+}
+
+function userFacingChatError(error: unknown): string {
+  const raw =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  const lower = raw.toLowerCase();
+
+  if (isProviderLeak(raw)) return GENERIC_TEMP_ERROR;
+
+  if (
+    lower.includes("rate limit") ||
+    lower.includes("429") ||
+    lower.includes("too many requests") ||
+    (lower.includes("per minute") && lower.includes("limit"))
+  ) {
+    return "Секунду собираю инфу по крупицам звездной пыли... В этот раз занимает чуть больше времени. Дай мне пару секунд…";
+  }
+  if (
+    raw === "Load failed" ||
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror") ||
+    lower.includes("network request failed") ||
+    lower.includes("load failed")
+  ) {
+    return "Что-то мне не получается достучаться до небес 🤔 Проверь интернет и попробуй ещё раз.";
+  }
+  if (raw === "The user aborted a request." || lower.includes("abort")) {
+    return "Ой… споткнулся, пока шел. Повтори отправку ещё раз - я лишние запросы не спишу ❤️";
+  }
+  return (
+    raw.trim() ||
+    "сервис сейчас отвечает медленнее обычного. Подождите минуту или обновите страницу."
+  );
+}
+
+function shouldFlushNow(text: string): boolean {
+  if (!text) return false;
+  if (text.endsWith("\n\n")) return true;
+  const last = text[text.length - 1];
+  if (last === "!" || last === "?") return true;
+  if (last === "." && text.length >= 2) {
+    return /[а-яёА-ЯЁa-zA-Z»"']/.test(text[text.length - 2]);
+  }
+  return false;
+}
+
+function appendInterruptedResponseNotice(content: string, message: string): string {
+  const trimmed = content.trimEnd();
+  const notice = `Ответ оборвался и может быть неполным: ${message}`;
+  if (!trimmed) return notice;
+  return `${trimmed}\n\n${notice}`;
+}
+
+type ChatStreamContextValue = {
+  localMessages: OpenaiMessage[];
+  isStreaming: boolean;
+  streamingConversationId: number | null;
+  paywallState: PaywallState | null;
+  failureCount: number;
+  closePaywall: () => void;
+  sendMessage: (
+    content: string,
+    contactId?: number | null,
+    contactExtendedMode?: boolean,
+    routeConversationId?: number,
+  ) => Promise<number | undefined>;
+  clearLocalMessages: () => void;
+  removeLocalMessages: (ids: number[]) => void;
+  addLocalSystemMessage: (content: string, conversationId?: number) => void;
+};
+
+const ChatStreamContext = createContext<ChatStreamContextValue | null>(null);
+
+export function ChatStreamProvider({ children }: { children: React.ReactNode }) {
+  const [, setLocation] = useLocation();
+  const [localMessages, setLocalMessages] = useState<OpenaiMessage[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingConversationId, setStreamingConversationId] = useState<number | null>(
+    null,
+  );
+  const [paywallState, setPaywallState] = useState<PaywallState | null>(null);
+  const [failureCount, setFailureCount] = useState(0);
+  const queryClient = useQueryClient();
+
+  const sendMessage = async (
+    content: string,
+    contactId?: number | null,
+    contactExtendedMode?: boolean,
+    routeConversationId?: number,
+  ) => {
+    const sessionId = getSessionId();
+    let targetId = routeConversationId;
+    const streamingAssistantId = -Date.now();
+
+    const tempUserMsg: OpenaiMessage = {
+      id: Date.now(),
+      conversationId: targetId || 0,
+      role: "user",
+      content,
+      createdAt: new Date().toISOString(),
+    };
+    const tempAssistantMsg: OpenaiMessage = {
+      id: streamingAssistantId,
+      conversationId: targetId || 0,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+    };
+    setLocalMessages((prev) => [...prev, tempUserMsg, tempAssistantMsg]);
+    setIsStreaming(true);
+    setStreamingConversationId(targetId ?? null);
+
+    let hadSendError = false;
+    let requestTimeout: ReturnType<typeof setTimeout> | null = null;
+    const controller = new AbortController();
+    const clearRequestTimeout = () => {
+      if (requestTimeout) {
+        clearTimeout(requestTimeout);
+        requestTimeout = null;
+      }
+    };
+    requestTimeout = setTimeout(() => controller.abort(), 60_000);
+
+    try {
+      if (!targetId) {
+        const conv = await createOpenaiConversation(
+          { firstMessage: content },
+          { headers: getAuthHeaders() },
+        );
+        targetId = conv.id;
+        setStreamingConversationId(targetId);
+        setLocalMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempUserMsg.id || m.id === streamingAssistantId
+              ? { ...m, conversationId: targetId! }
+              : m,
+          ),
+        );
+        queryClient.invalidateQueries({ queryKey: getListOpenaiConversationsQueryKey() });
+        setLocation(`/chat/${targetId}`, { replace: true });
+      }
+
+      const body: Record<string, unknown> = {
+        content,
+        sessionId,
+        contactExtendedMode: Boolean(contactExtendedMode),
+      };
+      if (contactId != null) {
+        body.contactId = contactId;
+      }
+
+      let res!: Response;
+      let htmlRetryCount = 0;
+      const MAX_HTML_RETRIES = 2;
+
+      fetchRetry: while (true) {
+        res = await fetch(`/api/openai/conversations/${targetId}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+        clearRequestTimeout();
+
+        if (!res.ok) {
+          const raw = await res.text();
+          const isHtml = raw.trimStart().startsWith("<!");
+
+          if (isHtml && res.status >= 500 && htmlRetryCount < MAX_HTML_RETRIES) {
+            htmlRetryCount++;
+            const waitMsg =
+              "Подожди секундочку… Сервер перезагружается, сейчас попробую ещё раз 🔄";
+            setLocalMessages((prev) =>
+              prev.map((m) =>
+                m.id === streamingAssistantId ? { ...m, content: waitMsg } : m,
+              ),
+            );
+            await new Promise((r) => setTimeout(r, 4000 * htmlRetryCount));
+            setLocalMessages((prev) =>
+              prev.map((m) => (m.id === streamingAssistantId ? { ...m, content: "" } : m)),
+            );
+            requestTimeout = setTimeout(() => controller.abort(), 60_000);
+            continue fetchRetry;
+          }
+
+          setLocalMessages((prev) => prev.filter((m) => m.id !== streamingAssistantId));
+          let message = `Ошибка сервера (${res.status})`;
+          let payloadMeta: { freeRemaining?: number; required?: number; balance?: number } =
+            {};
+          const openPaywall = (msg: string, meta: typeof payloadMeta) => {
+            setPaywallState({
+              open: true,
+              message: msg,
+              ...meta,
+            });
+          };
+          try {
+            const payload = JSON.parse(raw) as {
+              error?: unknown;
+              freeRemaining?: number;
+              required?: number;
+              balance?: number;
+            };
+            if (payload?.error) {
+              const errStr = typeof payload.error === "string" ? payload.error : "";
+              if (errStr && !isProviderLeak(errStr)) {
+                message = errStr;
+                if (typeof payload.freeRemaining === "number") {
+                  message += `. Бесплатно осталось: ${payload.freeRemaining}`;
+                }
+              }
+            }
+            payloadMeta = {
+              freeRemaining: payload?.freeRemaining,
+              required: payload?.required,
+              balance: payload?.balance,
+            };
+            if (res.status === 402) {
+              const paywallMsg =
+                typeof payload?.error === "string" && payload.error
+                  ? payload.error
+                  : "Лимит запросов исчерпан. Пополните пакет.";
+              openPaywall(paywallMsg, payloadMeta);
+            }
+          } catch {
+            if (isHtml) {
+              message =
+                res.status >= 500
+                  ? "Сервер временно недоступен (внутренняя ошибка). Попробуйте позже или обновите страницу."
+                  : `Запрос отклонён (${res.status}). Обновите страницу и войдите снова.`;
+            }
+            if (res.status === 402) {
+              openPaywall(
+                "Лимит бесплатных запросов исчерпан. Пополните пакет, чтобы продолжить.",
+                payloadMeta,
+              );
+            }
+          }
+          throw Object.assign(new Error(message), { code: res.status, payloadMeta });
+        }
+
+        break fetchRetry;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error(
+          "Не удалось открыть поток ответа. Проверьте соединение и попробуйте ещё раз.",
+        );
+      }
+      const decoder = new TextDecoder();
+      let assistantMsg = "";
+      let streamError: string | null = null;
+      let sseBuffer = "";
+
+      let pendingContent = "";
+      let flushTimer: ReturnType<typeof setTimeout> | null = null;
+      const commitMsg = (text: string) =>
+        setLocalMessages((prev) =>
+          prev.map((m) => (m.id === streamingAssistantId ? { ...m, content: text } : m)),
+        );
+      const flushPending = () => {
+        flushTimer = null;
+        if (!pendingContent) return;
+        assistantMsg += pendingContent;
+        pendingContent = "";
+        commitMsg(assistantMsg);
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        sseBuffer += chunk;
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6).trim();
+            if (!dataStr || dataStr === "[DONE]") continue;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.content) {
+                pendingContent += data.content;
+                if (shouldFlushNow(pendingContent)) {
+                  if (flushTimer) {
+                    clearTimeout(flushTimer);
+                    flushTimer = null;
+                  }
+                  flushPending();
+                } else if (!flushTimer) {
+                  flushTimer = setTimeout(flushPending, 30);
+                }
+              }
+              if (data.error) {
+                streamError =
+                  typeof data.error === "string" ? data.error : "Generation failed";
+                break;
+              }
+              if (data.done) break;
+            } catch {
+              /* ignore malformed SSE chunks */
+            }
+          }
+        }
+
+        if (streamError) break;
+      }
+
+      if (flushTimer) {
+        clearTimeout(flushTimer);
+        flushTimer = null;
+      }
+      flushPending();
+      commitMsg(assistantMsg);
+
+      if (streamError) {
+        throw new Error(streamError);
+      }
+
+      setFailureCount(0);
+      recordAiSuccess();
+      queryClient.invalidateQueries({ queryKey: getGetOpenaiConversationQueryKey(targetId) });
+    } catch (error) {
+      clearRequestTimeout();
+      console.error("Chat error:", error);
+      const errorCode =
+        typeof (error as { code?: unknown })?.code === "number"
+          ? (error as { code: number }).code
+          : undefined;
+      const message = userFacingChatError(error);
+      const isRateLimit = errorCode === 429;
+      const noPrefix = isRateLimit || errorCode === 413 || errorCode === 500;
+      if (errorCode === 402) {
+        hadSendError = true;
+        return;
+      }
+      hadSendError = true;
+      setFailureCount((prev) => prev + 1);
+      setLocalMessages((prev) => {
+        const hasStreaming = prev.some((m) => m.id === streamingAssistantId);
+        if (hasStreaming) {
+          const existingStreaming = prev.find((m) => m.id === streamingAssistantId);
+          if (existingStreaming?.content?.trim()) {
+            return prev.map((m) =>
+              m.id === streamingAssistantId
+                ? {
+                    ...m,
+                    content: appendInterruptedResponseNotice(
+                      existingStreaming.content,
+                      message,
+                    ),
+                  }
+                : m,
+            );
+          }
+          return prev.map((m) =>
+            m.id === streamingAssistantId
+              ? {
+                  ...m,
+                  content: noPrefix
+                    ? message
+                    : `Сейчас не получилось ответить: ${message}`,
+                }
+              : m,
+          );
+        }
+        const hasOriginalUser = prev.some((m) => m.id === tempUserMsg.id);
+        if (!hasOriginalUser) return prev;
+
+        const tempAssistantError: OpenaiMessage = {
+          id: Date.now() + 1,
+          conversationId: targetId || 0,
+          role: "assistant",
+          content: noPrefix ? message : `Сейчас не получилось ответить: ${message}`,
+          createdAt: new Date().toISOString(),
+        };
+        return [...prev, tempAssistantError];
+      });
+    } finally {
+      clearRequestTimeout();
+      setIsStreaming(false);
+      setStreamingConversationId(null);
+    }
+
+    return hadSendError ? undefined : targetId;
+  };
+
+  const clearLocalMessages = () => setLocalMessages([]);
+  const removeLocalMessages = (ids: number[]) => {
+    const idSet = new Set(ids);
+    setLocalMessages((prev) => prev.filter((m) => !idSet.has(m.id)));
+  };
+  const closePaywall = () => setPaywallState(null);
+
+  const addLocalSystemMessage = useCallback((content: string, conversationId?: number) => {
+    setLocalMessages((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        conversationId: conversationId ?? 0,
+        role: "system",
+        content,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+  }, []);
+
+  const value: ChatStreamContextValue = {
+    localMessages,
+    isStreaming,
+    streamingConversationId,
+    paywallState,
+    failureCount,
+    closePaywall,
+    sendMessage,
+    clearLocalMessages,
+    removeLocalMessages,
+    addLocalSystemMessage,
+  };
+
+  return <ChatStreamContext.Provider value={value}>{children}</ChatStreamContext.Provider>;
+}
+
+export function useChatStream(): ChatStreamContextValue {
+  const ctx = useContext(ChatStreamContext);
+  if (!ctx) {
+    throw new Error("useChatStream must be used within ChatStreamProvider");
+  }
+  return ctx;
+}
