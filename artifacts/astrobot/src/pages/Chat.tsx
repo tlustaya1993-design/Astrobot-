@@ -303,14 +303,20 @@ export default function Chat() {
   const isStreamVisibleHere =
     isStreaming &&
     streamingConversationId != null &&
-    conversationId === streamingConversationId;
+    (conversationId === streamingConversationId ||
+      (conversationId == null && streamingConversationId != null));
 
   const localMessagesForView = useMemo(() => {
     if (conversationId != null) {
       return localMessages.filter((m) => m.conversationId === conversationId);
     }
-    return localMessages.filter((m) => m.conversationId === 0);
-  }, [localMessages, conversationId]);
+    return localMessages.filter(
+      (m) =>
+        m.conversationId === 0 ||
+        (streamingConversationId != null &&
+          m.conversationId === streamingConversationId),
+    );
+  }, [localMessages, conversationId, streamingConversationId]);
 
   const displayMessages = useMemo(() => {
     const persisted = conversation?.messages ?? [];
@@ -356,6 +362,12 @@ export default function Chat() {
       setOnboardingPhase(null);
     }
   }, [conversationId]);
+
+  useEffect(() => {
+    if (conversationId != null) return;
+    if (streamingConversationId == null || streamingConversationId <= 0) return;
+    setLocation(`/chat/${streamingConversationId}`, { replace: true });
+  }, [conversationId, streamingConversationId, setLocation]);
 
   const finishChatOnboarding = useCallback(() => {
     try {
