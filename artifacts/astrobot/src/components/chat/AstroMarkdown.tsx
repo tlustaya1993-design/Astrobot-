@@ -1,9 +1,15 @@
-import React, { memo, useState, useRef, useEffect } from 'react';
+import React, { memo, useState, useRef, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
 
 const REMARK_PLUGINS = [remarkGfm];
+
+/** Paragraph source text starts with ✦ (with optional markdown asterisks). */
+export function isLikelyAstroParagraphText(text: string): boolean {
+  const t = text.trimStart();
+  return t.startsWith('✦') || /^\*{1,2}\s*✦/.test(t);
+}
 
 /** Reveal one line per tick (~12 lines/sec). */
 const REVEAL_MS_PER_LINE = 80;
@@ -45,40 +51,42 @@ function isAstroEmBlock(children: React.ReactNode): boolean {
   return secondText.trimStart().startsWith('✦');
 }
 
-const MD_COMPONENTS: Components = {
-  p: ({ children }) => {
-    if (isAstroEmBlock(children)) {
-      return <p className="astro-em-block mb-3 last:mb-0" data-astro-block="true">{children}</p>;
-    }
-    return <p className="mb-3 last:mb-0 leading-[1.65]">{children}</p>;
-  },
-  strong: ({ children }) => <strong className="text-primary font-semibold">{children}</strong>,
-  em:     ({ children }) => <em className="text-primary/90 font-medium italic">{children}</em>,
-  h1:     ({ children }) => <h1 className="text-white font-semibold text-xl mb-3 mt-2 leading-snug">{children}</h1>,
-  h2:     ({ children }) => <h2 className="text-white font-semibold text-lg mb-3 mt-2 leading-snug">{children}</h2>,
-  h3:     ({ children }) => <h3 className="text-primary/90 font-semibold text-[12px] tracking-[0.08em] uppercase mb-2 mt-4 leading-snug">{children}</h3>,
-  h4:     ({ children }) => <h4 className="text-primary/80 font-semibold text-[11px] tracking-[0.06em] uppercase mb-2 mt-3">{children}</h4>,
-  h5:     ({ children }) => <h5 className="text-primary/70 font-semibold text-xs mb-1 mt-1">{children}</h5>,
-  h6:     ({ children }) => <h6 className="text-primary/60 font-semibold text-xs mb-1 mt-1">{children}</h6>,
-  ul:     ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>,
-  ol:     ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1.5">{children}</ol>,
-  li:     ({ children }) => <li className="leading-[1.65]">{children}</li>,
-  hr:     ()              => (
-    <div className="astro-divider" role="separator">
-      <span className="astro-divider-symbol">✦</span>
-    </div>
-  ),
-  table: ({ children }) => (
-    <div className="overflow-x-auto my-3 rounded-lg border border-white/10">
-      <table className="w-full border-collapse text-xs">{children}</table>
-    </div>
-  ),
-  thead: ({ children }) => <thead className="bg-primary/10 text-primary/90">{children}</thead>,
-  tbody: ({ children }) => <tbody className="divide-y divide-white/5">{children}</tbody>,
-  tr:    ({ children }) => <tr className="hover:bg-white/3 transition-colors">{children}</tr>,
-  th:    ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">{children}</th>,
-  td:    ({ children }) => <td className="px-3 py-2 align-top">{children}</td>,
-};
+function makeMdComponents(forceAstroBlock: boolean): Components {
+  return {
+    p: ({ children }) => {
+      if (forceAstroBlock || isAstroEmBlock(children)) {
+        return <p className="astro-em-block mb-3 last:mb-0" data-astro-block="true">{children}</p>;
+      }
+      return <p className="mb-3 last:mb-0 leading-[1.65]">{children}</p>;
+    },
+    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+    em:     ({ children }) => <em className="astro-md-em font-medium italic">{children}</em>,
+    h1:     ({ children }) => <h1 className="text-white font-semibold text-xl mb-3 mt-2 leading-snug">{children}</h1>,
+    h2:     ({ children }) => <h2 className="text-white font-semibold text-lg mb-3 mt-2 leading-snug">{children}</h2>,
+    h3:     ({ children }) => <h3 className="text-primary/90 font-semibold text-[12px] tracking-[0.08em] uppercase mb-2 mt-4 leading-snug">{children}</h3>,
+    h4:     ({ children }) => <h4 className="text-primary/80 font-semibold text-[11px] tracking-[0.06em] uppercase mb-2 mt-3">{children}</h4>,
+    h5:     ({ children }) => <h5 className="text-primary/70 font-semibold text-xs mb-1 mt-1">{children}</h5>,
+    h6:     ({ children }) => <h6 className="text-primary/60 font-semibold text-xs mb-1 mt-1">{children}</h6>,
+    ul:     ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>,
+    ol:     ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1.5">{children}</ol>,
+    li:     ({ children }) => <li className="leading-[1.65]">{children}</li>,
+    hr:     ()              => (
+      <div className="astro-divider" role="separator">
+        <span className="astro-divider-symbol">✦</span>
+      </div>
+    ),
+    table: ({ children }) => (
+      <div className="overflow-x-auto my-3 rounded-lg border border-white/10">
+        <table className="w-full border-collapse text-xs">{children}</table>
+      </div>
+    ),
+    thead: ({ children }) => <thead className="bg-primary/10 text-primary/90">{children}</thead>,
+    tbody: ({ children }) => <tbody className="divide-y divide-white/5">{children}</tbody>,
+    tr:    ({ children }) => <tr className="hover:bg-white/3 transition-colors">{children}</tr>,
+    th:    ({ children }) => <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">{children}</th>,
+    td:    ({ children }) => <td className="px-3 py-2 align-top">{children}</td>,
+  };
+}
 
 /**
  * Close any unclosed inline markers so ReactMarkdown never sees a dangling
@@ -137,8 +145,13 @@ const ParagraphBlock = memo(function ParagraphBlock({
   text: string;
   active: boolean;
 }) {
+  const forceAstroBlock = isLikelyAstroParagraphText(text);
+  const components = useMemo(
+    () => makeMdComponents(forceAstroBlock),
+    [forceAstroBlock],
+  );
   return (
-    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
       {active ? closeUnclosedMarkers(text) : text}
     </ReactMarkdown>
   );
@@ -289,10 +302,12 @@ const AstroMarkdown = memo(function AstroMarkdown({
     }
   }, [postStream, visibleLength, content.length]);
 
+  const staticComponents = useMemo(() => makeMdComponents(false), []);
+
   if (!revealActive) {
     return (
       <div className="astro-md leading-[1.65] stream-md-reveal">
-        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MD_COMPONENTS}>
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={staticComponents}>
           {content}
         </ReactMarkdown>
       </div>
