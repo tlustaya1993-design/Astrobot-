@@ -23,27 +23,32 @@ interface AstroMarkdownProps {
  *   *✦ italic text*     → <p><em>✦ italic text</em></p>
  *   ✦ *italic text*     → <p>✦ <em>italic text</em></p>
  */
+function leadingText(node: React.ReactNode): string {
+  if (typeof node === 'string') return node;
+  if (!React.isValidElement(node)) return '';
+  const el = node as React.ReactElement<{ children?: React.ReactNode }>;
+  const parts = React.Children.toArray(el.props.children);
+  let out = '';
+  for (const part of parts) {
+    out += leadingText(part);
+    if (out.trimStart().length > 0) break;
+  }
+  return out;
+}
+
 function isAstroEmBlock(children: React.ReactNode): boolean {
   const arr = React.Children.toArray(children);
   if (arr.length === 0) return false;
-  const first = arr[0];
-  if (typeof first === 'string' && first.trimStart().startsWith('✦')) return true;
-  if (React.isValidElement(first)) {
-    const el = first as React.ReactElement<{ children?: React.ReactNode }>;
-    if (el.type === 'em') {
-      const text = React.Children.toArray(el.props.children)
-        .map(c => (typeof c === 'string' ? c : ''))
-        .join('');
-      return text.trimStart().startsWith('✦');
-    }
-  }
-  return false;
+  const firstText = leadingText(arr[0]);
+  if (firstText.trimStart().startsWith('✦')) return true;
+  const secondText = arr.length > 1 ? leadingText(arr[1]) : '';
+  return secondText.trimStart().startsWith('✦');
 }
 
 const MD_COMPONENTS: Components = {
   p: ({ children }) => {
     if (isAstroEmBlock(children)) {
-      return <p className="astro-em-block mb-3 last:mb-0">{children}</p>;
+      return <p className="astro-em-block mb-3 last:mb-0" data-astro-block="true">{children}</p>;
     }
     return <p className="mb-3 last:mb-0 leading-[1.65]">{children}</p>;
   },

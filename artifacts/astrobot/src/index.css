@@ -221,18 +221,38 @@ html.keyboard-open [data-bottom-nav] {
    so key phrases inside the block inherit the muted-white body colour;
    **bold** (strong) still gets text-primary (gold) via its own class. */
 .astro-em-block {
-  border-left: 2px solid rgba(201, 162, 39, 0.5);
-  padding-left: 0.75rem;
+  position: relative;
+  padding-left: 0.875rem;
   color: rgba(255, 255, 255, 0.65);
   font-style: italic;
   font-size: 14px;
   line-height: 1.65;
 }
 
+.astro-em-block::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.08em;
+  bottom: 0.08em;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(201, 162, 39, 0.62);
+}
+
+.astro-em-block,
+.astro-em-block span,
 .astro-em-block em {
-  color: inherit !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.astro-em-block em {
   font-style: italic;
   font-weight: 500;
+}
+
+.astro-em-block strong {
+  color: hsl(var(--primary)) !important;
 }
 
 /* Astro section divider — thin line + ✦ centred in gold.
