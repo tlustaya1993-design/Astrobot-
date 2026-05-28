@@ -215,11 +215,30 @@ html.keyboard-open [data-bottom-nav] {
   @apply px-3 py-2 align-top;
 }
 
+/* Gold gradient for **bold** in main body (not inside ✦ evidence block). */
+.astro-md p:not(.astro-em-block) strong,
+.astro-md li strong,
+.astro-md h1 strong,
+.astro-md h2 strong,
+.astro-md h3 strong,
+.astro-md h4 strong,
+.astro-md h5 strong,
+.astro-md h6 strong {
+  font-weight: 600;
+  background: linear-gradient(135deg, #b8860b 0%, #e8d18c 48%, #f4e4a8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Emphasis in main body — gold tint; overridden inside ✦ block below. */
+.astro-md-em {
+  color: hsl(var(--primary) / 0.9);
+}
+
 /* Astro evidence block — italic paragraph starting with ✦
-   Vertical gold bar on the left, subdued italic text.
-   .astro-em-block em: !important overrides text-primary/90 set in MD_COMPONENTS
-   so key phrases inside the block inherit the muted-white body colour;
-   **bold** (strong) still gets text-primary (gold) via its own class. */
+   Vertical gold bar on the left, subdued italic text. */
 .astro-em-block {
   position: relative;
   padding-left: 0.875rem;
@@ -227,6 +246,7 @@ html.keyboard-open [data-bottom-nav] {
   font-style: italic;
   font-size: 14px;
   line-height: 1.65;
+  white-space: pre-line;
 }
 
 .astro-em-block::before {
@@ -242,16 +262,22 @@ html.keyboard-open [data-bottom-nav] {
 
 .astro-em-block,
 .astro-em-block span,
-.astro-em-block em {
+.astro-em-block .astro-md-em {
   color: rgba(255, 255, 255, 0.65) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.65) !important;
+  transition: none;
 }
 
-.astro-em-block em {
+.astro-em-block .astro-md-em {
   font-style: italic;
   font-weight: 500;
 }
 
 .astro-em-block strong {
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  -webkit-text-fill-color: unset;
   color: hsl(var(--primary)) !important;
 }
 
