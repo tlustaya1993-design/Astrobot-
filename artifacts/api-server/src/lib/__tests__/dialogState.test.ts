@@ -38,12 +38,24 @@ describe("dedupeSignals", () => {
     expect(merged).toHaveLength(1);
   });
 
+  it("merges full and abbreviated labels with orb and degrees", () => {
+    const merged = dedupeSignals(
+      ["Транзитный Юпитер △ натальное Солнце (орб 0.3°, точный)"],
+      ["Транз. Юпитер △ натал. Солнце"],
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toContain("Юпитер");
+  });
+
   it("caps at 30 signals and keeps the newest", () => {
-    const existing = Array.from({ length: 29 }, (_, i) => `сигнал ${i}`);
-    const merged = dedupeSignals(existing, ["сигнал 29", "сигнал 30"]);
+    const existing = Array.from(
+      { length: 29 },
+      (_, i) => `сигнал ${String.fromCharCode(97 + (i % 26))}${i >= 26 ? "z" : ""}`,
+    );
+    const merged = dedupeSignals(existing, ["сигнал ya", "сигнал yb"]);
     expect(merged).toHaveLength(30);
-    expect(merged[0]).toBe("сигнал 1");
-    expect(merged[29]).toBe("сигнал 30");
+    expect(merged[0]).toBe("сигнал b");
+    expect(merged[29]).toBe("сигнал yb");
   });
 });
 
