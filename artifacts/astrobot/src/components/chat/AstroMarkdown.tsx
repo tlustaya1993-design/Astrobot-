@@ -59,7 +59,9 @@ function makeMdComponents(forceAstroBlock: boolean): Components {
       }
       return <p className="mb-3 last:mb-0 leading-[1.65]">{children}</p>;
     },
-    strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+    strong: ({ children }) => (
+      <strong className={forceAstroBlock ? 'font-semibold' : 'astro-md-strong-gold'}>{children}</strong>
+    ),
     em:     ({ children }) => <em className="astro-md-em font-medium italic">{children}</em>,
     h1:     ({ children }) => <h1 className="text-white font-semibold text-xl mb-3 mt-2 leading-snug">{children}</h1>,
     h2:     ({ children }) => <h2 className="text-white font-semibold text-lg mb-3 mt-2 leading-snug">{children}</h2>,
