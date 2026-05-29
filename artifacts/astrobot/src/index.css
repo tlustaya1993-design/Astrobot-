@@ -215,21 +215,23 @@ html.keyboard-open [data-bottom-nav] {
   @apply px-3 py-2 align-top;
 }
 
-/* Gold gradient for **bold** in main body (not inside ✦ evidence block). */
-.astro-md p:not(.astro-em-block) strong,
-.astro-md li strong,
-.astro-md h1 strong,
-.astro-md h2 strong,
-.astro-md h3 strong,
-.astro-md h4 strong,
-.astro-md h5 strong,
-.astro-md h6 strong {
+/* Gold gradient for **bold** in main body — explicit class from AstroMarkdown. */
+.astro-md-strong-gold {
+  display: inline;
   font-weight: 600;
-  background: linear-gradient(135deg, #b8860b 0%, #e8d18c 48%, #f4e4a8 100%);
+  background-image: linear-gradient(135deg, #b8860b 0%, #e8d18c 48%, #f4e4a8 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
+}
+
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .astro-md-strong-gold {
+    background-image: none;
+    -webkit-text-fill-color: unset;
+    color: #e8d18c;
+  }
 }
 
 /* Emphasis in main body — gold tint; overridden inside ✦ block below. */
@@ -273,8 +275,11 @@ html.keyboard-open [data-bottom-nav] {
   font-weight: 500;
 }
 
-.astro-em-block strong {
+.astro-em-block strong,
+.astro-em-block .astro-md-strong-gold {
+  display: inline;
   background: none;
+  background-image: none;
   -webkit-background-clip: unset;
   background-clip: unset;
   -webkit-text-fill-color: unset;
