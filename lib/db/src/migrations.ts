@@ -62,6 +62,14 @@ async function applySchemaPatches(pool: Pool): Promise<void> {
     ADD COLUMN IF NOT EXISTS contact_extended_mode boolean NOT NULL DEFAULT false
   `);
   await pool.query(`
+    ALTER TABLE conversations
+    ADD COLUMN IF NOT EXISTS used_signals_json text
+  `);
+  await pool.query(`
+    ALTER TABLE conversations
+    ADD COLUMN IF NOT EXISTS last_hook_topic text
+  `);
+  await pool.query(`
     ALTER TABLE messages
     ADD COLUMN IF NOT EXISTS message_type text DEFAULT 'chat'
   `);

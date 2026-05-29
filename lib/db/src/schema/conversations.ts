@@ -9,6 +9,10 @@ export const conversations = pgTable("conversations", {
   contactId: integer("contact_id"),
   /** Расширенный разбор по выбранному контакту (прогноз, соляр, прогрессии и т.д.) — дороже по «запросам». */
   contactExtendedMode: boolean("contact_extended_mode").notNull().default(false),
+  /** JSON-массив строк: аспекты/сигналы уже разобранные в этом диалоге. */
+  usedSignalsJson: text("used_signals_json"),
+  /** Тема последнего крючка в конце ответа бота. */
+  lastHookTopic: text("last_hook_topic"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
