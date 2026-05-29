@@ -17,6 +17,7 @@ import {
   type ChartValidationResult,
 } from "../../lib/astrology.js";
 import { isAstroAssistantMessage } from "../../lib/astroMessageFilter.js";
+import { parseUsedSignalsJson } from "../../lib/dialogState.js";
 import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedUser,
@@ -395,6 +396,9 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
+  const usedSignals = parseUsedSignalsJson(conv.usedSignalsJson);
+  const lastHookTopic = conv.lastHookTopic ?? null;
+
   const initialContactId = conv.contactId ?? null;
 
   let effectiveContactId: number | null = conv.contactId ?? null;
@@ -567,7 +571,14 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .limit(20),
   ]);
 
-  const systemPrompt = safeBuildSystemPrompt(userProfile, contactProfile, userMemories, nextExtended);
+  const systemPrompt = safeBuildSystemPrompt(
+    userProfile,
+    contactProfile,
+    userMemories,
+    nextExtended,
+    usedSignals,
+    lastHookTopic,
+  );
 
   // Astro assistant messages are stripped from LLM history: their house/planet
   // assignments are always stale vs the fresh system prompt.  Both explicitly
@@ -862,9 +873,11 @@ function safeBuildSystemPrompt(
   contact: ContactRow = null,
   memories: MemoryRow[] = [],
   contactExtendedMode = false,
+  usedSignals: string[] = [],
+  lastHookTopic: string | null = null,
 ): string {
   try {
-    return buildSystemPrompt(user, contact, memories, contactExtendedMode);
+    return buildSystemPrompt(user, contact, memories, contactExtendedMode, usedSignals, lastHookTopic);
   } catch (err) {
     logger.error({ err }, "buildSystemPrompt failed; using fallback system prompt");
     const name = user?.name || "гость";
@@ -1071,6 +1084,8 @@ function buildSystemPrompt(
   contact: ContactRow = null,
   memories: MemoryRow[] = [],
   contactExtendedMode = false,
+  usedSignals: string[] = [],
+  lastHookTopic: string | null = null,
 ): string {
   const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, validation: userValidation } = calcUserData(user);
 
@@ -1117,6 +1132,11 @@ function buildSystemPrompt(
     warningLines.push("⚠️ СИСТЕМНОЕ ПРЕДУПРЕЖДЕНИЕ (контакт): Дома контакта не прошли валидацию. Не используй дома и управителей домов контакта в ответе. Планеты, знаки и синастрические аспекты доступны.");
   }
   const warningBlock = warningLines.length > 0 ? `\n${warningLines.join("\n")}\n` : "";
+
+  const usedSignalsBlock =
+    usedSignals.length > 0
+      ? `Аспекты которые уже были разобраны в этом диалоге — не повторять как новый анализ:\n${usedSignals.map((s) => `— ${s}`).join("\n")}\n\nПоследний предложенный крючок: ${lastHookTopic || "не было"}\n`
+      : "";
 
   const memoriesSection = memories.length > 0
     ? `\nЧто я помню о пользователе из прошлых разговоров:\n${memories.map(m => `— ${m.content}`).join("\n")}\n`
@@ -1484,7 +1504,7 @@ AstroBot — навигация по вероятностям жизни, не �
 
 Проходи все 12 домов по порядку, ни один не пропускай. Для каждого: знак на куспиде, управитель и где он стоит. Пустой дом — не значит «нечего сказать»: раскрой тему через знак и положение управителя. Все данные только из профиля.
 
-${synastryModeNote}${warningBlock}${profileSection}
+${synastryModeNote}${warningBlock}${usedSignalsBlock}${profileSection}
 ${contactProfileSection}
 ${memoriesSection}`;
 }
