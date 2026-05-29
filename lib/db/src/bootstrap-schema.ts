@@ -56,6 +56,8 @@ export async function ensureBootstrapSchema(pool: Pool): Promise<void> {
     title text NOT NULL,
     contact_id integer,
     contact_extended_mode boolean NOT NULL DEFAULT false,
+    used_signals_json text,
+    last_hook_topic text,
     created_at timestamptz NOT NULL DEFAULT now()
   )`);
 
