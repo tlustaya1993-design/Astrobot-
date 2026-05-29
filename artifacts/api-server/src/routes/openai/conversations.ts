@@ -17,7 +17,12 @@ import {
   type ChartValidationResult,
 } from "../../lib/astrology.js";
 import { isAstroAssistantMessage } from "../../lib/astroMessageFilter.js";
-import { parseUsedSignalsJson } from "../../lib/dialogState.js";
+import {
+  parseUsedSignalsJson,
+  extractSignalsFromResponse,
+  extractLastHookTopic,
+  dedupeSignals,
+} from "../../lib/dialogState.js";
 import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedUser,
@@ -701,6 +706,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
             updatedAt: new Date(),
           })
           .where(eq(usersTable.sessionId, sessionId)),
+        updateConversationDialogState(id, fullResponse, conv),
       ]);
 
       if (sessionId && fullResponse) {
@@ -807,6 +813,30 @@ router.delete("/memories/:id", async (req, res) => {
     .where(and(eq(memoriesTable.id, memId), eq(memoriesTable.sessionId, sessionId)));
   res.status(204).end();
 });
+
+// ── Dialog state (anti-repetition) ───────────────────────────────────────────
+
+async function updateConversationDialogState(
+  conversationId: number,
+  fullResponse: string,
+  conv: { usedSignalsJson: string | null },
+): Promise<void> {
+  try {
+    const newSignals = extractSignalsFromResponse(fullResponse);
+    const existing = parseUsedSignalsJson(conv.usedSignalsJson);
+    const merged = dedupeSignals(existing, newSignals);
+    const hook = extractLastHookTopic(fullResponse);
+    await db
+      .update(conversations)
+      .set({
+        usedSignalsJson: JSON.stringify(merged),
+        lastHookTopic: hook,
+      })
+      .where(eq(conversations.id, conversationId));
+  } catch (err) {
+    logger.error({ err, conversationId }, "updateConversationDialogState failed");
+  }
+}
 
 // ── Memory extraction ────────────────────────────────────────────────────────
 
