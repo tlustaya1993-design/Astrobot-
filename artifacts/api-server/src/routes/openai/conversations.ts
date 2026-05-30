@@ -576,6 +576,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .limit(20),
   ]);
 
+  const hookAffirmation =
+    isShortHookAffirmation(normalizedContent) && !!lastHookTopic;
   const systemPrompt = safeBuildSystemPrompt(
     userProfile,
     contactProfile,
@@ -583,6 +585,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     nextExtended,
     usedSignals,
     lastHookTopic,
+    hookAffirmation,
   );
 
   // Astro assistant messages are stripped from LLM history: their house/planet
@@ -897,6 +900,19 @@ type ContactRow = {
 
 type MemoryRow = { content: string } & Record<string, unknown>;
 
+const HOOK_AFFIRMATION_WORDS = new Set([
+  "да", "давай", "давайте", "конечно", "ок", "окей", "хорошо", "угу", "ага", "ладно",
+]);
+
+/** Короткое согласие на крючок: «да», «давай», «ок» и т.п. без развёрнутого вопроса. */
+function isShortHookAffirmation(content: string): boolean {
+  const t = content.trim().toLowerCase().replace(/[!?.,…:;]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!t || t.length > 40) return false;
+  const words = t.split(" ").filter(Boolean);
+  if (words.length === 0 || words.length > 4) return false;
+  return words.every((w) => HOOK_AFFIRMATION_WORDS.has(w));
+}
+
 /** Никогда не бросает — иначе клиент ловит HTTP 500 до открытия SSE. */
 function safeBuildSystemPrompt(
   user: UserRow,
@@ -905,9 +921,18 @@ function safeBuildSystemPrompt(
   contactExtendedMode = false,
   usedSignals: string[] = [],
   lastHookTopic: string | null = null,
+  hookAffirmation = false,
 ): string {
   try {
-    return buildSystemPrompt(user, contact, memories, contactExtendedMode, usedSignals, lastHookTopic);
+    return buildSystemPrompt(
+      user,
+      contact,
+      memories,
+      contactExtendedMode,
+      usedSignals,
+      lastHookTopic,
+      hookAffirmation,
+    );
   } catch (err) {
     logger.error({ err }, "buildSystemPrompt failed; using fallback system prompt");
     const name = user?.name || "гость";
@@ -1116,6 +1141,7 @@ function buildSystemPrompt(
   contactExtendedMode = false,
   usedSignals: string[] = [],
   lastHookTopic: string | null = null,
+  hookAffirmation = false,
 ): string {
   const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, validation: userValidation } = calcUserData(user);
 
@@ -1163,10 +1189,24 @@ function buildSystemPrompt(
   }
   const warningBlock = warningLines.length > 0 ? `\n${warningLines.join("\n")}\n` : "";
 
+  const usedSignalsLines: string[] = [];
+  if (hookAffirmation && lastHookTopic) {
+    usedSignalsLines.push(
+      `РЕЖИМ ОТВЕТА НА СОГЛАСИЕ: пользователь согласился на продолжение. Разверни именно тему последнего крючка: «${lastHookTopic}». Не повторяй транзиты и аспекты из списка ниже как новый разбор. Начни сразу с обещанного слоя (соляр / прогрессии / натал / другой дом / другая планета) — без вступления с теми же транзитами.`,
+    );
+  }
+  if (usedSignals.length > 0) {
+    usedSignalsLines.push(
+      "Аспекты которые уже были разобраны в этом диалоге — не разворачивать повторно как основной анализ. Переходи на другой слой карты (прогрессии / соляр / натал / другая планета / другой дом).",
+      ...usedSignals.map((s) => `— ${s}`),
+      "Связь с ПРАВИЛОМ ОТБОРА СИГНАЛОВ: аспекты из этого списка не включать в ✦-блок и не делать ими основным аргументом ответа. Допустима только короткая отсылка «как мы уже смотрели» (одно предложение) — затем сразу новый слой.",
+    );
+  }
+  if (usedSignalsLines.length > 0 || lastHookTopic) {
+    usedSignalsLines.push(`Последний предложенный крючок: ${lastHookTopic || "не было"}`);
+  }
   const usedSignalsBlock =
-    usedSignals.length > 0
-      ? `Аспекты которые уже были разобраны в этом диалоге — не разворачивать повторно как основной анализ. Можно упомянуть коротко как связку если это открывает новый слой. Переходи на другой слой карты (прогрессии / соляр / натал / другая планета / другой дом).\n${usedSignals.map((s) => `— ${s}`).join("\n")}\n\nПоследний предложенный крючок: ${lastHookTopic || "не было"}\n`
-      : "";
+    usedSignalsLines.length > 0 ? `${usedSignalsLines.join("\n")}\n` : "";
 
   const memoriesSection = memories.length > 0
     ? `\nЧто я помню о пользователе из прошлых разговоров:\n${memories.map(m => `— ${m.content}`).join("\n")}\n`
@@ -1264,6 +1304,8 @@ ${contactAstroSection ? `\n${contactAstroSection}\n` : ""}`
 
 Список уже разобранных аспектов (если передан выше) не запрещает хвостик: если в профиле есть слой (прогрессии, соляр, натал, другой дом, другая планета), которого ещё не было в этом диалоге — крючок с вопросом про него уместен. Не выдавай в крючке уже разобранный аспект за новую находку.
 
+Запрещено повторно предлагать в хвостике ту же тему, что в блоке «Последний предложенный крючок» выше (тот же слой: соляр, прогрессии, натал, тот же дом или планета). Если другого нового слоя по теме нет — заканчивай без крючка.
+
 Крючок должен быть реальным — только то что есть в данных профиля. Не выдумывай аспекты ради красивого перехода. Перед тем как предложить тему — проверь: эта информация уже прозвучала в этом разговоре? Если да — не повторяй и не делай вид, что это новая находка.
 
 Когда предлагаешь тему в хвостике — формулируй как реальное продолжение, не как отдельный новый разговор. Человек должен чувствовать что следующий ответ будет продолжением этого же исследования, а не новой темой с нуля. Если человек отвечает «да» на твой крючок — следующий ответ начинается оттуда где остановились, без переформулировок и повторений того что уже было.
@@ -1311,6 +1353,8 @@ ${contactAstroSection ? `\n${contactAstroSection}\n` : ""}`
 Упоминается только если усиливает основной сюжет, объясняет оттенок, или противоречит главной картине.
 
 Запрещено: перечислять все аспекты подряд ради полноты. Каждый новый сигнал должен менять или усиливать вывод — иначе не включается.
+
+Если выше передан список уже разобранных аспектов — они не попадают в приоритеты 1–2, не включаются в ✦-блок и не становятся основным аргументом. Допустима только короткая отсылка «как мы уже смотрели» — одно предложение — затем только сигналы вне списка или новый слой карты.
 
 ФОРМУЛА ИНТЕРПРЕТАЦИИ СИГНАЛА
 
