@@ -322,14 +322,14 @@ const AstroMarkdown = memo(function AstroMarkdown({
 
   if (!revealActive) {
     return (
-      <div className="astro-md leading-[1.65] stream-md-reveal">
+      <div className="astro-md min-w-0 max-w-full overflow-x-hidden leading-[1.65] stream-md-reveal">
         <StaticMarkdownBody content={content} />
       </div>
     );
   }
 
   return (
-    <div className="astro-md leading-[1.65]">
+    <div className="astro-md min-w-0 max-w-full overflow-x-hidden leading-[1.65]">
       <StreamingMarkdownBody
         content={content}
         visibleLength={visibleLength}

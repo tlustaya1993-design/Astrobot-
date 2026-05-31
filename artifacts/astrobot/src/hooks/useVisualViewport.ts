@@ -31,16 +31,27 @@ export function useVisualViewport(): void {
       return;
     }
 
+    let prevKeyboardOpen = false;
+
     function sync() {
-      const h = window.visualViewport
-        ? Math.round(window.visualViewport.height)
-        : window.innerHeight;
+      const vv = window.visualViewport;
+      const h = vv ? Math.round(vv.height) : window.innerHeight;
       document.documentElement.style.setProperty('--vvh', `${h}px`);
 
-      // Keyboard is considered open when the visual viewport is more than 120px
-      // shorter than the layout viewport (a keyboard is at minimum ~150px tall).
       const keyboardVisible = window.innerHeight - h > 120;
       document.documentElement.classList.toggle('keyboard-open', keyboardVisible);
+
+      // iOS Safari: after keyboard dismiss the page can stay visually offset.
+      if (prevKeyboardOpen && !keyboardVisible) {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+      }
+      prevKeyboardOpen = keyboardVisible;
+
+      if (vv && !keyboardVisible && vv.offsetTop > 0) {
+        window.scrollTo(0, 0);
+      }
     }
 
     sync();

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 
 const TUTORIAL_KEY = 'astrobot_tutorial_v1';
 const LEGACY_ONBOARDING_KEY = 'astrobot_chat_onboarding_v1';
+export const FRESH_ONBOARDING_KEY = 'astrobot_fresh_onboarding';
 
 export const TUTORIAL_TOTAL_STEPS = 10;
 
