@@ -594,15 +594,23 @@ router.post("/conversations/:id/messages", async (req, res) => {
     isShortContinuation,
   );
 
-  // Astro assistant messages are stripped from LLM history: their house/planet
+  // Astro assistant messages are mostly stripped from LLM history: their house/planet
   // assignments are always stale vs the fresh system prompt.  Both explicitly
   // tagged messages (messageType === "astro") and historical messages created
   // before the tag was introduced (messageType null/undefined) are detected via
   // isAstroAssistantMessage, which matches on structural content markers.
+  // The most recent astro reply is kept in full so the model sees what it said last turn.
+  const lastAstroMessage = [...history]
+    .filter((m) => m.role === "assistant" && isAstroAssistantMessage(m))
+    .at(-1);
+  const lastAstroId = lastAstroMessage?.id ?? null;
+
   const chatMessages = history.map((m) => ({
     role: m.role as "user" | "assistant",
     content: isAstroAssistantMessage(m)
-      ? "[астрологический разбор был предоставлен — актуальные данные находятся в текущем расчёте]"
+      ? m.id === lastAstroId
+        ? m.content
+        : "[астрологический разбор был предоставлен — актуальные данные находятся в текущем расчёте]"
       : m.content,
   }));
 
