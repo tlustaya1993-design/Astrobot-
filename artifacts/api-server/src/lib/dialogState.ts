@@ -1,7 +1,17 @@
 const MAX_SIGNALS = 30;
 
 const ASTRO_HOOK_TERMS =
-  /(?:сатурн|юпитер|марс|луна|солнце|меркурий|венера|плутон|уран|нептун|хирон|лилит|узел|дом|соляр|прогресси|транзит|асцендент|mc|ic)/i;
+  /(?:сатурн|юпитер|марс|луна|солнце|меркурий|венера|плутон|уран|нептун|хирон|лилит|узел|узлы|дома|дом|соляр|прогресси|дирекци|транзит|натал|синастри|асцендент|mc|ic)/i;
+
+/** Приглашение продолжить разбор без обязательного «?». */
+const HOOK_INVITATION_RE =
+  /(?:хочешь\s+посмотреть|хочешь\s+посмотрим|могу\s+посмотреть|если\s+интересно|можно\s+отдельно\s+разобрать|дальше\s+можно\s+посмотреть)/i;
+
+function isHookSentence(sentence: string): boolean {
+  if (!ASTRO_HOOK_TERMS.test(sentence)) return false;
+  if (sentence.includes("?")) return true;
+  return HOOK_INVITATION_RE.test(sentence);
+}
 
 const SIGNAL_LINE_RE = /✦\s*(.+?)\s*→/;
 
@@ -60,7 +70,7 @@ export function extractSignalsFromResponse(text: string): string[] {
 }
 
 /**
- * Тема последнего крючка: последнее предложение с «?» и астротермином.
+ * Тема последнего крючка: последнее предложение с «?» или приглашением («могу посмотреть» и т.п.) и астротермином.
  */
 export function extractLastHookTopic(text: string): string | null {
   if (!text.trim()) return null;
@@ -68,8 +78,7 @@ export function extractLastHookTopic(text: string): string | null {
   const sentences = text.match(/[^.!??\n]+(?:[.!?]+|$)/g) ?? [];
   for (let i = sentences.length - 1; i >= 0; i--) {
     const sentence = sentences[i].replace(/\s+/g, " ").trim();
-    if (!sentence.includes("?")) continue;
-    if (!ASTRO_HOOK_TERMS.test(sentence)) continue;
+    if (!isHookSentence(sentence)) continue;
     return sentence;
   }
   return null;
