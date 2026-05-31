@@ -211,6 +211,79 @@ function calcTooltipPos(
   return { top, left, width: tooltipW };
 }
 
+interface StepTooltipCardProps {
+  cfg: StepCfg;
+  step: number;
+  isLast: boolean;
+  onNext: () => void;
+  onSkip: () => void;
+  className?: string;
+  style?: React.CSSProperties;
+}
+
+function StepTooltipCard({
+  cfg,
+  step,
+  isLast,
+  onNext,
+  onSkip,
+  className = '',
+  style,
+}: StepTooltipCardProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -6, scale: 0.97 }}
+      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+      className={`pointer-events-auto rounded-2xl border border-primary/20 bg-card/98 backdrop-blur-xl p-4 flex flex-col gap-3 shadow-[0_12px_44px_rgba(0,0,0,0.55),0_0_0_1px_rgba(212,175,55,0.1)] ${className}`}
+      style={style}
+      onClick={e => e.stopPropagation()}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-semibold font-display text-foreground leading-snug">
+          {cfg.title}
+        </p>
+        <button
+          type="button"
+          onClick={onSkip}
+          aria-label="Закрыть обучение"
+          className="shrink-0 p-1.5 -mr-1 -mt-0.5 rounded-full hover:bg-white/10 text-muted-foreground transition touch-manipulation"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="text-sm text-foreground/82 leading-relaxed">
+        {cfg.text}
+      </div>
+
+      <div className="flex items-center justify-between gap-3 pt-0.5">
+        <ProgressDots current={step} compact />
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={onSkip}
+            className="px-3 py-2 rounded-xl text-xs text-muted-foreground hover:text-foreground/75 transition touch-manipulation min-h-[36px]"
+          >
+            Пропустить
+          </button>
+          <span className="text-[11px] text-muted-foreground tabular-nums">
+            {step}/{TUTORIAL_TOTAL_STEPS}
+          </span>
+          <button
+            type="button"
+            onClick={onNext}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] text-xs font-semibold shadow-sm hover:brightness-105 active:brightness-95 transition touch-manipulation min-h-[36px]"
+          >
+            {isLast ? 'Готово ✓' : 'Далее →'}
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 export function TutorialOverlay() {
   const { step, isActive, next, skip } = useTutorial();
   const [spotRect, setSpotRect] = useState<SpotRect | null>(null);
@@ -360,23 +433,11 @@ export function TutorialOverlay() {
           )}
 
           {/* ── STEPS 2–10: Spotlight mode ── */}
-          {!isWelcome && (
+          {!isWelcome && cfg && (
             <>
-              {/* Dark backdrops around the spotlight — tapping outside advances; inside passes through to real UI */}
-              {spotRect ? (
-                <>
-                  <div className="absolute left-0 right-0 cursor-default" style={{ top: 0, height: Math.max(0, spotRect.top) }} onClick={skip} />
-                  <div className="absolute left-0 right-0 cursor-default" style={{ top: spotRect.top + spotRect.height, bottom: 0 }} onClick={skip} />
-                  <div className="absolute cursor-default" style={{ top: spotRect.top, height: spotRect.height, left: 0, width: Math.max(0, spotRect.left) }} onClick={skip} />
-                  <div className="absolute cursor-default" style={{ top: spotRect.top, height: spotRect.height, left: spotRect.left + spotRect.width, right: 0 }} onClick={skip} />
-                </>
-              ) : (
-                <button
-                  className="absolute inset-0 cursor-default"
-                  aria-label="Пропустить обучение"
-                  tabIndex={-1}
-                  onClick={skip}
-                />
+              {/* Full dim when spotlight target is unavailable — no silent skip trap */}
+              {!spotRect && (
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-[1px] pointer-events-none" />
               )}
 
               {/* Spotlight cutout */}
@@ -406,56 +467,32 @@ export function TutorialOverlay() {
                 )}
               </AnimatePresence>
 
-              {/* Tooltip */}
+              {/* Tooltip — always visible; centered fallback if target is missing */}
               <AnimatePresence mode="wait">
-                {tooltipPos && cfg && (
-                  <motion.div
+                {tooltipPos ? (
+                  <StepTooltipCard
                     key={`tip-${step}`}
-                    initial={{ opacity: 0, y: 10, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -6, scale: 0.97 }}
-                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute pointer-events-auto rounded-2xl border border-primary/20 bg-card/98 backdrop-blur-xl p-4 flex flex-col gap-3 shadow-[0_12px_44px_rgba(0,0,0,0.55),0_0_0_1px_rgba(212,175,55,0.1)]"
-                    style={{ top: tooltipPos.top, left: tooltipPos.left, width: tooltipPos.width }}
-                    onClick={e => e.stopPropagation()}
+                    cfg={cfg}
+                    step={step}
+                    isLast={isLast}
+                    onNext={next}
+                    onSkip={skip}
+                    style={{ position: 'absolute', top: tooltipPos.top, left: tooltipPos.left, width: tooltipPos.width }}
+                  />
+                ) : (
+                  <div
+                    key={`tip-fallback-${step}`}
+                    className="absolute inset-0 flex items-center justify-center px-6 pt-safe pointer-events-none"
                   >
-                    {/* Header */}
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold font-display text-foreground leading-snug">
-                        {cfg.title}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={skip}
-                        aria-label="Закрыть обучение"
-                        className="shrink-0 p-1.5 -mr-1 -mt-0.5 rounded-full hover:bg-white/10 text-muted-foreground transition touch-manipulation"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    {/* Body */}
-                    <div className="text-sm text-foreground/82 leading-relaxed">
-                      {cfg.text}
-                    </div>
-
-                    {/* Footer */}
-                    <div className="flex items-center justify-between gap-3 pt-0.5">
-                      <ProgressDots current={step} compact />
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <span className="text-[11px] text-muted-foreground tabular-nums">
-                          {step}/{TUTORIAL_TOTAL_STEPS}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={next}
-                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] text-xs font-semibold shadow-sm hover:brightness-105 active:brightness-95 transition touch-manipulation min-h-[36px]"
-                        >
-                          {isLast ? 'Готово ✓' : 'Далее →'}
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
+                    <StepTooltipCard
+                      cfg={cfg}
+                      step={step}
+                      isLast={isLast}
+                      onNext={next}
+                      onSkip={skip}
+                      className="w-full max-w-sm"
+                    />
+                  </div>
                 )}
               </AnimatePresence>
             </>
