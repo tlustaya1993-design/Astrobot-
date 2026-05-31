@@ -11,6 +11,36 @@ export function isLikelyAstroParagraphText(text: string): boolean {
   return t.startsWith('✦') || /^\*{1,2}\s*✦/.test(t);
 }
 
+/** Index in content where the ✦ evidence section begins, or content.length. */
+export function findAstroSectionStart(content: string): number {
+  const re = /^(\*{1,2}\s*)?✦/m;
+  const match = re.exec(content);
+  return match?.index ?? content.length;
+}
+
+/** Split assistant message into main interpretation and ✦ evidence sections. */
+export function splitAtAstroBlock(content: string): { main: string; astro: string | null } {
+  const cut = findAstroSectionStart(content);
+  if (cut >= content.length) {
+    return { main: content, astro: null };
+  }
+  const main = content.slice(0, cut).trimEnd();
+  const astro = content.slice(cut).trimStart();
+  return { main, astro: astro || null };
+}
+
+/**
+ * Normalize main-body markdown so block headings render as gold lead strong:
+ * - ### headings → **heading**
+ * - **Title** — body on one line → title line + blank line + body
+ */
+export function normalizeMainSectionMarkdown(text: string): string {
+  if (!text.trim()) return text;
+  let out = text.replace(/^#{1,6}\s+(.+)$/gm, '**$1**');
+  out = out.replace(/^\*\*(.+?)\*\*\s*(?:[—–-]\s*)?(.+)$/gm, '**$1**\n\n$2');
+  return out;
+}
+
 /** Reveal one line per tick (~12 lines/sec). */
 const REVEAL_MS_PER_LINE = 80;
 
@@ -21,43 +51,17 @@ interface AstroMarkdownProps {
   onRevealProgress?: () => void;
 }
 
-/**
- * Returns true when a <p> node is an "astro evidence block":
- * the paragraph either starts with a bare ✦ string, or its
- * first child is an <em> element whose text begins with ✦.
- * Both patterns are used by the LLM:
- *   *✦ italic text*     → <p><em>✦ italic text</em></p>
- *   ✦ *italic text*     → <p>✦ <em>italic text</em></p>
- */
-function leadingText(node: React.ReactNode): string {
-  if (typeof node === 'string') return node;
-  if (!React.isValidElement(node)) return '';
-  const el = node as React.ReactElement<{ children?: React.ReactNode }>;
-  const parts = React.Children.toArray(el.props.children);
-  let out = '';
-  for (const part of parts) {
-    out += leadingText(part);
-    if (out.trimStart().length > 0) break;
-  }
-  return out;
-}
-
-function isAstroEmBlock(children: React.ReactNode): boolean {
-  const arr = React.Children.toArray(children);
-  if (arr.length === 0) return false;
-  const firstText = leadingText(arr[0]);
-  if (firstText.trimStart().startsWith('✦')) return true;
-  const secondText = arr.length > 1 ? leadingText(arr[1]) : '';
-  return secondText.trimStart().startsWith('✦');
-}
-
 function makeMdComponents(forceAstroBlock: boolean): Components {
   return {
     p: ({ children }) => {
-      if (forceAstroBlock || isAstroEmBlock(children)) {
-        return <p className="astro-em-block mb-3 last:mb-0" data-astro-block="true">{children}</p>;
+      if (forceAstroBlock) {
+        return (
+          <p className="astro-em-block mb-3 last:mb-0" data-astro-block="true">
+            {children}
+          </p>
+        );
       }
-      return <p className="mb-3 last:mb-0 leading-[1.65]">{children}</p>;
+      return <p className="astro-md-main-block mb-3 last:mb-0 leading-[1.65]">{children}</p>;
     },
     strong: ({ children }) => (
       <strong className={forceAstroBlock ? 'font-semibold' : 'astro-md-strong-gold'}>{children}</strong>
@@ -65,8 +69,16 @@ function makeMdComponents(forceAstroBlock: boolean): Components {
     em:     ({ children }) => <em className="astro-md-em font-medium italic">{children}</em>,
     h1:     ({ children }) => <h1 className="text-white font-semibold text-xl mb-3 mt-2 leading-snug">{children}</h1>,
     h2:     ({ children }) => <h2 className="text-white font-semibold text-lg mb-3 mt-2 leading-snug">{children}</h2>,
-    h3:     ({ children }) => <h3 className="text-primary/90 font-semibold text-[12px] tracking-[0.08em] uppercase mb-2 mt-4 leading-snug">{children}</h3>,
-    h4:     ({ children }) => <h4 className="text-primary/80 font-semibold text-[11px] tracking-[0.06em] uppercase mb-2 mt-3">{children}</h4>,
+    h3:     ({ children }) => (
+      <h3 className="astro-md-strong-gold astro-md-block-heading text-[12px] tracking-[0.08em] uppercase mb-2 mt-4 leading-snug">
+        {children}
+      </h3>
+    ),
+    h4:     ({ children }) => (
+      <h4 className="astro-md-strong-gold astro-md-block-heading text-[11px] tracking-[0.06em] uppercase mb-2 mt-3">
+        {children}
+      </h4>
+    ),
     h5:     ({ children }) => <h5 className="text-primary/70 font-semibold text-xs mb-1 mt-1">{children}</h5>,
     h6:     ({ children }) => <h6 className="text-primary/60 font-semibold text-xs mb-1 mt-1">{children}</h6>,
     ul:     ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1.5">{children}</ul>,
@@ -90,16 +102,12 @@ function makeMdComponents(forceAstroBlock: boolean): Components {
   };
 }
 
+const MAIN_MD_COMPONENTS = makeMdComponents(false);
+const ASTRO_MD_COMPONENTS = makeMdComponents(true);
+
 /**
  * Close any unclosed inline markers so ReactMarkdown never sees a dangling
  * ** or * that would render as a raw symbol.
- *
- * Closing markers are inserted BEFORE trailing whitespace, not after.
- * CommonMark forbids a closing delimiter preceded by Unicode whitespace, so
- * appending `*` after a trailing space makes the em element vanish for one
- * frame and reappear on the next non-space character — visible flicker.
- * By inserting before the whitespace the <em> DOM node is always present
- * once the opening `*` appears; only its text content updates each tick.
  */
 function closeUnclosedMarkers(text: string): string {
   const trailingWs = text.match(/(\s*)$/)?.[1] ?? '';
@@ -133,28 +141,20 @@ function paragraphRanges(content: string): ParagraphRange[] {
   return ranges;
 }
 
-/**
- * Single paragraph renderer used for both in-progress and completed paragraphs.
- * Using the same component type + stable key `p-{idx}` means React reuses the
- * existing DOM nodes when the paragraph transitions from partial → complete,
- * instead of unmounting ActiveBlock and mounting CompletedBlock (which caused
- * a brief repaint flash at every paragraph boundary).
- */
 const ParagraphBlock = memo(function ParagraphBlock({
   text,
   active,
+  forceAstroBlock,
 }: {
   text: string;
   active: boolean;
+  forceAstroBlock: boolean;
 }) {
-  const forceAstroBlock = isLikelyAstroParagraphText(text);
-  const components = useMemo(
-    () => makeMdComponents(forceAstroBlock),
-    [forceAstroBlock],
-  );
+  const components = forceAstroBlock ? ASTRO_MD_COMPONENTS : MAIN_MD_COMPONENTS;
+  const source = forceAstroBlock ? text : normalizeMainSectionMarkdown(text);
   return (
     <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={components}>
-      {active ? closeUnclosedMarkers(text) : text}
+      {active ? closeUnclosedMarkers(source) : source}
     </ReactMarkdown>
   );
 });
@@ -162,25 +162,32 @@ const ParagraphBlock = memo(function ParagraphBlock({
 function StreamingMarkdownBody({
   content,
   visibleLength,
+  astroSectionStart,
 }: {
   content: string;
   visibleLength: number;
+  astroSectionStart: number;
 }) {
   const ranges = paragraphRanges(content);
   const nodes: React.ReactNode[] = [];
 
   for (let idx = 0; idx < ranges.length; idx++) {
     const { start, end, text } = ranges[idx];
+    const forceAstroBlock = start >= astroSectionStart || isLikelyAstroParagraphText(text);
     if (visibleLength >= end) {
       if (text.length > 0) {
-        nodes.push(<ParagraphBlock key={`p-${idx}`} text={text} active={false} />);
+        nodes.push(
+          <ParagraphBlock key={`p-${idx}`} text={text} active={false} forceAstroBlock={forceAstroBlock} />,
+        );
       }
       continue;
     }
     if (visibleLength > start) {
       const partial = content.slice(start, visibleLength);
       if (partial.length > 0) {
-        nodes.push(<ParagraphBlock key={`p-${idx}`} text={partial} active={true} />);
+        nodes.push(
+          <ParagraphBlock key={`p-${idx}`} text={partial} active={true} forceAstroBlock={forceAstroBlock} />,
+        );
       }
       break;
     }
@@ -190,13 +197,6 @@ function StreamingMarkdownBody({
   return <>{nodes}</>;
 }
 
-/**
- * Reveals buffered SSE content line-by-line (one \n boundary per tick).
- * Consecutive blank lines are skipped in a single tick so paragraph
- * transitions don't stall. If no newline exists yet in the buffer the
- * rest of the incomplete line is shown immediately (no flicker: the
- * incomplete tail is still passed through closeUnclosedMarkers).
- */
 function useStreamingReveal(
   content: string,
   active: boolean,
@@ -231,12 +231,10 @@ function useStreamingReveal(
           if (prev >= text.length) return prev;
           const nl = text.indexOf('\n', prev);
           if (nl === -1) {
-            // No complete line yet — show the rest of the incomplete tail.
             onProgressRef.current?.();
             return text.length;
           }
           let next = nl + 1;
-          // Skip consecutive blank lines so \n\n paragraph gaps cross in one tick.
           while (next < text.length && text[next] === '\n') next++;
           onProgressRef.current?.();
           return next;
@@ -258,7 +256,6 @@ function useStreamingReveal(
   return visibleLength;
 }
 
-/** Three animated dots — same animation as the pre-message typing indicator. */
 function StreamingDots() {
   return (
     <span className="streaming-dots not-prose" aria-hidden>
@@ -275,8 +272,26 @@ function StreamingDots() {
   );
 }
 
-// Wrap in React.memo so non-streaming historical messages don't re-render
-// on every ~30 ms SSE commit during a streaming response.
+function StaticMarkdownBody({ content }: { content: string }) {
+  const { main, astro } = useMemo(() => splitAtAstroBlock(content), [content]);
+  const normalizedMain = useMemo(() => normalizeMainSectionMarkdown(main), [main]);
+
+  return (
+    <>
+      {normalizedMain.trim().length > 0 && (
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={MAIN_MD_COMPONENTS}>
+          {normalizedMain}
+        </ReactMarkdown>
+      )}
+      {astro && (
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={ASTRO_MD_COMPONENTS}>
+          {astro}
+        </ReactMarkdown>
+      )}
+    </>
+  );
+}
+
 const AstroMarkdown = memo(function AstroMarkdown({
   content,
   isStreaming = false,
@@ -284,6 +299,7 @@ const AstroMarkdown = memo(function AstroMarkdown({
 }: AstroMarkdownProps) {
   const [postStream, setPostStream] = useState(false);
   const wasStreamingRef = useRef(false);
+  const astroSectionStart = useMemo(() => findAstroSectionStart(content), [content]);
 
   useEffect(() => {
     if (isStreaming) {
@@ -304,21 +320,21 @@ const AstroMarkdown = memo(function AstroMarkdown({
     }
   }, [postStream, visibleLength, content.length]);
 
-  const staticComponents = useMemo(() => makeMdComponents(false), []);
-
   if (!revealActive) {
     return (
       <div className="astro-md leading-[1.65] stream-md-reveal">
-        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={staticComponents}>
-          {content}
-        </ReactMarkdown>
+        <StaticMarkdownBody content={content} />
       </div>
     );
   }
 
   return (
     <div className="astro-md leading-[1.65]">
-      <StreamingMarkdownBody content={content} visibleLength={visibleLength} />
+      <StreamingMarkdownBody
+        content={content}
+        visibleLength={visibleLength}
+        astroSectionStart={astroSectionStart}
+      />
       {isStreaming && <StreamingDots />}
     </div>
   );
