@@ -89,9 +89,8 @@ function viteBaseForRouter(): string {
 }
 
 function App() {
-  // Tracks visualViewport.height and writes --vvh to <html>.
-  // Fixes iOS Safari: when the soft keyboard opens the visual viewport shrinks
-  // and --vvh shrinks with it, preventing the chat from collapsing or going black.
+  // Tracks visualViewport → --vvh + --vv-offset-top on <html>.
+  // Keyboard open: layout shrinks and shifts up. Keyboard close: scroll reset only.
   useVisualViewport();
 
   useEffect(() => {
