@@ -244,6 +244,7 @@ export default function ChatSidebar({
           )}
           <ChatMenuSubscriptionCard onClick={() => setShowPaywall(true)} />
         </div>
+        </div>
       </aside>
       <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
     </>
