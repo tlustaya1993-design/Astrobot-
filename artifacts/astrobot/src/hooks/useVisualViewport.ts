@@ -1,19 +1,13 @@
 import { useEffect } from 'react';
 
 /**
- * iOS Safari (browser tab) problem: when the soft keyboard appears the visual
- * viewport shrinks, but `100dvh` may lag. This hook writes --vvh so AppLayout
- * always tracks the real visible height.
+ * iOS Safari (browser tab): track visual viewport for layout height and pan offset.
  *
- * PWA / standalone mode exception: in iOS standalone mode visualViewport.height
- * is sometimes SMALLER than the actual available screen height (iOS quirk),
- * which creates a black gap below the bottom nav. In standalone mode we let
- * CSS `--vvh: 100dvh` (set in :root) handle it — 100dvh correctly fills the
- * screen in PWA mode — and skip the JS override entirely.
+ * - While keyboard is open: shrink --vvh to visible height and apply --vv-offset-top
+ *   so fixed layouts shift up with the visual viewport (input stays above keyboard).
+ * - When keyboard closes: reset document scroll so the page does not stay "lifted".
  *
- * Keyboard detection: when the keyboard is visible (visual viewport significantly
- * shorter than inner height), we add `keyboard-open` class to <html>. This lets
- * CSS hide the bottom nav so more space is available for content and the input.
+ * PWA / standalone: skip JS override; CSS 100dvh is enough there.
  */
 
 function isStandalone(): boolean {
@@ -27,6 +21,7 @@ export function useVisualViewport(): void {
   useEffect(() => {
     if (isStandalone()) {
       document.documentElement.style.removeProperty('--vvh');
+      document.documentElement.style.removeProperty('--vv-offset-top');
       document.documentElement.classList.remove('keyboard-open');
       return;
     }
@@ -35,23 +30,24 @@ export function useVisualViewport(): void {
 
     function sync() {
       const vv = window.visualViewport;
-      const h = vv ? Math.round(vv.height) : window.innerHeight;
-      document.documentElement.style.setProperty('--vvh', `${h}px`);
+      const visualH = vv ? Math.round(vv.height) : window.innerHeight;
+      const layoutH = window.innerHeight;
+      const keyboardVisible = layoutH - visualH > 120;
+      const offsetTop = vv?.offsetTop ?? 0;
 
-      const keyboardVisible = window.innerHeight - h > 120;
       document.documentElement.classList.toggle('keyboard-open', keyboardVisible);
+      document.documentElement.style.setProperty('--vvh', `${visualH}px`);
+      document.documentElement.style.setProperty('--vv-offset-top', `${offsetTop}px`);
 
-      // iOS Safari: after keyboard dismiss the page can stay visually offset.
+      // Only fix the "stuck lifted" state after keyboard dismiss — never while typing.
       if (prevKeyboardOpen && !keyboardVisible) {
         window.scrollTo(0, 0);
         document.documentElement.scrollTop = 0;
         document.body.scrollTop = 0;
+        window.dispatchEvent(new CustomEvent('astrobot:keyboard-dismiss'));
       }
-      prevKeyboardOpen = keyboardVisible;
 
-      if (vv && !keyboardVisible && vv.offsetTop > 0) {
-        window.scrollTo(0, 0);
-      }
+      prevKeyboardOpen = keyboardVisible;
     }
 
     sync();
@@ -65,6 +61,7 @@ export function useVisualViewport(): void {
       window.visualViewport?.removeEventListener('scroll', sync);
       window.removeEventListener('resize', sync);
       document.documentElement.classList.remove('keyboard-open');
+      document.documentElement.style.removeProperty('--vv-offset-top');
     };
   }, []);
 }

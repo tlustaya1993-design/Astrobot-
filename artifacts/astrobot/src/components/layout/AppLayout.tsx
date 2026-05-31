@@ -6,10 +6,8 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   return (
-    // h-[100dvh] is the fallback; --vvh is set by useVisualViewport (see App.tsx)
-    // and equals visualViewport.height — this correctly tracks the iOS Safari soft
-    // keyboard so the chat never collapses or goes black when keyboard opens.
-    <div style={{ height: 'var(--vvh, 100dvh)' }} className="flex flex-col w-full bg-background/40 relative overflow-hidden shadow-lg shadow-black/30 border-x border-white/[0.03] pt-safe md:border-x-0 md:shadow-none">
+    // h-[100dvh] fallback; --vvh + --vv-offset-top from useVisualViewport (see App.tsx).
+    <div className="flex flex-col w-full h-full bg-background/40 relative overflow-hidden shadow-lg shadow-black/30 border-x border-white/[0.03] pt-safe md:border-x-0 md:shadow-none">
       <div className="absolute inset-0 z-[-1] pointer-events-none overflow-hidden">
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(140,110,255,0.16),transparent_42%),radial-gradient(circle_at_85%_90%,rgba(240,190,90,0.12),transparent_45%)]" />

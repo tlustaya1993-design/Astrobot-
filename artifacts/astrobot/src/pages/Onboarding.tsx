@@ -47,19 +47,11 @@ export default function Onboarding() {
   }, [isMeLoading, me?.onboardingDone, setLocation]);
 
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    let prevH = vv.height;
-    const onVvChange = () => {
-      const h = vv.height;
-      if (h > prevH + 60) {
-        scrollRef.current?.scrollTo({ top: 0 });
-        window.scrollTo(0, 0);
-      }
-      prevH = h;
+    const onDismiss = () => {
+      scrollRef.current?.scrollTo({ top: 0 });
     };
-    vv.addEventListener('resize', onVvChange);
-    return () => vv.removeEventListener('resize', onVvChange);
+    window.addEventListener('astrobot:keyboard-dismiss', onDismiss);
+    return () => window.removeEventListener('astrobot:keyboard-dismiss', onDismiss);
   }, []);
 
   const handleNext = () => { setErrorMsg(null); setStep(s => s + 1); };
@@ -103,7 +95,7 @@ export default function Onboarding() {
     'rounded-xl min-h-12 font-semibold border-0 bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] shadow-[0_0_28px_rgba(212,175,55,0.42),0_4px_20px_rgba(0,0,0,0.35)] hover:brightness-105 hover:shadow-[0_0_32px_rgba(212,175,55,0.5)] transition-[filter,box-shadow] disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100';
 
   return (
-    <div className="relative overflow-hidden bg-[#06060c]" style={{ height: 'var(--vvh, 100dvh)' }}>
+    <div className="relative min-h-[100dvh] overflow-hidden bg-[#06060c]" style={{ minHeight: 'var(--vvh, 100dvh)' }}>
       <div
         className="absolute inset-0 pointer-events-none bg-background"
         aria-hidden
