@@ -83,4 +83,12 @@ describe("extractLastHookTopic", () => {
   it("returns null when there is no hook question with astro terms", () => {
     expect(extractLastHookTopic("Как дела? Всё нормально.")).toBeNull();
   });
+
+  it("returns hook without question mark when invitation phrase and astro term present", () => {
+    const text =
+      "Основной разбор.\n\nЕсли интересно — могу посмотреть детальнее что соляр говорит про конкретные месяцы этого финансового цикла.";
+    const topic = extractLastHookTopic(text);
+    expect(topic).toMatch(/соляр/i);
+    expect(topic).toMatch(/могу посмотреть|если интересно/i);
+  });
 });
