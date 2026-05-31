@@ -1,6 +1,13 @@
 const DEFAULT_FREE_REQUESTS_LIMIT = 5;
 const DEFAULT_UNLIMITED_EMAILS: string[] = [];
 
+/** Coerce DB/nullish billing counters — avoids NaN in canAfford when value is null. */
+export function coerceNonNegInt(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
+}
+
 function parseFreeQuota(): number {
   const raw = Number.parseInt(process.env.FREE_REQUESTS_QUOTA ?? "", 10);
   // Пустое/NaN/0: дефолт 5. Ноль в панелях часто означает «не задано», а не «запретить бесплатные».
@@ -35,7 +42,8 @@ export function isUnlimitedEmail(email: string | null | undefined): boolean {
 export const isUnlimitedUser = isUnlimitedEmail;
 
 export function getRemainingFreeRequests(requestsUsed: number): number {
-  return Math.max(0, FREE_REQUESTS_LIMIT - Math.max(0, requestsUsed));
+  const used = coerceNonNegInt(requestsUsed);
+  return Math.max(0, FREE_REQUESTS_LIMIT - used);
 }
 
 export function canAffordRequest(
@@ -47,9 +55,11 @@ export function canAffordRequest(
   if (requestCost <= 0) return true;
   if (isUnlimitedEmail(email)) return true;
 
-  const freeRemaining = getRemainingFreeRequests(requestsUsed);
+  const used = coerceNonNegInt(requestsUsed);
+  const balance = coerceNonNegInt(requestsBalance);
+  const freeRemaining = getRemainingFreeRequests(used);
   const paidUnitsNeeded = Math.max(0, requestCost - freeRemaining);
-  return requestsBalance >= paidUnitsNeeded;
+  return balance >= paidUnitsNeeded;
 }
 
 export function getBalanceAfterCharge(
@@ -58,10 +68,12 @@ export function getBalanceAfterCharge(
   requestCost: number,
   email: string | null | undefined,
 ): number {
-  if (requestCost <= 0) return requestsBalance;
-  if (isUnlimitedEmail(email)) return requestsBalance;
+  if (requestCost <= 0) return coerceNonNegInt(requestsBalance);
+  if (isUnlimitedEmail(email)) return coerceNonNegInt(requestsBalance);
 
-  const freeRemaining = getRemainingFreeRequests(requestsUsed);
+  const used = coerceNonNegInt(requestsUsed);
+  const balance = coerceNonNegInt(requestsBalance);
+  const freeRemaining = getRemainingFreeRequests(used);
   const paidUnitsNeeded = Math.max(0, requestCost - freeRemaining);
-  return Math.max(0, requestsBalance - paidUnitsNeeded);
+  return Math.max(0, balance - paidUnitsNeeded);
 }
