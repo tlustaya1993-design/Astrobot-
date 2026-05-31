@@ -29,6 +29,7 @@ import {
   getRemainingFreeRequests,
   canAffordRequest,
   getBalanceAfterCharge,
+  coerceNonNegInt,
 } from "../../lib/billing-policy.js";
 import { parseAvatarJson } from "../../lib/avatar-config.js";
 
@@ -138,11 +139,18 @@ function requireSessionId(
   return req.sessionId;
 }
 
-async function rollbackRequestsBalance(sessionId: string, balanceBeforeCharge: number, context: string) {
+async function rollbackRequestCharge(
+  sessionId: string,
+  balanceBeforeCharge: number,
+  requestCost: number,
+  context: string,
+) {
+  if (requestCost <= 0) return;
   try {
     await db
       .update(usersTable)
       .set({
+        requestsUsed: sql`GREATEST(0, ${usersTable.requestsUsed} - ${requestCost})`,
         requestsBalance: balanceBeforeCharge,
         updatedAt: new Date(),
       })
@@ -382,6 +390,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
   }
 
   let balanceBeforeCharge = 0;
+  let chargedRequestCost = 0;
   let insertedUserId: number | undefined;
 
   try {
@@ -491,20 +500,34 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .limit(1);
   }
 
+  if (!owner) {
+    res.status(503).json({
+      error: "Не удалось создать профиль сессии. Обновите страницу и попробуйте снова.",
+    });
+    return;
+  }
+
+  const usedBeforeCharge = coerceNonNegInt(owner.requestsUsed);
+  const balanceBefore = coerceNonNegInt(owner.requestsBalance);
+
   const baseCost = normalizedContent.length >= 1200 ? 2 : 1;
   /** Расширение по контакту: ×2 от базы, но длинное+расширение = 3 (не 4), чтобы не штрафовать за оба фактора сразу. */
   let requestCost = baseCost;
   if (effectiveContactId && nextExtended) {
     requestCost = baseCost >= 2 ? 3 : 2;
   }
-  const remainingFree = getRemainingFreeRequests(owner?.requestsUsed ?? 0);
-  const isUnlimited = isUnlimitedUser(owner?.email);
+  const remainingFree = getRemainingFreeRequests(usedBeforeCharge);
+  const isUnlimited = isUnlimitedUser(owner.email);
 
-  if (!owner || !canAffordRequest(owner.requestsUsed, owner.requestsBalance, requestCost, owner.email)) {
+  if (!canAffordRequest(usedBeforeCharge, balanceBefore, requestCost, owner.email)) {
+    logger.info(
+      { sessionId, usedBeforeCharge, balanceBefore, requestCost, remainingFree, freeLimit: FREE_REQUESTS_LIMIT },
+      "Request blocked: insufficient quota",
+    );
     res.status(402).json({
       error: `Лимит бесплатных запросов (${FREE_REQUESTS_LIMIT}) исчерпан. Пополните пакет, чтобы продолжить.`,
       required: requestCost,
-      balance: owner?.requestsBalance ?? 0,
+      balance: balanceBefore,
       freeRemaining: remainingFree,
       isUnlimited,
     });
@@ -514,7 +537,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
   // Rate limit — technical safeguard against spam, bugs, and bots.
   // Does not block paid users from using their balance; only enforces a minimum
   // interval between requests and prevents parallel requests from the same session.
-  const tier = detectTier(owner.email, owner.requestsBalance, isUnlimited);
+  const tier = detectTier(owner.email, balanceBefore, isUnlimited);
   const throttle = await checkAiThrottle(sessionId, tier);
   if (!throttle.ok) {
     res.setHeader("Retry-After", String(throttle.waitSec));
@@ -533,13 +556,14 @@ router.post("/conversations/:id/messages", async (req, res) => {
   markInFlight(sessionId);
 
   const nextBalance = getBalanceAfterCharge(
-    owner.requestsUsed,
-    owner.requestsBalance,
+    usedBeforeCharge,
+    balanceBefore,
     requestCost,
     owner.email,
   );
 
-  balanceBeforeCharge = owner.requestsBalance;
+  balanceBeforeCharge = balanceBefore;
+  chargedRequestCost = requestCost;
 
   const [insertedUser] = await db
     .insert(messages)
@@ -547,9 +571,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
     .returning({ id: messages.id });
   insertedUserId = insertedUser?.id;
 
+  // Reserve quota atomically before streaming (free + paid units).
   await db
     .update(usersTable)
     .set({
+      requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
       requestsBalance: nextBalance,
       updatedAt: new Date(),
     })
@@ -716,13 +742,6 @@ router.post("/conversations/:id/messages", async (req, res) => {
       const hasNatalHouses = !!(userProfile?.birthDate && userProfile?.birthTime && userProfile?.birthLat);
       await Promise.all([
         db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse, messageType: hasNatalHouses ? "astro" : "chat" }),
-        db
-          .update(usersTable)
-          .set({
-            requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
-            updatedAt: new Date(),
-          })
-          .where(eq(usersTable.sessionId, sessionId)),
         updateConversationDialogState(id, fullResponse, conv),
       ]);
 
@@ -749,10 +768,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
           extra: exhaustedRetries ? `Попыток: ${aiAttempt + 1}` : undefined,
         },
       ).catch(() => {});
-      await rollbackRequestsBalance(
+      await rollbackRequestCharge(
         sessionId,
         balanceBeforeCharge,
-        "Failed to rollback requestsBalance after stream error",
+        chargedRequestCost,
+        "Failed to rollback request charge after stream error",
       );
       safeWrite(`data: ${JSON.stringify({ error: userFacingMessage })}\n\n`);
       if (!res.writableEnded) {
@@ -764,10 +784,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
   } catch (sseErr) {
     logger.error({ err: sseErr }, "Chat SSE setup or write failed");
-    await rollbackRequestsBalance(
+    await rollbackRequestCharge(
       sessionId,
       balanceBeforeCharge,
-      "Failed to rollback requestsBalance after SSE failure",
+      chargedRequestCost,
+      "Failed to rollback request charge after SSE failure",
     );
     if (heartbeat) clearInterval(heartbeat);
     if (!res.headersSent) {
@@ -797,10 +818,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
         await db.delete(messages).where(eq(messages.id, insertedUserId));
       } catch { /* ignore */ }
     }
-    await rollbackRequestsBalance(
+    await rollbackRequestCharge(
       sessionId,
       balanceBeforeCharge,
-      "Failed to rollback requestsBalance after top-level handler error",
+      chargedRequestCost,
+      "Failed to rollback request charge after top-level handler error",
     );
     if (!res.headersSent) {
       res.status(500).json({
