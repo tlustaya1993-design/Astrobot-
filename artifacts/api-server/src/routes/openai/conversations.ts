@@ -576,8 +576,9 @@ router.post("/conversations/:id/messages", async (req, res) => {
       .limit(20),
   ]);
 
-  const hookAffirmation =
-    isShortHookAffirmation(normalizedContent) && !!lastHookTopic;
+  const shortAffirmationOrContinuation =
+    isShortHookAffirmation(normalizedContent) || isShortContinuationPhrase(normalizedContent);
+  const hookAffirmation = !!lastHookTopic && shortAffirmationOrContinuation;
   const isShortContinuation =
     !hookAffirmation &&
     isShortContinuationPhrase(normalizedContent) &&
@@ -945,6 +946,53 @@ function isShortContinuationPhrase(content: string): boolean {
   return SHORT_CONTINUATION_PHRASES.includes(t);
 }
 
+function buildDialogStatePromptBlock(opts: {
+  hookAffirmation: boolean;
+  isShortContinuation: boolean;
+  lastHookTopic: string | null;
+  usedSignals: string[];
+}): string {
+  const lines: string[] = [
+    `РЕЖИМ ПОДДЕРЖАНИЯ БЕСЕДЫ
+
+Перед ответом определи что сейчас важнее:
+
+1. Текущий запрос пользователя.
+Если пользователь задал конкретный вопрос — отвечай именно на него. Не начинай общий разбор заново.
+
+2. Последний крючок.
+Если пользователь коротко согласился («да», «давай», «ок», «продолжай», «ещё») — и до этого была предложена конкретная тема — разверни именно эту тему. Полный текст предложенной темы передаётся ниже как lastHookTopic. Начинай ответ с неё, не с общего разбора транзитов.
+
+3. Продолжение темы.
+Если пользователь просит продолжить без конкретного крючка — не повторяй базовый вывод прошлого ответа. Дай новый слой анализа.
+
+Общее правило отбора самых сильных аспектов применяется только после определения намерения пользователя. Оно не должно перебивать тему запроса или тему крючка.`,
+  ];
+
+  if (opts.hookAffirmation && opts.lastHookTopic) {
+    lines.push(
+      "",
+      `→ Сейчас активно: пункт 2 (крючок). Разверни: «${opts.lastHookTopic}». Транзиты из списка ниже не в первых двух абзацах и не в ✦. Начни с темы крючка.`,
+    );
+  } else if (opts.isShortContinuation) {
+    lines.push(
+      "",
+      "→ Сейчас активно: пункт 3 (продолжение). Новый слой; не пересказывай базовый вывод (сильный период, Юпитер, Плутон, перестройка дохода и т.п.).",
+    );
+  }
+
+  if (opts.lastHookTopic) {
+    lines.push("", `lastHookTopic: ${opts.lastHookTopic}`);
+  }
+
+  if (opts.usedSignals.length > 0) {
+    lines.push("", "Уже разобрано в диалоге (не в ✦ и не основным аргументом; одна фраза «как уже смотрели» — максимум):");
+    lines.push(...opts.usedSignals.map((s) => `— ${s}`));
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 /** Никогда не бросает — иначе клиент ловит HTTP 500 до открытия SSE. */
 function safeBuildSystemPrompt(
   user: UserRow,
@@ -1224,46 +1272,15 @@ function buildSystemPrompt(
   }
   const warningBlock = warningLines.length > 0 ? `\n${warningLines.join("\n")}\n` : "";
 
-  const usedSignalsLines: string[] = [];
-  if (hookAffirmation && lastHookTopic) {
-    usedSignalsLines.push(
-      `РЕЖИМ ОТВЕТА НА СОГЛАСИЕ: пользователь согласился на продолжение. Разверни именно тему последнего крючка: «${lastHookTopic}». Транзиты и аспекты из списка ниже не трогать. Первые два абзаца и ✦-блок — только новый слой, обещанный в крючке (соляр / прогрессии / натал / дом / планета). Без вступления с теми же транзитами.`,
-    );
-  } else if (isShortContinuation) {
-    usedSignalsLines.push(
-      `РЕЖИМ КОРОТКОГО ПРОДОЛЖЕНИЯ: пользователь просит продолжить — значит предыдущий анализ уже дан. Не повторяй белый текст и ✦-сигналы из прошлого ответа.
-
-Считай, что базовый вывод уже сделан и услышан. Не пересказывай:
-— что период сильный или насыщенный;
-— что идёт перестройка заработка или формата дохода;
-— что Юпитер даёт рост или расширение;
-— что Плутон трансформирует;
-— любой вывод, который уже прозвучал в этом диалоге.
-
-Начинай ответ сразу с нового слоя. Например:
-— тайминг по месяцам;
-— соляр детально;
-— риски и что может сорвать реализацию;
-— через какие дома и каналы идёт доход;
-— какие конкретные решения карта поддерживает;
-— прогрессии;
-— натальная механика темы.
-
-Если все основные транзиты уже в списке — переходи в прогрессии, соляр, натальную механику, синастрию или временную навигацию.`,
-    );
-  }
-  if (usedSignals.length > 0) {
-    usedSignalsLines.push(
-      "Аспекты которые уже были разобраны в этом диалоге — не разворачивать повторно как основной анализ. Переходи на другой слой карты (прогрессии / соляр / натал / другая планета / другой дом).",
-      ...usedSignals.map((s) => `— ${s}`),
-      "Связь с ПРАВИЛОМ ОТБОРА СИГНАЛОВ: аспекты из этого списка не включать в ✦-блок и не делать ими основным аргументом ответа. Допустима только короткая отсылка «как мы уже смотрели» (одно предложение) — затем сразу новый слой.",
-    );
-  }
-  if (usedSignalsLines.length > 0 || lastHookTopic) {
-    usedSignalsLines.push(`Последний предложенный крючок: ${lastHookTopic || "не было"}`);
-  }
   const usedSignalsBlock =
-    usedSignalsLines.length > 0 ? `${usedSignalsLines.join("\n")}\n` : "";
+    usedSignals.length > 0 || lastHookTopic || hookAffirmation || isShortContinuation
+      ? buildDialogStatePromptBlock({
+          hookAffirmation,
+          isShortContinuation,
+          lastHookTopic,
+          usedSignals,
+        })
+      : "";
 
   const memoriesSection = memories.length > 0
     ? `\nЧто я помню о пользователе из прошлых разговоров:\n${memories.map(m => `— ${m.content}`).join("\n")}\n`
@@ -1411,7 +1428,7 @@ ${contactAstroSection ? `\n${contactAstroSection}\n` : ""}`
 
 Запрещено: перечислять все аспекты подряд ради полноты. Каждый новый сигнал должен менять или усиливать вывод — иначе не включается.
 
-Если выше передан список уже разобранных аспектов — они не попадают в приоритеты 1–2, не включаются в ✦-блок и не становятся основным аргументом. Допустима только короткая отсылка «как мы уже смотрели» — одно предложение — затем только сигналы вне списка или новый слой карты.
+Сначала соблюдай РЕЖИМ ПОДДЕРЖАНИЯ БЕСЕДЫ (если передан выше). Список уже разобранных аспектов — не в приоритеты 1–2 и не в ✦; только «как уже смотрели» одним предложением, затем новый слой.
 
 ФОРМУЛА ИНТЕРПРЕТАЦИИ СИГНАЛА
 

@@ -91,4 +91,12 @@ describe("extractLastHookTopic", () => {
     expect(topic).toMatch(/соляр/i);
     expect(topic).toMatch(/могу посмотреть|если интересно/i);
   });
+
+  it("returns hook with «там есть» invitation and astro term", () => {
+    const text =
+      "В соляре на этот год там есть интересная активация 8-го дома по партнёрским финансам.";
+    const topic = extractLastHookTopic(text);
+    expect(topic).toMatch(/там есть/i);
+    expect(topic).toMatch(/соляр|8/i);
+  });
 });
