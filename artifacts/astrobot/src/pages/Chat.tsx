@@ -3,7 +3,7 @@ import { useRoute, useLocation } from 'wouter';
 import { Send, Sparkles, ChevronLeft, ChevronDown, ChevronUp, Copy, CircleHelp, X, RotateCcw, MessageSquare, User } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
-import { useTutorial, isTutorialDone } from '@/context/TutorialContext';
+import { useTutorial, isTutorialDone, FRESH_ONBOARDING_KEY } from '@/context/TutorialContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import {
   useGetOpenaiConversation,
@@ -523,14 +523,25 @@ export default function Chat() {
     }
   }, [isLoggedIn]);
 
-  // Auto-start tutorial for new users (no conversationId = fresh chat screen)
+  // Auto-start tutorial for new users (no conversationId = fresh chat screen).
+  // Defer while paywall is open; retry after registration or onboarding complete.
   useEffect(() => {
     if (conversationId) return;
     if (isTutorialDone()) return;
-    const t = window.setTimeout(() => startTutorial(), 1400);
+    if (tutorialActive) return;
+    if (paywallState?.open) return;
+
+    const isFresh = (() => {
+      try { return sessionStorage.getItem(FRESH_ONBOARDING_KEY) === '1'; } catch { return false; }
+    })();
+    const delay = isFresh ? 600 : 1400;
+    const t = window.setTimeout(() => {
+      if (isTutorialDone()) return;
+      startTutorial();
+      try { sessionStorage.removeItem(FRESH_ONBOARDING_KEY); } catch { /* ignore */ }
+    }, delay);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [conversationId, paywallState?.open, isLoggedIn, tutorialActive, startTutorial]);
 
   // Open / close profile sheet at the right tutorial steps
   useEffect(() => {

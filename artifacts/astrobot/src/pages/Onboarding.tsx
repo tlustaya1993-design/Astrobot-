@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { User, Sparkles, ArrowRight } from 'lucide-react';
@@ -10,8 +10,10 @@ import { useGetMe, useUpsertMe, UpsertUserBody } from '@workspace/api-client-rea
 import { getAuthHeaders } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
+import { FRESH_ONBOARDING_KEY } from '@/context/TutorialContext';
 
 export default function Onboarding() {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation();
   const { openAuthModal } = useAuth();
   const { data: me, isLoading: isMeLoading } = useGetMe({
@@ -44,6 +46,22 @@ export default function Onboarding() {
     }
   }, [isMeLoading, me?.onboardingDone, setLocation]);
 
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let prevH = vv.height;
+    const onVvChange = () => {
+      const h = vv.height;
+      if (h > prevH + 60) {
+        scrollRef.current?.scrollTo({ top: 0 });
+        window.scrollTo(0, 0);
+      }
+      prevH = h;
+    };
+    vv.addEventListener('resize', onVvChange);
+    return () => vv.removeEventListener('resize', onVvChange);
+  }, []);
+
   const handleNext = () => { setErrorMsg(null); setStep(s => s + 1); };
   const handleBack = () => { setErrorMsg(null); setStep(s => s - 1); };
 
@@ -57,6 +75,11 @@ export default function Onboarding() {
           onboardingDone: true,
         }
       });
+      try {
+        sessionStorage.setItem(FRESH_ONBOARDING_KEY, '1');
+      } catch {
+        /* ignore */
+      }
       setLocation('/chat');
     } catch (e) {
       console.error('Onboarding error', e);
@@ -80,7 +103,7 @@ export default function Onboarding() {
     'rounded-xl min-h-12 font-semibold border-0 bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] shadow-[0_0_28px_rgba(212,175,55,0.42),0_4px_20px_rgba(0,0,0,0.35)] hover:brightness-105 hover:shadow-[0_0_32px_rgba(212,175,55,0.5)] transition-[filter,box-shadow] disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100';
 
   return (
-    <div className="h-[100dvh] relative overflow-hidden bg-[#06060c]">
+    <div className="relative overflow-hidden bg-[#06060c]" style={{ height: 'var(--vvh, 100dvh)' }}>
       <div
         className="absolute inset-0 pointer-events-none bg-background"
         aria-hidden
@@ -127,8 +150,11 @@ export default function Onboarding() {
 
       {/* Centered content — overflow-y-auto lets the form scroll when the
           Android Chrome virtual keyboard shrinks the visible viewport */}
-      <div className="h-full overflow-y-auto flex flex-col items-center justify-center px-6 pt-16 pb-10">
-        <div className="relative w-full max-w-sm">
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain flex flex-col items-center px-6 pt-16 pb-10 pb-safe"
+      >
+        <div className="relative w-full max-w-sm my-auto py-4">
           <AnimatePresence mode="wait">
 
             {step === 1 && (

@@ -45,6 +45,7 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prevVvHeightRef = useRef<number | null>(null);
 
   const search = useCallback(async (q: string) => {
     if (q.trim().length < 2) {
@@ -54,7 +55,6 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
     }
     setIsLoading(true);
     try {
-      // Broad search (no featuretype filter): restrictive params often return empty results in browsers.
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=8&addressdetails=1`;
       const res = await fetch(url, {
         headers: { 'Accept-Language': 'ru,en' },
@@ -81,12 +81,21 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
     const el = inputRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
+    const vv = window.visualViewport;
+    const visibleH = vv?.height ?? window.innerHeight;
+    const spaceBelow = visibleH - rect.bottom - 8;
+    const spaceAbove = rect.top - 8;
+    const maxHeight = Math.min(220, Math.max(96, Math.max(spaceBelow, spaceAbove) - 8));
+    const openAbove = spaceBelow < 120 && spaceAbove > spaceBelow;
+
     setListStyle({
       position: 'fixed',
-      top: rect.bottom + 4,
+      top: openAbove ? Math.max(8, rect.top - maxHeight - 4) : rect.bottom + 4,
       left: rect.left,
       width: rect.width,
+      maxHeight,
       zIndex: 9999,
+      overflowY: 'auto',
     });
   }, []);
 
@@ -113,10 +122,32 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
     const onScrollOrResize = () => updateListPosition();
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize);
+    const vv = window.visualViewport;
+    vv?.addEventListener('resize', onScrollOrResize);
+    vv?.addEventListener('scroll', onScrollOrResize);
     return () => {
       window.removeEventListener('scroll', onScrollOrResize, true);
       window.removeEventListener('resize', onScrollOrResize);
+      vv?.removeEventListener('resize', onScrollOrResize);
+      vv?.removeEventListener('scroll', onScrollOrResize);
     };
+  }, [isOpen, updateListPosition]);
+
+  // Close and reset when iOS keyboard dismisses (viewport grows).
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    prevVvHeightRef.current = vv.height;
+    const onVvResize = () => {
+      const prev = prevVvHeightRef.current ?? vv.height;
+      if (vv.height > prev + 60) {
+        setIsOpen(false);
+      }
+      prevVvHeightRef.current = vv.height;
+      if (isOpen) updateListPosition();
+    };
+    vv.addEventListener('resize', onVvResize);
+    return () => vv.removeEventListener('resize', onVvResize);
   }, [isOpen, updateListPosition]);
 
   useEffect(() => {
@@ -174,6 +205,9 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
               updateListPosition();
             }
           }}
+          onBlur={() => {
+            window.setTimeout(() => setIsOpen(false), 150);
+          }}
           placeholder={placeholder}
           autoComplete="off"
           className={cn(
@@ -194,7 +228,7 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
           <div
             ref={listRef}
             style={listStyle}
-            className="bg-card border border-border rounded-xl shadow-xl shadow-black/50 overflow-hidden"
+            className="bg-card border border-border rounded-xl shadow-xl shadow-black/50 overflow-hidden overscroll-contain"
           >
             {results.map((result, i) => (
               <button
