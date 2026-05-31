@@ -578,6 +578,10 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   const hookAffirmation =
     isShortHookAffirmation(normalizedContent) && !!lastHookTopic;
+  const isShortContinuation =
+    !hookAffirmation &&
+    isShortContinuationPhrase(normalizedContent) &&
+    usedSignals.length > 0;
   const systemPrompt = safeBuildSystemPrompt(
     userProfile,
     contactProfile,
@@ -586,6 +590,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     usedSignals,
     lastHookTopic,
     hookAffirmation,
+    isShortContinuation,
   );
 
   // Astro assistant messages are stripped from LLM history: their house/planet
@@ -904,13 +909,40 @@ const HOOK_AFFIRMATION_WORDS = new Set([
   "да", "давай", "давайте", "конечно", "ок", "окей", "хорошо", "угу", "ага", "ладно",
 ]);
 
+function normalizeShortUserMessage(content: string): string {
+  return content
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[!?.,…:;]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /** Короткое согласие на крючок: «да», «давай», «ок» и т.п. без развёрнутого вопроса. */
 function isShortHookAffirmation(content: string): boolean {
-  const t = content.trim().toLowerCase().replace(/[!?.,…:;]+/g, " ").replace(/\s+/g, " ").trim();
+  const t = normalizeShortUserMessage(content);
   if (!t || t.length > 40) return false;
   const words = t.split(" ").filter(Boolean);
   if (words.length === 0 || words.length > 4) return false;
   return words.every((w) => HOOK_AFFIRMATION_WORDS.has(w));
+}
+
+/** Короткая просьба продолжить тему (не новый вопрос и не ответ на крючок). */
+const SHORT_CONTINUATION_PHRASES = [
+  "расскажи еще",
+  "что еще",
+  "а дальше",
+  "и что",
+  "продолжай",
+  "давай",
+  "еще",
+];
+
+function isShortContinuationPhrase(content: string): boolean {
+  const t = normalizeShortUserMessage(content);
+  if (!t || t.length > 48) return false;
+  return SHORT_CONTINUATION_PHRASES.includes(t);
 }
 
 /** Никогда не бросает — иначе клиент ловит HTTP 500 до открытия SSE. */
@@ -922,6 +954,7 @@ function safeBuildSystemPrompt(
   usedSignals: string[] = [],
   lastHookTopic: string | null = null,
   hookAffirmation = false,
+  isShortContinuation = false,
 ): string {
   try {
     return buildSystemPrompt(
@@ -932,6 +965,7 @@ function safeBuildSystemPrompt(
       usedSignals,
       lastHookTopic,
       hookAffirmation,
+      isShortContinuation,
     );
   } catch (err) {
     logger.error({ err }, "buildSystemPrompt failed; using fallback system prompt");
@@ -1142,6 +1176,7 @@ function buildSystemPrompt(
   usedSignals: string[] = [],
   lastHookTopic: string | null = null,
   hookAffirmation = false,
+  isShortContinuation = false,
 ): string {
   const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, validation: userValidation } = calcUserData(user);
 
@@ -1193,6 +1228,10 @@ function buildSystemPrompt(
   if (hookAffirmation && lastHookTopic) {
     usedSignalsLines.push(
       `РЕЖИМ ОТВЕТА НА СОГЛАСИЕ: пользователь согласился на продолжение. Разверни именно тему последнего крючка: «${lastHookTopic}». Не повторяй транзиты и аспекты из списка ниже как новый разбор. Начни сразу с обещанного слоя (соляр / прогрессии / натал / другой дом / другая планета) — без вступления с теми же транзитами.`,
+    );
+  } else if (isShortContinuation) {
+    usedSignalsLines.push(
+      "РЕЖИМ КОРОТКОГО ПРОДОЛЖЕНИЯ: пользователь просит продолжить — значит предыдущий анализ уже дан. Не повторяй белый текст и ✦-сигналы из прошлого ответа. Начни сразу с нового слоя карты, который ещё не был разобран. Если все основные транзиты уже в списке — переходи в прогрессии, соляр, натальную механику, синастрию или временную навигацию.",
     );
   }
   if (usedSignals.length > 0) {
