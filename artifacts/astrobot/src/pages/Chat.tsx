@@ -851,12 +851,20 @@ export default function Chat() {
                   <Sparkles className="w-6 h-6 text-primary" />
                 </div>
                 <h3 className="text-base font-display font-semibold mb-1">С чего начнем?</h3>
-                {promptSubtitle && (
+                {promptSubtitle ? (
                   <p
                     data-tutorial-id="free-requests"
                     className="mb-3 max-w-md text-sm text-primary/85 leading-relaxed"
                   >
                     {promptSubtitle}
+                  </p>
+                ) : (
+                  <p
+                    data-tutorial-id="free-requests"
+                    aria-hidden="true"
+                    className="sr-only"
+                  >
+                    5 бесплатных запросов - пробуйте и оцените формат.
                   </p>
                 )}
                 <div data-tutorial-id="quick-topics" className="flex flex-wrap justify-center gap-2 w-full max-w-md">
