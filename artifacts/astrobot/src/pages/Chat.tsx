@@ -79,44 +79,44 @@ function pronounsByGender(gender: Gender): {
 
 function selfPrompts(): QuickPrompt[] {
   return [
-    { label: '🌙 Обо мне', prompt: 'Что звёзды могут сказать обо мне?' },
-    { label: '🌀 Мой период', prompt: 'Какой период я сейчас переживаю?' },
-    { label: '🍀 Моя удача', prompt: 'Часть моей удачи - на что мне обратить внимание?' },
-    { label: '💼 Моя Карьера', prompt: 'Куда мне двигаться в карьере?' },
-    { label: '💰 Мои Деньги', prompt: 'Что у меня с финансовым потенциалом на этот период?' },
+    { label: 'Обо мне', prompt: 'Что звёзды могут сказать обо мне?' },
+    { label: 'Мой период', prompt: 'Какой период я сейчас переживаю?' },
+    { label: 'Моя удача', prompt: 'Часть моей удачи - на что мне обратить внимание?' },
+    { label: 'Моя карьера', prompt: 'Куда мне двигаться в карьере?' },
+    { label: 'Мои деньги', prompt: 'Что у меня с финансовым потенциалом на этот период?' },
   ];
 }
 
 function partnerPrompts(gender: Gender): QuickPrompt[] {
   const p = pronounsByGender(gender);
   return [
-    { label: '💞 Совместимость', prompt: 'Расскажи о нашей совместимости' },
-    { label: `🌀 Как ${p.subject} сейчас?`, prompt: 'Что сейчас происходит в его/ее жизни?' },
-    { label: '🔮 Наше будущее', prompt: 'Дай прогноз по нам на ближайшее будущее.' },
-    { label: '⚡ Наши проблемы', prompt: 'Что мешает нам в отношениях?' },
-    { label: '📅 5 лет вперёд', prompt: 'Дай прогноз по нам на ближайшие 5 лет.' },
+    { label: 'Совместимость', prompt: 'Расскажи о нашей совместимости' },
+    { label: `Как ${p.subject} сейчас`, prompt: 'Что сейчас происходит в его/ее жизни?' },
+    { label: 'Наше будущее', prompt: 'Дай прогноз по нам на ближайшее будущее.' },
+    { label: 'Наши проблемы', prompt: 'Что мешает нам в отношениях?' },
+    { label: '5 лет вперёд', prompt: 'Дай прогноз по нам на ближайшие 5 лет.' },
   ];
 }
 
 function bossPrompts(gender: Gender): QuickPrompt[] {
   const p = pronounsByGender(gender);
   return [
-    { label: '🤝 Как общаться?', prompt: 'Как лучше выстроить коммуникацию с начальником?' },
-    { label: '📈 Моё повышение', prompt: 'Могу ли я рассчитывать на повышение?' },
-    { label: '😬 Увольнение', prompt: 'Есть ли риск увольнения в ближайшее время?' },
-    { label: `🌀 Что ${p.subject} думает`, prompt: 'Что он/она думает обо мне в рабочем контексте?' },
-    { label: '💰 Рост дохода', prompt: 'Что поможет мне вырастить доход в работе?' },
+    { label: 'Как общаться', prompt: 'Как лучше выстроить коммуникацию с начальником?' },
+    { label: 'Моё повышение', prompt: 'Могу ли я рассчитывать на повышение?' },
+    { label: 'Риск увольнения', prompt: 'Есть ли риск увольнения в ближайшее время?' },
+    { label: `Что ${p.subject} думает`, prompt: 'Что он/она думает обо мне в рабочем контексте?' },
+    { label: 'Рост дохода', prompt: 'Что поможет мне вырастить доход в работе?' },
   ];
 }
 
 function childPrompts(gender: Gender): QuickPrompt[] {
   const p = pronounsByGender(gender);
   return [
-    { label: `🧩 Лучше узнать ${p.object}`, prompt: 'Помоги мне лучше понять моего ребенка' },
-    { label: `🌟 ${p.possessiveCap} таланты`, prompt: 'В чём природный талант моего ребёнка?' },
-    { label: `💚 ${p.possessiveCap} здоровье`, prompt: 'Что у ребенка по здоровью?' },
-    { label: '🗣️ Наше общение', prompt: 'Что я могу улучшить в нашем общении?' },
-    { label: `🌀 Как ${p.subject} сейчас?`, prompt: 'Что сейчас происходит у ребёнка?' },
+    { label: `Лучше узнать ${p.object}`, prompt: 'Помоги мне лучше понять моего ребенка' },
+    { label: `${p.possessiveCap} таланты`, prompt: 'В чём природный талант моего ребёнка?' },
+    { label: `${p.possessiveCap} здоровье`, prompt: 'Что у ребенка по здоровью?' },
+    { label: 'Наше общение', prompt: 'Что я могу улучшить в нашем общении?' },
+    { label: `Как ${p.subject} сейчас`, prompt: 'Что сейчас происходит у ребёнка?' },
   ];
 }
 
@@ -761,11 +761,11 @@ export default function Chat() {
       : selectedKind === 'child'
         ? childPrompts(contactGender)
         : [
-          { label: '💫 Совместимость', prompt: 'Расскажи о нашей совместимости' },
-          { label: '🌟 Таланты', prompt: 'Какие у этого человека сильные аспекты?' },
-          { label: '💚 Здоровье', prompt: 'Что у этого человека по здоровью?' },
-          { label: '🌀 Что сейчас', prompt: 'Какой период сейчас у этого человека?' },
-          { label: '🗣️ Общение', prompt: 'Как лучше выстроить контакт с этим человеком?' },
+          { label: 'Совместимость', prompt: 'Расскажи о нашей совместимости' },
+          { label: 'Таланты', prompt: 'Какие у этого человека сильные аспекты?' },
+          { label: 'Здоровье', prompt: 'Что у этого человека по здоровью?' },
+          { label: 'Что сейчас', prompt: 'Какой период сейчас у этого человека?' },
+          { label: 'Общение', prompt: 'Как лучше выстроить контакт с этим человеком?' },
         ];
 
   const promptSubtitle = selectedContactId == null
@@ -890,7 +890,7 @@ export default function Chat() {
                       whileTap={reduceMotion ? undefined : { scale: 0.96 }}
                       whileHover={reduceMotion ? undefined : { scale: 1.03 }}
                       transition={{ type: 'spring', stiffness: 520, damping: 28 }}
-                      className="w-auto px-4 py-2.5 rounded-2xl text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-colors text-center leading-snug"
+                      className="w-auto min-h-10 px-5 py-2 rounded-full text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-colors text-center leading-none whitespace-nowrap"
                     >
                       {prompt.label}
                     </motion.button>
