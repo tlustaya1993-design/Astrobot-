@@ -46,6 +46,13 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const prevVvHeightRef = useRef<number | null>(null);
+  // Tracks viewport height when keyboard is closed, to distinguish address-bar
+  // hide (~56px growth on Android) from keyboard dismiss (200px+ growth).
+  const baseViewportHeightRef = useRef<number>(
+    typeof window !== 'undefined' ? (window.visualViewport?.height ?? window.innerHeight) : 0
+  );
+  // Prevents onBlur from closing the dropdown while the user is touching a result row.
+  const isTouchingDropdownRef = useRef(false);
 
   const search = useCallback(async (q: string) => {
     if (q.trim().length < 2) {
@@ -133,14 +140,21 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
     };
   }, [isOpen, updateListPosition]);
 
-  // Close and reset when iOS keyboard dismisses (viewport grows).
+  // Close dropdown when the keyboard is dismissed (viewport grows back to ~base height).
+  // Uses 150 px threshold so that Android Chrome hiding its address bar (~56-70 px growth)
+  // does NOT incorrectly close the dropdown — only a real keyboard dismissal does.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
+    // Update base height whenever the keyboard is clearly not open.
+    if (vv.height > window.innerHeight * 0.75) {
+      baseViewportHeightRef.current = vv.height;
+    }
     prevVvHeightRef.current = vv.height;
     const onVvResize = () => {
       const prev = prevVvHeightRef.current ?? vv.height;
-      if (vv.height > prev + 60) {
+      const keyboardWasOpen = prev < baseViewportHeightRef.current - 100;
+      if (keyboardWasOpen && vv.height > prev + 150) {
         setIsOpen(false);
       }
       prevVvHeightRef.current = vv.height;
@@ -151,14 +165,15 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
   }, [isOpen, updateListPosition]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
+    function handleClickOutside(e: PointerEvent) {
       const t = e.target as Node;
       if (containerRef.current?.contains(t)) return;
       if (listRef.current?.contains(t)) return;
       setIsOpen(false);
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    // pointerdown fires reliably on both touch and mouse across all platforms.
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
   }, []);
 
   const handleSelect = (result: CityResult) => {
@@ -206,7 +221,11 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
             }
           }}
           onBlur={() => {
-            window.setTimeout(() => setIsOpen(false), 150);
+            // Delay so that a tap on a result row (which sets isTouchingDropdownRef)
+            // can cancel the close. Prevents premature close on Android touch devices.
+            window.setTimeout(() => {
+              if (!isTouchingDropdownRef.current) setIsOpen(false);
+            }, 150);
           }}
           placeholder={placeholder}
           autoComplete="off"
@@ -228,13 +247,16 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
           <div
             ref={listRef}
             style={listStyle}
+            onTouchStart={() => { isTouchingDropdownRef.current = true; }}
+            onTouchEnd={() => { window.setTimeout(() => { isTouchingDropdownRef.current = false; }, 300); }}
+            onTouchCancel={() => { isTouchingDropdownRef.current = false; }}
             className="bg-card border border-border rounded-xl shadow-xl shadow-black/50 overflow-hidden overscroll-contain"
           >
             {results.map((result, i) => (
               <button
                 key={`${result.lat}-${result.lon}-${i}`}
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
+                onPointerDown={(e) => e.preventDefault()}
                 onClick={() => handleSelect(result)}
                 className={cn(
                   'w-full text-left px-4 py-3 flex items-center gap-3 transition-colors',
