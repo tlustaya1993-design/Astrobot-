@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import {
@@ -62,8 +63,8 @@ function OnboardingShell({
   contentClassName?: string;
 }) {
   return (
-    <div className="flex h-full min-h-0 w-full flex-col px-4 pt-1">
-      <header className="relative z-20 shrink-0 py-0.5">
+    <div className="flex h-full min-h-0 w-full flex-col px-4">
+      <header className="relative z-20 shrink-0 pb-1 pt-[env(safe-area-inset-top,0px)]">
         <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
           <button
             type="button"
@@ -171,6 +172,53 @@ export default function Onboarding() {
     return () => window.removeEventListener('astrobot:keyboard-dismiss', onDismiss);
   }, []);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add('onboarding-route');
+
+    const debug =
+      typeof window !== 'undefined'
+      && new URLSearchParams(window.location.search).get('onboarding-debug') === '1';
+    if (debug) {
+      root.classList.add('onboarding-debug');
+      const probe = (label: string, el: Element | null) => {
+        if (!el) return { label, missing: true };
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        return {
+          label,
+          top: Math.round(r.top),
+          height: Math.round(r.height),
+          bg: cs.backgroundColor,
+          transform: cs.transform,
+          paddingTop: cs.paddingTop,
+        };
+      };
+      const log = () => {
+        console.table([
+          probe('html', document.documentElement),
+          probe('body', document.body),
+          probe('#root', document.getElementById('root')),
+          probe('.onboarding-screen', document.querySelector('[data-onboarding-screen]')),
+        ]);
+        console.log('CSS vars', {
+          vvh: getComputedStyle(root).getPropertyValue('--vvh'),
+          vvOffsetTop: getComputedStyle(root).getPropertyValue('--vv-offset-top'),
+        });
+      };
+      log();
+      window.addEventListener('resize', log);
+      return () => {
+        root.classList.remove('onboarding-route', 'onboarding-debug');
+        window.removeEventListener('resize', log);
+      };
+    }
+
+    return () => {
+      root.classList.remove('onboarding-route');
+    };
+  }, []);
+
   const handleNext = () => {
     setErrorMsg(null);
     setStep((s) => s + 1);
@@ -231,15 +279,11 @@ export default function Onboarding() {
     });
   };
 
-  return (
+  const screen = (
     <div
       ref={scrollRef}
       data-onboarding-screen
-      className="onboarding-screen fixed z-40 flex flex-col overflow-hidden"
-      style={{
-        top: 'var(--vv-offset-top, 0px)',
-        height: 'var(--vvh, 100dvh)',
-      }}
+      className="onboarding-screen flex flex-col overflow-hidden"
     >
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.1] mix-blend-screen"
@@ -463,4 +507,6 @@ export default function Onboarding() {
       </div>
     </div>
   );
+
+  return createPortal(screen, document.body);
 }
