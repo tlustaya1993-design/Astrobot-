@@ -307,6 +307,48 @@ html.ios-bg-test::after {
   pointer-events: none;
 }
 
+/*
+ * Onboarding background probe: /onboarding?flat-bg-test=1
+ * Band gone → culprit is .onboarding-screen gradient/overlay.
+ * Band remains → inspect with elementFromPoint.
+ */
+html.flat-bg-test,
+html.flat-bg-test body,
+html.flat-bg-test.onboarding-route {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+html.flat-bg-test .onboarding-screen {
+  background: #7a1f5c !important;
+  background-image: none !important;
+}
+
+html.flat-bg-test .onboarding-screen::before,
+html.flat-bg-test .onboarding-screen::after {
+  display: none !important;
+  content: none !important;
+}
+
+html.flat-bg-test .onboarding-screen [data-onboarding-bg-layer] {
+  display: none !important;
+}
+
+html.flat-bg-test::after {
+  content: "flat-bg-test: band gone = onboarding bg/overlay";
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 100000;
+  font: 11px/1.3 system-ui, sans-serif;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 6px 8px;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

@@ -179,6 +179,7 @@ export default function Onboarding() {
 
     const debug = params.get('onboarding-debug') === '1';
     const iosBgTest = params.get('ios-bg-test') === '1';
+    const flatBgTest = params.get('flat-bg-test') === '1';
 
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     const prevThemeColor = themeMeta?.getAttribute('content') ?? null;
@@ -186,6 +187,13 @@ export default function Onboarding() {
     if (iosBgTest) {
       root.classList.add('ios-bg-test');
       themeMeta?.setAttribute('content', '#ff0000');
+    }
+    if (flatBgTest) {
+      root.classList.add('flat-bg-test');
+      console.info(
+        '[flat-bg-test] Solid #7a1f5c on .onboarding-screen; gradients/overlays off. '
+          + 'If top band remains → not onboarding background.',
+      );
     }
 
     const logEnv = () => {
@@ -245,7 +253,7 @@ export default function Onboarding() {
     };
 
     if (debug) root.classList.add('onboarding-debug');
-    if (debug || iosBgTest) {
+    if (debug || iosBgTest || flatBgTest) {
       logEnv();
       logLayout();
       window.addEventListener('resize', logLayout);
@@ -253,7 +261,7 @@ export default function Onboarding() {
 
     return () => {
       window.removeEventListener('resize', logLayout);
-      root.classList.remove('onboarding-route', 'onboarding-debug', 'ios-bg-test');
+      root.classList.remove('onboarding-route', 'onboarding-debug', 'ios-bg-test', 'flat-bg-test');
       if (prevThemeColor) themeMeta?.setAttribute('content', prevThemeColor);
       else themeMeta?.setAttribute('content', '#0a0a14');
     };
@@ -326,6 +334,7 @@ export default function Onboarding() {
       className="onboarding-screen flex flex-col overflow-hidden"
     >
       <div
+        data-onboarding-bg-layer
         className="pointer-events-none absolute inset-0 opacity-[0.1] mix-blend-screen"
         style={{
           backgroundImage:
