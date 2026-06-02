@@ -20,6 +20,7 @@ import { getAuthHeaders } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { FRESH_ONBOARDING_KEY } from '@/context/TutorialContext';
+import { ONBOARDING_THEME_COLOR } from '@/lib/onboardingTheme';
 
 const slideVariants = {
   enter: { x: 40, opacity: 0 },
@@ -64,7 +65,10 @@ function OnboardingShell({
 }) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col px-4">
-      <header className="onboarding-header relative z-20 shrink-0 pb-1 pt-[env(safe-area-inset-top,0px)]">
+      <header
+        className="onboarding-header relative z-20 shrink-0 bg-transparent pb-2"
+        style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))' }}
+      >
         <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
           <button
             type="button"
@@ -184,6 +188,10 @@ export default function Onboarding() {
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     const prevThemeColor = themeMeta?.getAttribute('content') ?? null;
 
+    if (!iosBgTest && !flatBgTest) {
+      themeMeta?.setAttribute('content', ONBOARDING_THEME_COLOR);
+    }
+
     if (iosBgTest) {
       root.classList.add('ios-bg-test');
       themeMeta?.setAttribute('content', '#ff0000');
@@ -214,8 +222,8 @@ export default function Onboarding() {
         iosStandalone: (navigator as Navigator & { standalone?: boolean }).standalone === true,
         likelyTelegram: /Telegram/i.test(ua),
         themeColorMeta: themeMeta?.getAttribute('content'),
-        manifestTheme: '#0a0a14',
-        appleStatusBar: 'black (index.html)',
+        manifestTheme: ONBOARDING_THEME_COLOR,
+        appleStatusBar: 'black-translucent (index.html)',
         viewportFit: 'cover (index.html)',
         safeArea,
         innerHeight: window.innerHeight,
@@ -355,7 +363,7 @@ export default function Onboarding() {
       window.removeEventListener('resize', logGeometry);
       root.classList.remove('onboarding-route', 'onboarding-debug', 'ios-bg-test', 'flat-bg-test');
       if (prevThemeColor) themeMeta?.setAttribute('content', prevThemeColor);
-      else themeMeta?.setAttribute('content', '#0a0a14');
+      else themeMeta?.setAttribute('content', ONBOARDING_THEME_COLOR);
     };
   }, []);
 

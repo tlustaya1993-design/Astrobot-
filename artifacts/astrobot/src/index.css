@@ -53,6 +53,11 @@
   
   --border: 240 20% 18%;
   --ring: 43 74% 66%;
+
+  /* Status bar / browser chrome — matches top of app gradients (not flat #0a0a14) */
+  --app-chrome-top: #2b1d42;
+  --onboarding-top: #2b1d42;
+  --onboarding-base: #0a0912;
 }
 
 @layer base {
@@ -67,7 +72,7 @@
     overscroll-behavior: none;
     /* Dark background on html prevents white flash on Android Chrome
        when the body hasn't painted yet */
-    background-color: hsl(240 25% 4%);
+    background-color: var(--app-chrome-top, #2b1d42);
     /* --vvh / --vv-offset-top are set by useVisualViewport (App.tsx). */
     --vvh: 100dvh;
     --vv-offset-top: 0px;
@@ -178,22 +183,27 @@ html.keyboard-open [data-bottom-nav] {
 }
 
 /*
- * Onboarding route: paint the same background on html so any gap above #root
- * (from transform/height mismatch) matches the screen instead of a flat black band.
- * The screen itself is portaled to <body> (see Onboarding.tsx) so position:fixed
- * is relative to the viewport, not the transformed #root containing block.
+ * Onboarding: one continuous background from y=0 (incl. iOS status bar).
+ * theme-color meta is set to --onboarding-top in Onboarding.tsx.
+ * Screen is portaled to <body> (see Onboarding.tsx).
  */
 html.onboarding-route {
-  background-color: hsl(240 25% 4%);
+  background-color: var(--onboarding-top);
   background-image:
-    radial-gradient(ellipse 140% 92% at 50% -14%, rgba(139, 92, 246, 0.44), transparent 64%),
-    radial-gradient(circle at 88% 96%, rgba(212, 175, 55, 0.22), transparent 48%),
-    radial-gradient(circle at 12% 28%, rgba(167, 139, 250, 0.16), transparent 42%);
+    linear-gradient(180deg, var(--onboarding-top) 0%, #161024 26%, var(--onboarding-base) 52%),
+    radial-gradient(ellipse 120% 75% at 50% 12%, rgba(139, 92, 246, 0.34), transparent 58%),
+    radial-gradient(circle at 88% 96%, rgba(212, 175, 55, 0.18), transparent 48%),
+    radial-gradient(circle at 12% 28%, rgba(167, 139, 250, 0.14), transparent 42%);
+}
+
+html.onboarding-route body {
+  background: transparent;
 }
 
 html.onboarding-route #root {
   transform: none !important;
   height: 100dvh;
+  background: transparent;
 }
 
 /* Full-bleed onboarding — portaled to <body>, must cover layout + visual viewport */
@@ -212,11 +222,12 @@ html.onboarding-route #root {
   transform: none;
   box-sizing: border-box;
   overflow: hidden;
-  background-color: hsl(240 25% 4%);
+  background-color: var(--onboarding-top);
   background-image:
-    radial-gradient(ellipse 140% 92% at 50% -14%, rgba(139, 92, 246, 0.44), transparent 64%),
-    radial-gradient(circle at 88% 96%, rgba(212, 175, 55, 0.22), transparent 48%),
-    radial-gradient(circle at 12% 28%, rgba(167, 139, 250, 0.16), transparent 42%);
+    linear-gradient(180deg, var(--onboarding-top) 0%, #161024 26%, var(--onboarding-base) 52%),
+    radial-gradient(ellipse 120% 75% at 50% 12%, rgba(139, 92, 246, 0.34), transparent 58%),
+    radial-gradient(circle at 88% 96%, rgba(212, 175, 55, 0.18), transparent 48%),
+    radial-gradient(circle at 12% 28%, rgba(167, 139, 250, 0.14), transparent 42%);
 }
 
 .onboarding-content {

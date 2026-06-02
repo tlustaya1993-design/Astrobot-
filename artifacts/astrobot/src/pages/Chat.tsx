@@ -945,7 +945,7 @@ export default function Chat() {
                       type="button"
                       onClick={() => setInputValue(prompt.prompt)}
                       whileTap={reduceMotion ? undefined : { scale: 0.96 }}
-                      className="w-auto px-4 py-2.5 rounded-2xl text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-colors text-center leading-snug"
+                      className="w-auto min-h-10 px-5 py-2 rounded-full text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-colors text-center leading-none whitespace-nowrap"
                     >
                       {prompt.label}
                     </motion.button>
