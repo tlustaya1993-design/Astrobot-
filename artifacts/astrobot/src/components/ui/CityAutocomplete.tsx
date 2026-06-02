@@ -23,6 +23,11 @@ interface Props {
   placeholder?: string;
   className?: string;
   onFocusInput?: (el: HTMLInputElement) => void;
+  /**
+   * Draft callback: вызывается при наборе текста (без координат).
+   * Используется для сброса "выбранности" города на стороне родителя.
+   */
+  onDraftChange?: (draft: string) => void;
 }
 
 function getCityLabel(result: CityResult): string {
@@ -43,6 +48,7 @@ export function CityAutocomplete({
   placeholder = 'Город рождения',
   className,
   onFocusInput,
+  onDraftChange,
 }: Props) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<CityResult[]>([]);
@@ -204,11 +210,12 @@ export function CityAutocomplete({
           onChange={e => {
             const next = e.target.value;
             setQuery(next);
-            if (!next.trim()) {
-              onChange('');
-              return;
-            }
-            onChange(next);
+            onDraftChange?.(next);
+            // Очищаем выбор только при полном очищении инпута.
+            // При обычном наборе родителю не передаём текст, чтобы поиск не
+            // ломался из-за условия query===value (поиск должен зависеть от
+            // расхождения query и value).
+            if (!next.trim()) onChange('');
           }}
           onKeyDown={handleKeyDown}
           onFocus={(e) => {

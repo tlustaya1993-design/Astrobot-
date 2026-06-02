@@ -58,7 +58,7 @@ function OnboardingShell({
 }) {
   return (
     <>
-      <div className="shrink-0 px-4 pt-3 pb-1 safe-area-top">
+      <div className="shrink-0 px-4 pt-safe pb-1">
         <button
           type="button"
           onClick={onLogin}
@@ -72,7 +72,7 @@ function OnboardingShell({
         </button>
       </div>
 
-      <div className="shrink-0 flex flex-col items-center gap-2 px-6 pt-3 pb-3">
+      <div className="shrink-0 flex flex-col items-center gap-1 px-6 pt-2 pb-2">
         <div className="flex justify-center gap-2">
           {[1, 2, 3].map((i) => (
             <div
@@ -91,22 +91,27 @@ function OnboardingShell({
         <p className="text-xs text-muted-foreground/80">Шаг {step} из 3</p>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-6 pb-4">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-6 pb-2">
         <div className="w-full max-w-sm mx-auto">
-          <div className="relative mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_32px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
+          <div className="relative mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_28px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
             <div
               className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl"
               aria-hidden
             />
             <div className="relative z-[1] text-primary">{icon}</div>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-display font-bold text-center mb-2">{title}</h1>
-          <p className="text-muted-foreground text-center text-sm mb-6 leading-relaxed">{subtitle}</p>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-center mb-1">{title}</h1>
+          <p className="text-muted-foreground text-center text-sm mb-4 leading-relaxed">{subtitle}</p>
           {children}
         </div>
       </div>
 
-      <div className="shrink-0 px-6 pt-2 pb-6 pb-safe">{footer}</div>
+      <div
+        className="shrink-0 px-6 pt-2"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+      >
+        {footer}
+      </div>
     </>
   );
 }
@@ -123,6 +128,8 @@ export default function Onboarding() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cityError, setCityError] = useState<string | null>(null);
   const [birthTimeUnknown, setBirthTimeUnknown] = useState(false);
+  const [isCitySelected, setIsCitySelected] = useState(false);
+  const [cityDraft, setCityDraft] = useState('');
   const [formData, setFormData] = useState<UpsertUserBody>({
     name: '',
     birthDate: '',
@@ -167,13 +174,13 @@ export default function Onboarding() {
     formData.birthDate?.trim() && (birthTimeUnknown || formData.birthTime?.trim()),
   );
 
-  const canBuildChart = hasCitySelection(formData);
+  const canBuildChart = hasCitySelection(formData) && isCitySelected;
 
   const handleComplete = async () => {
     setErrorMsg(null);
     setCityError(null);
 
-    if (!hasCitySelection(formData)) {
+    if (!hasCitySelection(formData) || !isCitySelected) {
       setCityError('Выберите город из списка подсказок');
       return;
     }
@@ -249,7 +256,7 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={1}
-                icon={<Sparkles className="h-8 w-8 drop-shadow-[0_0_12px_rgba(212,175,55,0.55)]" />}
+                icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Добро пожаловать"
                 subtitle="Ваш личный AI-астролог. Начнём с того, чтобы познакомиться."
                 onLogin={() => openAuthModal('login')}
@@ -287,7 +294,7 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={2}
-                icon={<Sparkles className="h-8 w-8 drop-shadow-[0_0_12px_rgba(212,175,55,0.55)]" />}
+                  icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Когда вы родились?"
                 subtitle="Точные данные нужны для расчёта натальной карты."
                 onLogin={() => openAuthModal('login')}
@@ -340,7 +347,7 @@ export default function Onboarding() {
                     />
                   </div>
 
-                  <label className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-background/20 px-3 py-2.5 cursor-pointer">
+                  <label className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-background/20 px-3 py-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={birthTimeUnknown}
@@ -377,7 +384,7 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={3}
-                icon={<MapPin className="h-8 w-8 drop-shadow-[0_0_12px_rgba(212,175,55,0.55)]" />}
+                  icon={<MapPin className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Где вы родились?"
                 subtitle="Введите название города и выберите его из списка."
                 onLogin={() => openAuthModal('login')}
@@ -422,6 +429,12 @@ export default function Onboarding() {
                     placeholder="Начните вводить город…"
                     onChange={(city, lat, lng) => {
                       setCityError(null);
+                      setIsCitySelected(
+                        typeof lat === 'number' &&
+                          typeof lng === 'number' &&
+                          Number.isFinite(lat) &&
+                          Number.isFinite(lng),
+                      );
                       setFormData({
                         ...formData,
                         birthPlace: city,
@@ -429,10 +442,16 @@ export default function Onboarding() {
                         birthLng: lng,
                       });
                     }}
+                    onDraftChange={(draft) => {
+                      setCityDraft(draft);
+                      // После любого изменения текста запретим построение, пока
+                      // пользователь снова не выберет значение из списка.
+                      setIsCitySelected(false);
+                    }}
                     onFocusInput={(el) => scrollFocusedFieldIntoView(el)}
                   />
                   {cityError && <p className="text-red-400 text-xs pl-1">{cityError}</p>}
-                  {formData.birthPlace && !canBuildChart && (
+                  {cityDraft.trim() && !canBuildChart && (
                     <p className="text-amber-400/90 text-xs pl-1">
                       Выберите город из выпадающего списка
                     </p>
