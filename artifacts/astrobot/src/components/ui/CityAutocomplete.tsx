@@ -96,14 +96,12 @@ export function CityAutocomplete({
     const rect = el.getBoundingClientRect();
     const vv = window.visualViewport;
     const visibleH = vv?.height ?? window.innerHeight;
-    const spaceBelow = visibleH - rect.bottom - 8;
-    const spaceAbove = rect.top - 8;
-    const maxHeight = Math.min(220, Math.max(96, Math.max(spaceBelow, spaceAbove) - 8));
-    const openAbove = spaceBelow < 120 && spaceAbove > spaceBelow;
+    const spaceBelow = Math.max(0, visibleH - rect.bottom - 8);
+    const maxHeight = Math.min(220, Math.max(120, spaceBelow - 12));
 
     setListStyle({
       position: 'fixed',
-      top: openAbove ? Math.max(8, rect.top - maxHeight - 4) : rect.bottom + 4,
+      top: rect.bottom + 4,
       left: rect.left,
       width: rect.width,
       maxHeight,

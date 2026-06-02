@@ -39,6 +39,9 @@ function hasCitySelection(data: UpsertUserBody): boolean {
   );
 }
 
+const backLinkClass =
+  'w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-1';
+
 function OnboardingShell({
   step,
   icon,
@@ -47,6 +50,7 @@ function OnboardingShell({
   children,
   footer,
   onLogin,
+  centerContent = false,
 }: {
   step: number;
   icon: React.ReactNode;
@@ -55,44 +59,54 @@ function OnboardingShell({
   children: React.ReactNode;
   footer: React.ReactNode;
   onLogin: () => void;
+  centerContent?: boolean;
 }) {
   return (
     <>
-      <div className="shrink-0 px-4 pt-safe pb-1">
-        <button
-          type="button"
-          onClick={onLogin}
-          className="inline-flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors max-w-full"
-        >
-          <ChevronLeft className="h-4 w-4 shrink-0" />
-          <span className="truncate">
-            Уже есть аккаунт?{' '}
-            <span className="text-primary font-medium">Войти</span>
-          </span>
-        </button>
-      </div>
+      <div className="shrink-0 relative z-20 px-4 pt-safe pb-2 bg-[#06060c]/75 backdrop-blur-sm">
+        <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onLogin}
+            className="inline-flex min-w-0 items-center gap-0.5 text-left text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4 shrink-0" />
+            <span className="truncate">
+              Уже есть аккаунт?{' '}
+              <span className="text-primary font-medium">Войти</span>
+            </span>
+          </button>
 
-      <div className="shrink-0 flex flex-col items-center gap-1 px-6 pt-2 pb-2">
-        <div className="flex justify-center gap-2">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className={cn(
-                'h-1 rounded-full transition-all duration-500',
-                step === i
-                  ? 'w-10 bg-primary shadow-[0_0_8px_rgba(212,175,55,0.6)]'
-                  : step > i
-                    ? 'w-6 bg-primary/40'
-                    : 'w-6 bg-white/15',
-              )}
-            />
-          ))}
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex justify-end gap-1.5">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'h-1 rounded-full transition-all duration-500',
+                    step === i
+                      ? 'w-8 bg-primary shadow-[0_0_8px_rgba(212,175,55,0.6)]'
+                      : step > i
+                        ? 'w-5 bg-primary/40'
+                        : 'w-5 bg-white/15',
+                  )}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground/80 whitespace-nowrap">Шаг {step} из 3</p>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground/80">Шаг {step} из 3</p>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-6 pb-2">
-        <div className="w-full max-w-sm mx-auto">
+      <div
+        className={cn(
+          'flex-1 min-h-0 overflow-x-hidden overscroll-y-contain px-6 pb-2',
+          centerContent
+            ? 'flex flex-col justify-center overflow-y-auto'
+            : 'overflow-y-auto pt-2',
+        )}
+      >
+        <div className={cn('w-full max-w-sm mx-auto', centerContent && 'my-auto')}>
           <div className="relative mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_28px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
             <div
               className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl"
@@ -230,7 +244,7 @@ export default function Onboarding() {
         className="absolute inset-0 pointer-events-none opacity-[0.85]"
         style={{
           background:
-            'radial-gradient(ellipse 120% 80% at 50% 20%, rgba(139, 92, 246, 0.35), transparent 55%), radial-gradient(circle at 20% 0%, rgba(167, 139, 250, 0.25), transparent 45%), radial-gradient(circle at 85% 95%, rgba(212, 175, 55, 0.22), transparent 50%)',
+            'radial-gradient(ellipse 110% 65% at 50% 32%, rgba(139, 92, 246, 0.28), transparent 58%), radial-gradient(circle at 15% 8%, rgba(167, 139, 250, 0.18), transparent 42%), radial-gradient(circle at 85% 95%, rgba(212, 175, 55, 0.22), transparent 50%)',
         }}
       />
       <div
@@ -256,6 +270,7 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={1}
+                centerContent
                 icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Добро пожаловать"
                 subtitle="Ваш личный AI-астролог. Начнём с того, чтобы познакомиться."
@@ -300,11 +315,7 @@ export default function Onboarding() {
                 onLogin={() => openAuthModal('login')}
                 footer={
                   <div className="space-y-3 w-full max-w-sm mx-auto">
-                    <button
-                      type="button"
-                      onClick={handleBack}
-                      className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
-                    >
+                    <button type="button" onClick={handleBack} className={backLinkClass}>
                       ← Назад
                     </button>
                     <Button
@@ -317,7 +328,7 @@ export default function Onboarding() {
                   </div>
                 }
               >
-                <div className="space-y-4 rounded-2xl border border-border/50 bg-card/30 p-4">
+                <div className="space-y-4 rounded-2xl border border-border/50 bg-card/30 p-4 relative z-10">
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5 text-primary" />
@@ -384,7 +395,8 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={3}
-                  icon={<MapPin className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
+                centerContent
+                icon={<MapPin className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Где вы родились?"
                 subtitle="Введите название города и выберите его из списка."
                 onLogin={() => openAuthModal('login')}
@@ -395,27 +407,20 @@ export default function Onboarding() {
                         {errorMsg}
                       </p>
                     )}
-                    <div className="flex gap-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="flex-1 min-h-12 rounded-xl"
-                        onClick={handleBack}
-                      >
-                        Назад
-                      </Button>
-                      <Button
-                        className={cn('flex-[1.4]', ctaButtonClass)}
-                        onClick={handleComplete}
-                        disabled={!canBuildChart || upsertMutation.isPending}
-                        isLoading={upsertMutation.isPending}
-                      >
-                        <span className="inline-flex items-center justify-center gap-1.5">
-                          Построить карту
-                          <Sparkles className="w-4 h-4" />
-                        </span>
-                      </Button>
-                    </div>
+                    <button type="button" onClick={handleBack} className={backLinkClass}>
+                      ← Назад
+                    </button>
+                    <Button
+                      className={cn('w-full', ctaButtonClass)}
+                      onClick={handleComplete}
+                      disabled={!canBuildChart || upsertMutation.isPending}
+                      isLoading={upsertMutation.isPending}
+                    >
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        Построить карту
+                        <Sparkles className="w-4 h-4" />
+                      </span>
+                    </Button>
                   </div>
                 }
               >
