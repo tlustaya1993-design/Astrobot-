@@ -101,11 +101,11 @@ function OnboardingShell({
 
       <main
         className={cn(
-          'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain px-2',
+          'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain px-2 flex flex-col justify-center',
           contentClassName,
         )}
       >
-        <div className="mx-auto w-full max-w-sm pt-0.5 pb-4">
+        <div className="mx-auto my-auto w-full max-w-sm py-4">
           <div className="relative mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_28px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
             <div
               className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl"
@@ -488,7 +488,6 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={2}
-                contentClassName="pt-1"
                 icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Когда вы родились?"
                 subtitle="Точные данные нужны для расчёта натальной карты."
