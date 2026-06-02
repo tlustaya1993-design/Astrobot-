@@ -215,7 +215,11 @@ export function CityAutocomplete({
             // При обычном наборе родителю не передаём текст, чтобы поиск не
             // ломался из-за условия query===value (поиск должен зависеть от
             // расхождения query и value).
-            if (!next.trim()) onChange('');
+            if (!next.trim()) {
+              onChange('');
+              return;
+            }
+            if (!onDraftChange) onChange(next);
           }}
           onKeyDown={handleKeyDown}
           onFocus={(e) => {
