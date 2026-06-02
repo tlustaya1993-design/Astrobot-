@@ -367,6 +367,10 @@ html.flat-bg-test .onboarding-screen [data-onboarding-bg-layer] {
   display: none !important;
 }
 
+html.flat-bg-test .onboarding-header {
+  display: none !important;
+}
+
 html.flat-bg-test::after {
   content: "flat-bg-test: band gone = onboarding bg/overlay";
   position: fixed;

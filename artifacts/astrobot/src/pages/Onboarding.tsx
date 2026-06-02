@@ -64,7 +64,7 @@ function OnboardingShell({
 }) {
   return (
     <div className="flex h-full min-h-0 w-full flex-col px-4">
-      <header className="relative z-20 shrink-0 pb-1 pt-[env(safe-area-inset-top,0px)]">
+      <header className="onboarding-header relative z-20 shrink-0 pb-1 pt-[env(safe-area-inset-top,0px)]">
         <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
           <button
             type="button"
