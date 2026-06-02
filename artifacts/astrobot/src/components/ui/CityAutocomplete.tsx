@@ -22,6 +22,7 @@ interface Props {
   onChange: (value: string, lat?: number, lng?: number) => void;
   placeholder?: string;
   className?: string;
+  onFocusInput?: (el: HTMLInputElement) => void;
 }
 
 function getCityLabel(result: CityResult): string {
@@ -36,7 +37,13 @@ function getCityLabel(result: CityResult): string {
   return parts.length > 0 ? parts.join(', ') : result.display_name.split(',').slice(0, 2).join(',').trim();
 }
 
-export function CityAutocomplete({ value, onChange, placeholder = 'Город рождения', className }: Props) {
+export function CityAutocomplete({
+  value,
+  onChange,
+  placeholder = 'Город рождения',
+  className,
+  onFocusInput,
+}: Props) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<CityResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -195,11 +202,17 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
           type="text"
           value={query}
           onChange={e => {
-            setQuery(e.target.value);
-            if (!e.target.value.trim()) onChange('');
+            const next = e.target.value;
+            setQuery(next);
+            if (!next.trim()) {
+              onChange('');
+              return;
+            }
+            onChange(next);
           }}
           onKeyDown={handleKeyDown}
-          onFocus={() => {
+          onFocus={(e) => {
+            onFocusInput?.(e.currentTarget);
             if (results.length > 0) {
               setIsOpen(true);
               updateListPosition();

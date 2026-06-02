@@ -1,7 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { User, Sparkles, ArrowRight } from 'lucide-react';
+import {
+  User,
+  Sparkles,
+  ArrowRight,
+  ChevronLeft,
+  Calendar,
+  Clock,
+  MapPin,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/DateInput';
@@ -11,6 +19,97 @@ import { getAuthHeaders } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { FRESH_ONBOARDING_KEY } from '@/context/TutorialContext';
+
+const slideVariants = {
+  enter: { x: 40, opacity: 0 },
+  center: { x: 0, opacity: 1 },
+  exit: { x: -40, opacity: 0 },
+};
+
+const ctaButtonClass =
+  'rounded-xl min-h-12 font-semibold border-0 bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] shadow-[0_0_28px_rgba(212,175,55,0.42),0_4px_20px_rgba(0,0,0,0.35)] hover:brightness-105 hover:shadow-[0_0_32px_rgba(212,175,55,0.5)] transition-[filter,box-shadow] disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100';
+
+function hasCitySelection(data: UpsertUserBody): boolean {
+  return Boolean(
+    data.birthPlace?.trim()
+      && data.birthLat != null
+      && data.birthLng != null
+      && Number.isFinite(Number(data.birthLat))
+      && Number.isFinite(Number(data.birthLng)),
+  );
+}
+
+function OnboardingShell({
+  step,
+  icon,
+  title,
+  subtitle,
+  children,
+  footer,
+  onLogin,
+}: {
+  step: number;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+  footer: React.ReactNode;
+  onLogin: () => void;
+}) {
+  return (
+    <>
+      <div className="shrink-0 px-4 pt-3 pb-1 safe-area-top">
+        <button
+          type="button"
+          onClick={onLogin}
+          className="inline-flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground transition-colors max-w-full"
+        >
+          <ChevronLeft className="h-4 w-4 shrink-0" />
+          <span className="truncate">
+            Уже есть аккаунт?{' '}
+            <span className="text-primary font-medium">Войти</span>
+          </span>
+        </button>
+      </div>
+
+      <div className="shrink-0 flex flex-col items-center gap-2 px-6 pt-3 pb-3">
+        <div className="flex justify-center gap-2">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className={cn(
+                'h-1 rounded-full transition-all duration-500',
+                step === i
+                  ? 'w-10 bg-primary shadow-[0_0_8px_rgba(212,175,55,0.6)]'
+                  : step > i
+                    ? 'w-6 bg-primary/40'
+                    : 'w-6 bg-white/15',
+              )}
+            />
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground/80">Шаг {step} из 3</p>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-6 pb-4">
+        <div className="w-full max-w-sm mx-auto">
+          <div className="relative mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_32px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
+            <div
+              className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl"
+              aria-hidden
+            />
+            <div className="relative z-[1] text-primary">{icon}</div>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-center mb-2">{title}</h1>
+          <p className="text-muted-foreground text-center text-sm mb-6 leading-relaxed">{subtitle}</p>
+          {children}
+        </div>
+      </div>
+
+      <div className="shrink-0 px-6 pt-2 pb-6 pb-safe">{footer}</div>
+    </>
+  );
+}
 
 export default function Onboarding() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -22,6 +121,7 @@ export default function Onboarding() {
   });
   const [step, setStep] = useState(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [cityError, setCityError] = useState<string | null>(null);
   const [birthTimeUnknown, setBirthTimeUnknown] = useState(false);
   const [formData, setFormData] = useState<UpsertUserBody>({
     name: '',
@@ -31,16 +131,14 @@ export default function Onboarding() {
     birthLat: undefined,
     birthLng: undefined,
     tonePreferredDepth: 'deep',
-    tonePreferredStyle: 'mystical'
+    tonePreferredStyle: 'mystical',
   });
 
   const upsertMutation = useUpsertMe({
-    request: { headers: getAuthHeaders() }
+    request: { headers: getAuthHeaders() },
   });
 
   useEffect(() => {
-    // Prevent accidental profile overwrite via direct /onboarding link
-    // when the current account has already completed setup.
     if (!isMeLoading && me?.onboardingDone) {
       setLocation('/chat?onboardingBlocked=1', { replace: true });
     }
@@ -48,24 +146,46 @@ export default function Onboarding() {
 
   useEffect(() => {
     const onDismiss = () => {
-      scrollRef.current?.scrollTo({ top: 0 });
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     };
     window.addEventListener('astrobot:keyboard-dismiss', onDismiss);
     return () => window.removeEventListener('astrobot:keyboard-dismiss', onDismiss);
   }, []);
 
-  const handleNext = () => { setErrorMsg(null); setStep(s => s + 1); };
-  const handleBack = () => { setErrorMsg(null); setStep(s => s - 1); };
+  const handleNext = () => {
+    setErrorMsg(null);
+    setStep((s) => s + 1);
+  };
+
+  const handleBack = () => {
+    setErrorMsg(null);
+    setCityError(null);
+    setStep((s) => s - 1);
+  };
+
+  const canProceedStep2 = Boolean(
+    formData.birthDate?.trim() && (birthTimeUnknown || formData.birthTime?.trim()),
+  );
+
+  const canBuildChart = hasCitySelection(formData);
 
   const handleComplete = async () => {
     setErrorMsg(null);
+    setCityError(null);
+
+    if (!hasCitySelection(formData)) {
+      setCityError('Выберите город из списка подсказок');
+      return;
+    }
+
     try {
       await upsertMutation.mutateAsync({
         data: {
           ...formData,
           birthTime: birthTimeUnknown ? '12:00' : formData.birthTime,
+          birthTimeUnknown,
           onboardingDone: true,
-        }
+        },
       });
       try {
         sessionStorage.setItem(FRESH_ONBOARDING_KEY, '1');
@@ -85,143 +205,142 @@ export default function Onboarding() {
     }
   };
 
-  const slideVariants = {
-    enter: { x: 40, opacity: 0 },
-    center: { x: 0, opacity: 1 },
-    exit: { x: -40, opacity: 0 },
+  const scrollFocusedFieldIntoView = (el: HTMLElement | null) => {
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
   };
 
-  const ctaButtonClass =
-    'rounded-xl min-h-12 font-semibold border-0 bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] shadow-[0_0_28px_rgba(212,175,55,0.42),0_4px_20px_rgba(0,0,0,0.35)] hover:brightness-105 hover:shadow-[0_0_32px_rgba(212,175,55,0.5)] transition-[filter,box-shadow] disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100';
-
   return (
-    <div className="relative min-h-[100dvh] overflow-hidden bg-[#06060c]" style={{ minHeight: 'var(--vvh, 100dvh)' }}>
-      <div
-        className="absolute inset-0 pointer-events-none bg-background"
-        aria-hidden
-      />
+    <div
+      ref={scrollRef}
+      className="relative flex flex-col overflow-hidden bg-[#06060c] h-[100dvh]"
+      style={{ height: 'var(--vvh, 100dvh)' }}
+    >
+      <div className="absolute inset-0 pointer-events-none bg-background" aria-hidden />
       <div
         className="absolute inset-0 pointer-events-none opacity-[0.85]"
         style={{
           background:
-            "radial-gradient(ellipse 120% 80% at 50% 20%, rgba(139, 92, 246, 0.35), transparent 55%), radial-gradient(circle at 20% 0%, rgba(167, 139, 250, 0.25), transparent 45%), radial-gradient(circle at 85% 95%, rgba(212, 175, 55, 0.22), transparent 50%)",
+            'radial-gradient(ellipse 120% 80% at 50% 20%, rgba(139, 92, 246, 0.35), transparent 55%), radial-gradient(circle at 20% 0%, rgba(167, 139, 250, 0.25), transparent 45%), radial-gradient(circle at 85% 95%, rgba(212, 175, 55, 0.22), transparent 50%)',
         }}
       />
       <div
         className="absolute inset-0 pointer-events-none opacity-[0.12] mix-blend-screen"
         style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.35) 1px, transparent 0)`,
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.35) 1px, transparent 0)',
           backgroundSize: '48px 48px',
         }}
       />
 
-      {/* Progress dots */}
-      <div className="absolute top-10 inset-x-0 flex justify-center gap-2 z-10">
-        {[1, 2, 3].map(i => (
-          <div
-            key={i}
-            className={`h-1.5 rounded-full transition-all duration-500 ${
-              step === i
-                ? 'w-8 bg-primary shadow-[0_0_8px_rgba(212,175,55,0.6)]'
-                : 'w-4 bg-white/20'
-            }`}
-          />
-        ))}
-      </div>
-
-      <div className="absolute top-16 inset-x-0 z-20 flex justify-center px-6">
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-9 rounded-full border border-primary/30 bg-black/20 px-4 text-xs sm:text-sm font-medium text-primary hover:bg-primary/10"
-          onClick={() => openAuthModal('login')}
-        >
-          Войти / зарегистрироваться
-        </Button>
-      </div>
-
-      {/* Centered content — overflow-y-auto lets the form scroll when the
-          Android Chrome virtual keyboard shrinks the visible viewport */}
-      <div
-        ref={scrollRef}
-        className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain flex flex-col items-center px-6 pt-16 pb-10 pb-safe"
-      >
-        <div className="relative w-full max-w-sm my-auto py-4">
-          <AnimatePresence mode="wait">
-
-            {step === 1 && (
-              <motion.div
-                key="step1"
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.35, ease: 'easeInOut' }}
-              >
-                <div className="relative mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_40px_rgba(212,175,55,0.35),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
-                  <div className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl" aria-hidden />
-                  <Sparkles className="relative z-[1] h-10 w-10 text-primary drop-shadow-[0_0_12px_rgba(212,175,55,0.55)]" />
-                </div>
-                <h1 className="text-3xl font-display font-bold text-center mb-2">Добро пожаловать</h1>
-                <p className="text-muted-foreground text-center mb-8">Ваш личный AI-астролог. Начнём с того, чтобы познакомиться.</p>
-
-                <div className="space-y-4">
-                  <Input
-                    icon={<User className="w-5 h-5" />}
-                    placeholder="Ваше имя"
-                    value={formData.name || ''}
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    onKeyDown={e => e.key === 'Enter' && formData.name?.trim() && handleNext()}
-                  />
+      <div className="relative z-10 flex flex-col h-full min-h-0">
+        <AnimatePresence mode="wait">
+          {step === 1 && (
+            <motion.div
+              key="step1"
+              className="flex flex-col h-full min-h-0"
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+            >
+              <OnboardingShell
+                step={1}
+                icon={<Sparkles className="h-8 w-8 drop-shadow-[0_0_12px_rgba(212,175,55,0.55)]" />}
+                title="Добро пожаловать"
+                subtitle="Ваш личный AI-астролог. Начнём с того, чтобы познакомиться."
+                onLogin={() => openAuthModal('login')}
+                footer={
                   <Button
-                    className={cn('w-full', ctaButtonClass)}
+                    className={cn('w-full max-w-sm mx-auto block', ctaButtonClass)}
                     onClick={handleNext}
                     disabled={!formData.name?.trim()}
                   >
-                    Продолжить <ArrowRight className="w-4 h-4" />
+                    Продолжить <ArrowRight className="w-4 h-4 ml-1 inline" />
                   </Button>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 2 && (
-              <motion.div
-                key="step2"
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.35, ease: 'easeInOut' }}
+                }
               >
-                <h1 className="text-3xl font-display font-bold text-center mb-2">Данные рождения</h1>
-                <p className="text-muted-foreground text-center mb-6">Точные данные нужны для расчёта натальной карты.</p>
+                <Input
+                  icon={<User className="w-5 h-5" />}
+                  placeholder="Ваше имя"
+                  value={formData.name || ''}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Enter' && formData.name?.trim() && handleNext()}
+                  onFocus={(e) => scrollFocusedFieldIntoView(e.currentTarget)}
+                />
+              </OnboardingShell>
+            </motion.div>
+          )}
 
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground pl-1">Дата рождения</label>
+          {step === 2 && (
+            <motion.div
+              key="step2"
+              className="flex flex-col h-full min-h-0"
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+            >
+              <OnboardingShell
+                step={2}
+                icon={<Sparkles className="h-8 w-8 drop-shadow-[0_0_12px_rgba(212,175,55,0.55)]" />}
+                title="Когда вы родились?"
+                subtitle="Точные данные нужны для расчёта натальной карты."
+                onLogin={() => openAuthModal('login')}
+                footer={
+                  <div className="space-y-3 w-full max-w-sm mx-auto">
+                    <button
+                      type="button"
+                      onClick={handleBack}
+                      className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+                    >
+                      ← Назад
+                    </button>
+                    <Button
+                      className={cn('w-full', ctaButtonClass)}
+                      onClick={handleNext}
+                      disabled={!canProceedStep2}
+                    >
+                      Далее <ArrowRight className="w-4 h-4 ml-1 inline" />
+                    </Button>
+                  </div>
+                }
+              >
+                <div className="space-y-4 rounded-2xl border border-border/50 bg-card/30 p-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-primary" />
+                      Дата рождения
+                    </label>
                     <DateInput
                       value={formData.birthDate || ''}
-                      onChange={date => setFormData({ ...formData, birthDate: date })}
+                      onChange={(date) => setFormData({ ...formData, birthDate: date })}
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground pl-1">
-                      Время рождения <span className="text-muted-foreground/50">(необязательно)</span>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-primary" />
+                      Время рождения
                     </label>
                     <input
                       type="time"
                       value={birthTimeUnknown ? '12:00' : (formData.birthTime || '')}
-                      onChange={e => {
+                      onChange={(e) => {
                         setBirthTimeUnknown(false);
                         setFormData({ ...formData, birthTime: e.target.value });
                       }}
                       disabled={birthTimeUnknown}
-                      className="w-full bg-card/50 backdrop-blur-sm border border-border rounded-xl text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all duration-300 px-4 py-3.5"
+                      onFocus={(e) => scrollFocusedFieldIntoView(e.currentTarget)}
+                      className="w-full bg-card/50 backdrop-blur-sm border border-border rounded-xl text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all duration-300 px-4 py-3.5 disabled:opacity-60"
                     />
                   </div>
 
-                  <label className="flex items-start gap-2 rounded-xl border border-border bg-card/30 px-3 py-2.5">
+                  <label className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-background/20 px-3 py-2.5 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={birthTimeUnknown}
@@ -233,7 +352,7 @@ export default function Onboarding() {
                           birthTime: checked ? '12:00' : '',
                         });
                       }}
-                      className="mt-0.5"
+                      className="mt-0.5 shrink-0"
                     />
                     <span className="text-xs text-muted-foreground leading-relaxed">
                       Я не знаю точное время рождения.
@@ -241,113 +360,88 @@ export default function Onboarding() {
                       Используем 12:00 по умолчанию. Ответы будут менее конкретными.
                     </span>
                   </label>
+                </div>
+              </OnboardingShell>
+            </motion.div>
+          )}
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground pl-1">Город рождения</label>
-                    <CityAutocomplete
-                      value={formData.birthPlace || ''}
-                      onChange={(city, lat, lng) => setFormData({
+          {step === 3 && (
+            <motion.div
+              key="step3"
+              className="flex flex-col h-full min-h-0"
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+            >
+              <OnboardingShell
+                step={3}
+                icon={<MapPin className="h-8 w-8 drop-shadow-[0_0_12px_rgba(212,175,55,0.55)]" />}
+                title="Где вы родились?"
+                subtitle="Введите название города и выберите его из списка."
+                onLogin={() => openAuthModal('login')}
+                footer={
+                  <div className="space-y-3 w-full max-w-sm mx-auto">
+                    {errorMsg && (
+                      <p className="text-red-400 text-sm text-center bg-red-500/10 rounded-xl px-3 py-2">
+                        {errorMsg}
+                      </p>
+                    )}
+                    <div className="flex gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 min-h-12 rounded-xl"
+                        onClick={handleBack}
+                      >
+                        Назад
+                      </Button>
+                      <Button
+                        className={cn('flex-[1.4]', ctaButtonClass)}
+                        onClick={handleComplete}
+                        disabled={!canBuildChart || upsertMutation.isPending}
+                        isLoading={upsertMutation.isPending}
+                      >
+                        <span className="inline-flex items-center justify-center gap-1.5">
+                          Построить карту
+                          <Sparkles className="w-4 h-4" />
+                        </span>
+                      </Button>
+                    </div>
+                  </div>
+                }
+              >
+                <div className="space-y-2 rounded-2xl border border-border/50 bg-card/30 p-4">
+                  <label className="text-xs font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                    Город рождения
+                  </label>
+                  <CityAutocomplete
+                    value={formData.birthPlace || ''}
+                    placeholder="Начните вводить город…"
+                    onChange={(city, lat, lng) => {
+                      setCityError(null);
+                      setFormData({
                         ...formData,
                         birthPlace: city,
                         birthLat: lat,
-                        birthLng: lng
-                      })}
-                    />
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <Button variant="outline" className="flex-1" onClick={handleBack}>Назад</Button>
-                    <Button
-                      className={cn('flex-1', ctaButtonClass)}
-                      onClick={handleNext}
-                      disabled={!formData.birthDate || !formData.birthPlace}
-                    >
-                      Далее
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 3 && (
-              <motion.div
-                key="step3"
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.35, ease: 'easeInOut' }}
-              >
-                <h1 className="text-3xl font-display font-bold text-center mb-2">Стиль общения</h1>
-                <p className="text-muted-foreground text-center mb-6">Как вы хотите, чтобы AstroBot говорил с вами?</p>
-
-                <div className="space-y-5">
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium text-foreground/80">Глубина</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { value: 'simple', label: 'Просто и ясно' },
-                        { value: 'deep', label: 'Глубоко и детально' },
-                      ].map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setFormData({ ...formData, tonePreferredDepth: opt.value as any })}
-                          className={`py-3 px-2 rounded-xl border transition-all text-sm leading-tight ${
-                            formData.tonePreferredDepth === opt.value
-                              ? 'bg-primary/20 border-primary text-primary'
-                              : 'bg-card/50 border-border text-muted-foreground hover:border-white/20'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium text-foreground/80">Тон</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { value: 'modern', label: 'Современный' },
-                        { value: 'mystical', label: 'Мистический' },
-                      ].map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setFormData({ ...formData, tonePreferredStyle: opt.value as any })}
-                          className={`py-3 px-2 rounded-xl border transition-all text-sm ${
-                            formData.tonePreferredStyle === opt.value
-                              ? 'bg-primary/20 border-primary text-primary'
-                              : 'bg-card/50 border-border text-muted-foreground hover:border-white/20'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {errorMsg && (
-                    <p className="text-red-400 text-sm text-center bg-red-500/10 rounded-xl px-3 py-2">
-                      {errorMsg}
+                        birthLng: lng,
+                      });
+                    }}
+                    onFocusInput={(el) => scrollFocusedFieldIntoView(el)}
+                  />
+                  {cityError && <p className="text-red-400 text-xs pl-1">{cityError}</p>}
+                  {formData.birthPlace && !canBuildChart && (
+                    <p className="text-amber-400/90 text-xs pl-1">
+                      Выберите город из выпадающего списка
                     </p>
                   )}
-
-                  <div className="flex gap-3">
-                    <Button variant="outline" className="flex-1" onClick={handleBack}>Назад</Button>
-                    <Button
-                      className={cn('flex-1', ctaButtonClass)}
-                      onClick={handleComplete}
-                      isLoading={upsertMutation.isPending}
-                    >
-                      Начать
-                    </Button>
-                  </div>
                 </div>
-              </motion.div>
-            )}
-
-          </AnimatePresence>
-        </div>
+              </OnboardingShell>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
