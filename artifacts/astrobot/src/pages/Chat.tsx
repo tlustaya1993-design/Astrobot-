@@ -835,7 +835,7 @@ export default function Chat() {
         ];
 
   const promptSubtitle = selectedContactId == null
-    ? (!isLoggedIn ? '5 бесплатных запросов - пробуйте и оцените формат.' : '')
+    ? (!isLoggedIn ? '5 бесплатных запросов - пробуйте и оцените формат' : '')
     : '';
 
   const showQuickPrompts = !isLoading && displayMessages.length === 0;
@@ -926,7 +926,9 @@ export default function Chat() {
           {/* Messages */}
           <div
             ref={messagesScrollRef}
-            className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-3 space-y-4 [overflow-anchor:none]"
+            className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-3 [overflow-anchor:none] ${
+              showContactModePicker ? 'flex flex-col' : 'space-y-4'
+            }`}
             onTouchStart={stopAutoScroll}
             onPointerDown={stopAutoScroll}
           >
@@ -937,7 +939,10 @@ export default function Chat() {
             )}
 
             {showContactModePicker && (
-              <div className="flex flex-col items-center py-2">
+              <div className="flex flex-1 flex-col items-center justify-center min-h-[min(52vh,440px)] py-6">
+                <div className="chat-hero-icon mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
                 <ContactAnalysisModeScreen
                   extended={contactExtendedMode}
                   onChange={(next) => void persistContactExtendedMode(next)}
@@ -975,7 +980,7 @@ export default function Chat() {
                     aria-hidden="true"
                     className="sr-only"
                   >
-                    5 бесплатных запросов - пробуйте и оцените формат.
+                    5 бесплатных запросов - пробуйте и оцените формат
                   </p>
                 )}
               </motion.div>
