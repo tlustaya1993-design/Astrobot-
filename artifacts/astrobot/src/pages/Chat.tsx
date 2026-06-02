@@ -850,7 +850,7 @@ export default function Chat() {
           onTouchEnd={handleTouchEnd}
         >
           {/* Header */}
-          <header className="sticky top-0 z-40 flex min-h-[44px] items-center gap-2 border-b border-white/[0.04] bg-transparent px-3 py-1.5 backdrop-blur-md">
+          <header className="sticky top-0 z-40 flex min-h-[44px] items-center gap-2 bg-transparent px-3 py-1.5">
             {showContactChatHeader ? (
               <>
                 {conversationId ? (
@@ -949,23 +949,23 @@ export default function Chat() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center justify-center py-2 text-center"
+                className="chat-hero flex flex-col items-center justify-center py-3 text-center"
               >
-                {/* Daily Forecast Card */}
+                {/* Daily Forecast Card — unchanged */}
                 {!selectedContactId && (
                   <div className="w-full max-w-md mb-3" data-tutorial-id="forecast-card">
                     <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
                   </div>
                 )}
 
-                <div className="w-12 h-12 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-2.5 shadow-[0_0_20px_rgba(212,175,55,0.14)]">
-                  <Sparkles className="w-6 h-6 text-primary" />
+                <div className="chat-hero-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
+                  <Sparkles className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="text-base font-display font-semibold mb-1">С чего начнем?</h3>
+                <h3 className="mb-1.5 text-base font-display font-semibold text-foreground">С чего начнем?</h3>
                 {promptSubtitle ? (
                   <p
                     data-tutorial-id="free-requests"
-                    className="mb-3 max-w-md text-sm text-primary/85 leading-relaxed"
+                    className="max-w-md text-sm leading-relaxed text-[#d4a93a]/90"
                   >
                     {promptSubtitle}
                   </p>
@@ -1123,8 +1123,8 @@ export default function Chat() {
             <div className="h-4 shrink-0" aria-hidden />
           </div>
 
-          {/* Bottom: quick prompts + input + nav — glass layer on shared gradient */}
-          <div className="shrink-0 border-t border-white/[0.05] bg-white/[0.02] backdrop-blur-xl">
+          {/* Bottom: quick prompts + input + nav */}
+          <div className="chat-composer-dock shrink-0">
           {showQuickPrompts && (
             <ChatQuickPromptSlider
               prompts={activeQuickPrompts}
@@ -1160,7 +1160,7 @@ export default function Chat() {
                     : 'Спросите звёзды...'
                 }
                 rows={1}
-                className="w-full min-h-[52px] max-h-[140px] resize-none overflow-y-auto rounded-3xl border border-white/10 bg-white/[0.06] py-3 pl-4 pr-14 text-foreground leading-relaxed outline-none backdrop-blur-md transition-all placeholder:text-muted-foreground focus:border-primary/40 focus:ring-1 focus:ring-primary/40"
+                className="w-full min-h-[52px] max-h-[140px] resize-none overflow-y-auto rounded-3xl border border-white/[0.08] bg-white/[0.04] py-3 pl-4 pr-14 text-foreground leading-relaxed outline-none backdrop-blur-sm transition-all placeholder:text-muted-foreground focus:border-primary/35 focus:ring-1 focus:ring-primary/30"
                 disabled={isStreaming}
               />
               <motion.button

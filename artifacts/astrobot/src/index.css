@@ -54,9 +54,9 @@
   --border: 240 20% 18%;
   --ring: 43 74% 66%;
 
-  /* Status bar / browser chrome — matches top of app gradients (not flat #0a0a14) */
-  --app-chrome-top: #2b1d42;
-  --onboarding-top: #2b1d42;
+  /* Status bar / browser chrome — matches chat scene top (#2D2152) */
+  --app-chrome-top: #2d2152;
+  --onboarding-top: #2d2152;
   --onboarding-base: #0a0912;
 }
 
@@ -397,7 +397,7 @@ html.flat-bg-test::after {
   pointer-events: none;
 }
 
-/* Chat main screen — one continuous scene (status bar → input) */
+/* Chat main screen — premium calm gradient (no stars/textures) */
 .chat-scene {
   position: relative;
   isolation: isolate;
@@ -414,13 +414,47 @@ html.flat-bg-test::after {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(circle at 50% 0%, rgba(120, 70, 180, 0.35), transparent 36%),
-    linear-gradient(180deg, #2a1b46 0%, #1b142d 38%, #0b0b12 100%);
+    radial-gradient(circle at center, rgba(120, 70, 255, 0.12) 0%, transparent 60%),
+    linear-gradient(180deg, #2d2152 0%, #18132f 45%, #090b18 100%);
 }
 
 .chat-scene > * {
   position: relative;
   z-index: 1;
+}
+
+.chat-hero-icon {
+  box-shadow: 0 0 60px rgba(140, 90, 255, 0.15);
+}
+
+.chat-compat-chip {
+  box-shadow: 0 0 16px rgba(120, 70, 255, 0.18);
+}
+
+.chat-composer-dock {
+  background: linear-gradient(180deg, rgba(20, 16, 40, 0.85), rgba(10, 10, 20, 0.95));
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+}
+
+.chat-quick-prompt-chip {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(200, 160, 50, 0.5);
+  background: rgba(255, 220, 100, 0.07);
+  backdrop-filter: blur(12px);
+  color: #d4a93a;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.chat-quick-prompt-chip:hover {
+  background: rgba(255, 220, 100, 0.11);
+  border-color: rgba(200, 160, 50, 0.65);
 }
 
 .chat-quick-prompts {

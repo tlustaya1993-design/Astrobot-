@@ -103,7 +103,7 @@ export default function PeoplePanel({
     <>
       <div
         data-tutorial-id="people-panel"
-        className="flex items-center gap-2 overflow-x-auto border-b border-white/[0.04] bg-transparent px-3 py-2 scrollbar-none"
+        className="flex items-center gap-2 overflow-x-auto bg-transparent px-3 py-2 scrollbar-none"
       >
 
         {/* «Я» */}
@@ -187,15 +187,15 @@ export default function PeoplePanel({
             data-onboarding-target="add-contact"
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowModal(true)}
-            className={`flex min-w-[200px] flex-1 items-center gap-2 rounded-full border border-violet-400/25 bg-white/[0.06] px-3 py-2 text-sm font-medium text-foreground/90 shadow-[0_0_20px_rgba(139,92,246,0.12)] backdrop-blur-md transition-all hover:border-violet-400/40 ${
-              onboardingHighlightAdd ? 'ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse' : ''
+            className={`chat-compat-chip flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-violet-400/30 bg-violet-950/25 px-2.5 pl-1.5 text-sm font-medium text-foreground/90 backdrop-blur-md transition-all hover:border-violet-400/45 ${
+              onboardingHighlightAdd ? 'ring-2 ring-primary ring-offset-2 ring-offset-transparent animate-pulse' : ''
             }`}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600/80 text-white">
-              <Plus className="w-4 h-4" strokeWidth={2.5} />
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-600/80 text-white">
+              <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
             </span>
-            <span className="flex-1 text-center leading-snug">Совместимость с любым человеком</span>
-            <Users className="w-5 h-5 shrink-0 text-violet-400/90" strokeWidth={1.75} />
+            <span className="whitespace-nowrap leading-none">Совместимость</span>
+            <Users className="h-4 w-4 shrink-0 text-violet-300/85" strokeWidth={1.75} />
           </motion.button>
         )}
 

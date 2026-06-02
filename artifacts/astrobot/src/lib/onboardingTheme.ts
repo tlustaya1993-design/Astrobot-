@@ -1,5 +1,5 @@
-/** Solid top of onboarding — must match <meta name="theme-color"> on /onboarding */
-export const ONBOARDING_THEME_COLOR = '#2b1d42';
+/** Solid top of onboarding — aligned with chat scene top (#2D2152) */
+export const ONBOARDING_THEME_COLOR = '#2D2152';
 
 /** Base tone below the top gradient blend */
 export const ONBOARDING_SURFACE_BASE = '#0a0912';

@@ -4,8 +4,8 @@
   "description": "AI-астролог в формате живого диалога",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#2b1d42",
-  "theme_color": "#2b1d42",
+  "background_color": "#2D2152",
+  "theme_color": "#2D2152",
   "orientation": "portrait-primary",
   "icons": [
     {
