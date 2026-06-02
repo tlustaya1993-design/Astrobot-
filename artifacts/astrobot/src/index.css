@@ -177,6 +177,22 @@ html.keyboard-open [data-bottom-nav] {
   padding-right: env(safe-area-inset-right, 0px);
 }
 
+/* Full-bleed onboarding: fixed to visual viewport, no boxed “letterbox” at top */
+.onboarding-screen {
+  width: 100%;
+  max-width: 100%;
+  left: 0;
+  right: 0;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-top: env(safe-area-inset-top, 0px);
+  background-color: hsl(240 25% 4%);
+  background-image:
+    radial-gradient(ellipse 130% 85% at 50% -8%, rgba(139, 92, 246, 0.38), transparent 62%),
+    radial-gradient(circle at 88% 96%, rgba(212, 175, 55, 0.22), transparent 48%),
+    radial-gradient(circle at 12% 28%, rgba(167, 139, 250, 0.16), transparent 42%);
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

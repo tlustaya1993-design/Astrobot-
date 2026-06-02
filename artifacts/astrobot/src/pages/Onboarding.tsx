@@ -50,7 +50,6 @@ function OnboardingShell({
   children,
   footer,
   onLogin,
-  centerContent = false,
   contentClassName,
 }: {
   step: number;
@@ -60,12 +59,11 @@ function OnboardingShell({
   children: React.ReactNode;
   footer: React.ReactNode;
   onLogin: () => void;
-  centerContent?: boolean;
   contentClassName?: string;
 }) {
   return (
-    <>
-      <div className="shrink-0 relative z-20 bg-transparent px-4 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] pb-3">
+    <div className="flex h-full min-h-0 w-full flex-col px-4">
+      <header className="relative z-20 shrink-0 py-2">
         <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
           <button
             type="button"
@@ -98,19 +96,16 @@ function OnboardingShell({
             <p className="text-xs text-muted-foreground/80 whitespace-nowrap">Шаг {step} из 3</p>
           </div>
         </div>
-      </div>
+      </header>
 
-      <div
+      <main
         className={cn(
-          'flex-1 min-h-0 overflow-x-hidden overscroll-y-contain bg-transparent px-6 pb-2',
-          centerContent
-            ? 'flex flex-col justify-center overflow-y-auto'
-            : 'overflow-y-auto pt-4',
+          'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain px-2',
           contentClassName,
         )}
       >
-        <div className={cn('w-full max-w-sm mx-auto', centerContent && 'my-auto')}>
-          <div className="relative mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_28px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
+        <div className="mx-auto w-full max-w-sm pt-2 pb-4">
+          <div className="relative mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_28px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
             <div
               className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl"
               aria-hidden
@@ -121,15 +116,15 @@ function OnboardingShell({
           <p className="text-muted-foreground text-center text-sm mb-4 leading-relaxed">{subtitle}</p>
           {children}
         </div>
-      </div>
+      </main>
 
-      <div
-        className="shrink-0 px-6 pt-2"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+      <footer
+        className="relative z-20 shrink-0 px-2 pt-1"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
       >
-        {footer}
-      </div>
-    </>
+        <div className="mx-auto w-full max-w-sm">{footer}</div>
+      </footer>
+    </div>
   );
 }
 
@@ -239,27 +234,24 @@ export default function Onboarding() {
   return (
     <div
       ref={scrollRef}
-      className="relative flex flex-col overflow-hidden bg-[#06060c]"
-      style={{ height: 'var(--vvh, 100dvh)' }}
+      data-onboarding-screen
+      className="onboarding-screen fixed z-40 flex flex-col overflow-hidden"
+      style={{
+        top: 'var(--vv-offset-top, 0px)',
+        height: 'var(--vvh, 100dvh)',
+      }}
     >
-      <div className="absolute inset-0 pointer-events-none bg-background/55" aria-hidden />
       <div
-        className="absolute inset-0 pointer-events-none opacity-[0.85]"
-        style={{
-          background:
-            'radial-gradient(ellipse 110% 65% at 50% 32%, rgba(139, 92, 246, 0.28), transparent 58%), radial-gradient(circle at 15% 8%, rgba(167, 139, 250, 0.18), transparent 42%), radial-gradient(circle at 85% 95%, rgba(212, 175, 55, 0.22), transparent 50%)',
-        }}
-      />
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.12] mix-blend-screen"
+        className="pointer-events-none absolute inset-0 opacity-[0.1] mix-blend-screen"
         style={{
           backgroundImage:
             'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.35) 1px, transparent 0)',
           backgroundSize: '48px 48px',
         }}
+        aria-hidden
       />
 
-      <div className="relative z-10 flex flex-col h-full min-h-0">
+      <div className="relative z-10 flex h-full min-h-0 flex-col">
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div
@@ -273,7 +265,6 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={1}
-                centerContent
                 icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Добро пожаловать"
                 subtitle="Ваш личный AI-астролог. Начнём с того, чтобы познакомиться."
@@ -312,7 +303,7 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={2}
-                contentClassName="pt-8"
+                contentClassName="pt-1"
                 icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Когда вы родились?"
                 subtitle="Точные данные нужны для расчёта натальной карты."
@@ -399,7 +390,6 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={3}
-                centerContent
                 icon={<MapPin className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Где вы родились?"
                 subtitle="Введите название города и выберите его из списка."
