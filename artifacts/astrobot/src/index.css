@@ -397,6 +397,49 @@ html.flat-bg-test::after {
   pointer-events: none;
 }
 
+/* Chat main screen — one continuous scene (status bar → input) */
+.chat-scene {
+  position: relative;
+  isolation: isolate;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(120, 70, 180, 0.35), transparent 36%),
+    linear-gradient(180deg, #2a1b46 0%, #1b142d 38%, #0b0b12 100%);
+}
+
+.chat-scene > * {
+  position: relative;
+  z-index: 1;
+}
+
+.chat-quick-prompts {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.chat-quick-prompts::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

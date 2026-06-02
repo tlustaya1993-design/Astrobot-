@@ -101,7 +101,10 @@ export default function PeoplePanel({
 
   return (
     <>
-      <div data-tutorial-id="people-panel" className="flex items-center gap-2 px-3 py-2 overflow-x-auto scrollbar-none bg-background/60 border-b border-border/50">
+      <div
+        data-tutorial-id="people-panel"
+        className="flex items-center gap-2 overflow-x-auto border-b border-white/[0.04] bg-transparent px-3 py-2 scrollbar-none"
+      >
 
         {/* «Я» */}
         <motion.button
@@ -115,8 +118,8 @@ export default function PeoplePanel({
           }}
           className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-sm font-medium shrink-0 transition-all border ${
             selectedContactId === null
-              ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
-              : 'bg-card border-border text-muted-foreground hover:border-primary/40'
+              ? 'border-primary bg-primary/20 text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
+              : 'border-white/10 bg-white/[0.06] text-muted-foreground backdrop-blur-sm hover:border-primary/40'
           }`}
         >
           <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/30 shrink-0">
@@ -143,10 +146,10 @@ export default function PeoplePanel({
                   }
                   onSelect(contact.id);
                 }}
-                className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-sm font-medium transition-all border ${
+                className={`flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-sm font-medium transition-all ${
                   selectedContactId === contact.id
-                    ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
-                    : 'bg-card border-border text-muted-foreground hover:border-primary/40'
+                    ? 'border-primary bg-primary/20 text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
+                    : 'border-white/10 bg-white/[0.06] text-muted-foreground backdrop-blur-sm hover:border-primary/40'
                 }`}
               >
                 <div className={`w-6.5 h-6.5 rounded-full overflow-hidden border border-primary/30 shrink-0 ${
@@ -184,7 +187,7 @@ export default function PeoplePanel({
             data-onboarding-target="add-contact"
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowModal(true)}
-            className={`flex flex-1 min-w-[200px] items-center gap-2 rounded-full border border-violet-500/35 bg-gradient-to-r from-violet-950/40 via-card/80 to-fuchsia-950/30 px-3 py-2 text-sm font-medium text-foreground/90 shadow-[0_0_20px_rgba(139,92,246,0.15)] hover:border-violet-400/50 transition-all ${
+            className={`flex min-w-[200px] flex-1 items-center gap-2 rounded-full border border-violet-400/25 bg-white/[0.06] px-3 py-2 text-sm font-medium text-foreground/90 shadow-[0_0_20px_rgba(139,92,246,0.12)] backdrop-blur-md transition-all hover:border-violet-400/40 ${
               onboardingHighlightAdd ? 'ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse' : ''
             }`}
           >
@@ -203,7 +206,7 @@ export default function PeoplePanel({
             data-onboarding-target="add-contact"
             whileTap={{ scale: 0.95 }}
             onClick={() => setShowModal(true)}
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-dashed border-border/80 text-muted-foreground hover:border-primary/50 hover:text-primary transition-all ${
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-dashed border-white/15 bg-white/[0.04] text-muted-foreground backdrop-blur-sm transition-all hover:border-primary/50 hover:text-primary ${
               onboardingHighlightAdd ? 'ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse' : ''
             }`}
             aria-label="Добавить человека"

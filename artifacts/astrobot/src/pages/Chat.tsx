@@ -16,6 +16,7 @@ import AstroMarkdown from '@/components/chat/AstroMarkdown';
 import PeoplePanel from '@/components/chat/PeoplePanel';
 import ContactAnalysisModeScreen from '@/components/chat/ContactAnalysisModeScreen';
 import ContactHeaderModeSwitch from '@/components/chat/ContactHeaderModeSwitch';
+import ChatQuickPromptSlider from '@/components/chat/ChatQuickPromptSlider';
 import { ChatOnboardingOverlay, type ChatOnboardingPhase } from '@/components/chat/ChatOnboardingOverlay';
 import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
@@ -837,16 +838,19 @@ export default function Chat() {
     ? (!isLoggedIn ? '5 бесплатных запросов - пробуйте и оцените формат.' : '')
     : '';
 
+  const showQuickPrompts = !isLoading && displayMessages.length === 0;
+  const activeQuickPrompts = selectedContactId != null ? contactPromptSet : selfPrompts();
+
   return (
     <>
-      <AppLayout>
+      <AppLayout immersive>
         <div
-          className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden"
+          className="chat-scene min-h-0 min-w-0 flex-1 overflow-x-hidden"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
           {/* Header */}
-          <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 px-3 py-1.5 flex items-center gap-2 shadow-sm min-h-[44px]">
+          <header className="sticky top-0 z-40 flex min-h-[44px] items-center gap-2 border-b border-white/[0.04] bg-transparent px-3 py-1.5 backdrop-blur-md">
             {showContactChatHeader ? (
               <>
                 {conversationId ? (
@@ -938,19 +942,6 @@ export default function Chat() {
                   extended={contactExtendedMode}
                   onChange={(next) => void persistContactExtendedMode(next)}
                 />
-                <div data-tutorial-id="quick-topics" className="flex flex-wrap justify-center gap-2 w-full max-w-md mt-4 px-1">
-                  {contactPromptSet.map((prompt, i) => (
-                    <motion.button
-                      key={i}
-                      type="button"
-                      onClick={() => setInputValue(prompt.prompt)}
-                      whileTap={reduceMotion ? undefined : { scale: 0.96 }}
-                      className="w-auto min-h-10 px-5 py-2 rounded-full text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-colors text-center leading-none whitespace-nowrap"
-                    >
-                      {prompt.label}
-                    </motion.button>
-                  ))}
-                </div>
               </div>
             )}
 
@@ -987,24 +978,6 @@ export default function Chat() {
                     5 бесплатных запросов - пробуйте и оцените формат.
                   </p>
                 )}
-                <div data-tutorial-id="quick-topics" className="flex flex-wrap justify-center gap-2 w-full max-w-md">
-                  {(selectedContactId
-                    ? contactPromptSet
-                    : selfPrompts()
-                  ).map((prompt, i) => (
-                    <motion.button
-                      key={i}
-                      type="button"
-                      onClick={() => setInputValue(prompt.prompt)}
-                      whileTap={reduceMotion ? undefined : { scale: 0.96 }}
-                      whileHover={reduceMotion ? undefined : { scale: 1.03 }}
-                      transition={{ type: 'spring', stiffness: 520, damping: 28 }}
-                      className="w-auto min-h-10 px-5 py-2 rounded-full text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-colors text-center leading-none whitespace-nowrap"
-                    >
-                      {prompt.label}
-                    </motion.button>
-                  ))}
-                </div>
               </motion.div>
             )}
 
@@ -1150,9 +1123,16 @@ export default function Chat() {
             <div className="h-4 shrink-0" aria-hidden />
           </div>
 
-          {/* Unified bottom panel: input + nav tabs */}
-          <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border">
-          <div className="px-4 pt-2 pb-2">
+          {/* Bottom: quick prompts + input + nav — glass layer on shared gradient */}
+          <div className="shrink-0 border-t border-white/[0.05] bg-white/[0.02] backdrop-blur-xl">
+          {showQuickPrompts && (
+            <ChatQuickPromptSlider
+              prompts={activeQuickPrompts}
+              onSelect={setInputValue}
+              reduceMotion={reduceMotion}
+            />
+          )}
+          <div className="px-4 pb-2 pt-0">
             {inputValue.length > CHAR_COUNTER_THRESHOLD && (
               <div className={`text-right text-xs mb-1 tabular-nums ${inputValue.length > MAX_CHAT_MESSAGE_CHARS ? 'text-destructive font-medium' : inputValue.length > MAX_CHAT_MESSAGE_CHARS * 0.9 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
                 {inputValue.length}/{MAX_CHAT_MESSAGE_CHARS}
@@ -1180,7 +1160,7 @@ export default function Chat() {
                     : 'Спросите звёзды...'
                 }
                 rows={1}
-                className="w-full min-h-[52px] max-h-[140px] resize-none overflow-y-auto bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-3xl py-3 pl-4 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50 leading-relaxed"
+                className="w-full min-h-[52px] max-h-[140px] resize-none overflow-y-auto rounded-3xl border border-white/10 bg-white/[0.06] py-3 pl-4 pr-14 text-foreground leading-relaxed outline-none backdrop-blur-md transition-all placeholder:text-muted-foreground focus:border-primary/40 focus:ring-1 focus:ring-primary/40"
                 disabled={isStreaming}
               />
               <motion.button
