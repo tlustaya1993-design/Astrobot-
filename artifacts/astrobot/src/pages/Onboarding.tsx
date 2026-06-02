@@ -252,15 +252,107 @@ export default function Onboarding() {
       });
     };
 
+    const logGeometry = () => {
+      const screen = document.querySelector<HTMLElement>('[data-onboarding-screen]');
+      const vv = window.visualViewport;
+      const viewport = {
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        outerWidth: window.outerWidth,
+        outerHeight: window.outerHeight,
+        devicePixelRatio: window.devicePixelRatio,
+      };
+      const visualViewport = vv
+        ? {
+            width: vv.width,
+            height: vv.height,
+            offsetTop: vv.offsetTop,
+            offsetLeft: vv.offsetLeft,
+            scale: vv.scale,
+          }
+        : null;
+
+      console.log('[flat-bg-test] viewport', viewport);
+      console.log('[flat-bg-test] visualViewport', visualViewport);
+
+      if (!screen) {
+        console.warn('[flat-bg-test] .onboarding-screen not found');
+        return;
+      }
+
+      const r = screen.getBoundingClientRect();
+      const cs = getComputedStyle(screen);
+      console.log('[flat-bg-test] .onboarding-screen rect', {
+        top: r.top,
+        left: r.left,
+        width: r.width,
+        height: r.height,
+        bottom: r.bottom,
+        right: r.right,
+      });
+      console.log('[flat-bg-test] .onboarding-screen computed', {
+        position: cs.position,
+        inset: `${cs.top} ${cs.right} ${cs.bottom} ${cs.left}`,
+        width: cs.width,
+        height: cs.height,
+        minWidth: cs.minWidth,
+        minHeight: cs.minHeight,
+        maxWidth: cs.maxWidth,
+        maxHeight: cs.maxHeight,
+        margin: cs.margin,
+        padding: cs.padding,
+        transform: cs.transform,
+        contain: cs.contain,
+        overflow: cs.overflow,
+        scale: cs.scale,
+        boxSizing: cs.boxSizing,
+      });
+
+      const parent = screen.parentElement;
+      if (parent) {
+        const pr = parent.getBoundingClientRect();
+        const pcs = getComputedStyle(parent);
+        console.log('[flat-bg-test] parent', {
+          tag: parent.tagName,
+          className: parent.className,
+          rect: { top: pr.top, left: pr.left, width: pr.width, height: pr.height },
+          transform: pcs.transform,
+          overflow: pcs.overflow,
+          width: pcs.width,
+          height: pcs.height,
+        });
+      }
+
+      const gaps = visualViewport
+        ? {
+            gapTop: r.top - visualViewport.offsetTop,
+            gapLeft: r.left - visualViewport.offsetLeft,
+            gapBottom: visualViewport.offsetTop + visualViewport.height - r.bottom,
+            gapRight: visualViewport.offsetLeft + visualViewport.width - r.right,
+          }
+        : {
+            gapTop: r.top,
+            gapLeft: r.left,
+            gapBottom: window.innerHeight - r.bottom,
+            gapRight: window.innerWidth - r.right,
+          };
+      console.log('[flat-bg-test] gaps vs visual viewport', gaps);
+    };
+
     if (debug) root.classList.add('onboarding-debug');
     if (debug || iosBgTest || flatBgTest) {
       logEnv();
       logLayout();
       window.addEventListener('resize', logLayout);
     }
+    if (flatBgTest) {
+      logGeometry();
+      window.addEventListener('resize', logGeometry);
+    }
 
     return () => {
       window.removeEventListener('resize', logLayout);
+      window.removeEventListener('resize', logGeometry);
       root.classList.remove('onboarding-route', 'onboarding-debug', 'ios-bg-test', 'flat-bg-test');
       if (prevThemeColor) themeMeta?.setAttribute('content', prevThemeColor);
       else themeMeta?.setAttribute('content', '#0a0a14');
@@ -344,7 +436,7 @@ export default function Onboarding() {
         aria-hidden
       />
 
-      <div className="relative z-10 flex h-full min-h-0 flex-col">
+      <div className="onboarding-content">
         <AnimatePresence mode="wait">
           {step === 1 && (
             <motion.div
