@@ -222,7 +222,7 @@ export default function Onboarding() {
   return (
     <div
       ref={scrollRef}
-      className="relative flex flex-col overflow-hidden bg-[#06060c] h-[100dvh]"
+      className="relative flex flex-col overflow-hidden bg-[#06060c]"
       style={{ height: 'var(--vvh, 100dvh)' }}
     >
       <div className="absolute inset-0 pointer-events-none bg-background" aria-hidden />
