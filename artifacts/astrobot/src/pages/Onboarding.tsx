@@ -62,8 +62,8 @@ function OnboardingShell({
   contentClassName?: string;
 }) {
   return (
-    <div className="flex h-full min-h-0 w-full flex-col px-4">
-      <header className="relative z-20 shrink-0 py-2">
+    <div className="flex h-full min-h-0 w-full flex-col px-4 pt-1">
+      <header className="relative z-20 shrink-0 py-0.5">
         <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
           <button
             type="button"
@@ -104,7 +104,7 @@ function OnboardingShell({
           contentClassName,
         )}
       >
-        <div className="mx-auto w-full max-w-sm pt-2 pb-4">
+        <div className="mx-auto w-full max-w-sm pt-0.5 pb-4">
           <div className="relative mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_28px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
             <div
               className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl"
