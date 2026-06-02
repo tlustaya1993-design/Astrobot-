@@ -63,7 +63,7 @@ function OnboardingShell({
 }) {
   return (
     <>
-      <div className="shrink-0 relative z-20 px-4 pt-safe pb-2 bg-[#06060c]/75 backdrop-blur-sm">
+      <div className="shrink-0 relative z-20 px-4 pt-safe pb-2">
         <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
           <button
             type="button"
