@@ -174,48 +174,88 @@ export default function Onboarding() {
 
   useEffect(() => {
     const root = document.documentElement;
+    const params = new URLSearchParams(window.location.search);
     root.classList.add('onboarding-route');
 
-    const debug =
-      typeof window !== 'undefined'
-      && new URLSearchParams(window.location.search).get('onboarding-debug') === '1';
-    if (debug) {
-      root.classList.add('onboarding-debug');
-      const probe = (label: string, el: Element | null) => {
-        if (!el) return { label, missing: true };
-        const r = el.getBoundingClientRect();
-        const cs = getComputedStyle(el);
-        return {
-          label,
-          top: Math.round(r.top),
-          height: Math.round(r.height),
-          bg: cs.backgroundColor,
-          transform: cs.transform,
-          paddingTop: cs.paddingTop,
-        };
+    const debug = params.get('onboarding-debug') === '1';
+    const iosBgTest = params.get('ios-bg-test') === '1';
+
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    const prevThemeColor = themeMeta?.getAttribute('content') ?? null;
+
+    if (iosBgTest) {
+      root.classList.add('ios-bg-test');
+      themeMeta?.setAttribute('content', '#ff0000');
+    }
+
+    const logEnv = () => {
+      const ua = navigator.userAgent;
+      const safeProbe = document.createElement('div');
+      safeProbe.style.cssText =
+        'position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);';
+      document.body.appendChild(safeProbe);
+      const safeCs = getComputedStyle(safeProbe);
+      const safeArea = {
+        top: safeCs.paddingTop,
+        bottom: safeCs.paddingBottom,
       };
-      const log = () => {
-        console.table([
-          probe('html', document.documentElement),
-          probe('body', document.body),
-          probe('#root', document.getElementById('root')),
-          probe('.onboarding-screen', document.querySelector('[data-onboarding-screen]')),
-        ]);
-        console.log('CSS vars', {
-          vvh: getComputedStyle(root).getPropertyValue('--vvh'),
-          vvOffsetTop: getComputedStyle(root).getPropertyValue('--vv-offset-top'),
-        });
+      safeProbe.remove();
+
+      console.log('[onboarding env]', {
+        displayMode: window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser',
+        iosStandalone: (navigator as Navigator & { standalone?: boolean }).standalone === true,
+        likelyTelegram: /Telegram/i.test(ua),
+        themeColorMeta: themeMeta?.getAttribute('content'),
+        manifestTheme: '#0a0a14',
+        appleStatusBar: 'black (index.html)',
+        viewportFit: 'cover (index.html)',
+        safeArea,
+        innerHeight: window.innerHeight,
+        visualViewport: window.visualViewport
+          ? { height: window.visualViewport.height, offsetTop: window.visualViewport.offsetTop }
+          : null,
+      });
+    };
+
+    const probe = (label: string, el: Element | null) => {
+      if (!el) return { label, missing: true };
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return {
+        label,
+        top: Math.round(r.top),
+        height: Math.round(r.height),
+        bg: cs.backgroundColor,
+        transform: cs.transform,
+        paddingTop: cs.paddingTop,
       };
-      log();
-      window.addEventListener('resize', log);
-      return () => {
-        root.classList.remove('onboarding-route', 'onboarding-debug');
-        window.removeEventListener('resize', log);
-      };
+    };
+
+    const logLayout = () => {
+      console.table([
+        probe('html', document.documentElement),
+        probe('body', document.body),
+        probe('#root', document.getElementById('root')),
+        probe('.onboarding-screen', document.querySelector('[data-onboarding-screen]')),
+      ]);
+      console.log('CSS vars', {
+        vvh: getComputedStyle(root).getPropertyValue('--vvh'),
+        vvOffsetTop: getComputedStyle(root).getPropertyValue('--vv-offset-top'),
+      });
+    };
+
+    if (debug) root.classList.add('onboarding-debug');
+    if (debug || iosBgTest) {
+      logEnv();
+      logLayout();
+      window.addEventListener('resize', logLayout);
     }
 
     return () => {
-      root.classList.remove('onboarding-route');
+      window.removeEventListener('resize', logLayout);
+      root.classList.remove('onboarding-route', 'onboarding-debug', 'ios-bg-test');
+      if (prevThemeColor) themeMeta?.setAttribute('content', prevThemeColor);
+      else themeMeta?.setAttribute('content', '#0a0a14');
     };
   }, []);
 

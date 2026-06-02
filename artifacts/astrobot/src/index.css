@@ -271,6 +271,42 @@ html.onboarding-debug .onboarding-screen::before {
   pointer-events: none;
 }
 
+/*
+ * iOS/PWA probe: /onboarding?ios-bg-test=1
+ * If the top band turns red → html/body (or theme-color) in our page.
+ * If it stays black → iOS shell / WebView chrome outside DOM.
+ */
+html.ios-bg-test,
+html.ios-bg-test body {
+  background: #ff0000 !important;
+  background-image: none !important;
+}
+
+html.ios-bg-test.onboarding-route {
+  background: #ff0000 !important;
+  background-image: none !important;
+}
+
+html.ios-bg-test .onboarding-screen {
+  background: rgba(255, 0, 0, 0.25) !important;
+  background-image: none !important;
+}
+
+html.ios-bg-test::after {
+  content: "ios-bg-test: red=DOM / black=iOS chrome";
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 100000;
+  font: 11px/1.3 system-ui, sans-serif;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 6px 8px;
+  text-align: center;
+  pointer-events: none;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
