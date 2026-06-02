@@ -72,7 +72,7 @@
     overscroll-behavior: none;
     /* Dark background on html prevents white flash on Android Chrome
        when the body hasn't painted yet */
-    background-color: var(--app-chrome-top, #2b1d42);
+    background-color: var(--app-chrome-top, #2d2152);
     /* --vvh / --vv-offset-top are set by useVisualViewport (App.tsx). */
     --vvh: 100dvh;
     --vv-offset-top: 0px;
