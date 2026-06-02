@@ -51,6 +51,7 @@ function OnboardingShell({
   footer,
   onLogin,
   centerContent = false,
+  contentClassName,
 }: {
   step: number;
   icon: React.ReactNode;
@@ -60,10 +61,11 @@ function OnboardingShell({
   footer: React.ReactNode;
   onLogin: () => void;
   centerContent?: boolean;
+  contentClassName?: string;
 }) {
   return (
     <>
-      <div className="shrink-0 relative z-20 px-4 pt-safe pb-2">
+      <div className="shrink-0 relative z-20 bg-transparent px-4 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] pb-3">
         <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
           <button
             type="button"
@@ -100,10 +102,11 @@ function OnboardingShell({
 
       <div
         className={cn(
-          'flex-1 min-h-0 overflow-x-hidden overscroll-y-contain px-6 pb-2',
+          'flex-1 min-h-0 overflow-x-hidden overscroll-y-contain bg-transparent px-6 pb-2',
           centerContent
             ? 'flex flex-col justify-center overflow-y-auto'
-            : 'overflow-y-auto pt-2',
+            : 'overflow-y-auto pt-4',
+          contentClassName,
         )}
       >
         <div className={cn('w-full max-w-sm mx-auto', centerContent && 'my-auto')}>
@@ -239,7 +242,7 @@ export default function Onboarding() {
       className="relative flex flex-col overflow-hidden bg-[#06060c]"
       style={{ height: 'var(--vvh, 100dvh)' }}
     >
-      <div className="absolute inset-0 pointer-events-none bg-background" aria-hidden />
+      <div className="absolute inset-0 pointer-events-none bg-background/55" aria-hidden />
       <div
         className="absolute inset-0 pointer-events-none opacity-[0.85]"
         style={{
@@ -309,7 +312,8 @@ export default function Onboarding() {
             >
               <OnboardingShell
                 step={2}
-                  icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
+                contentClassName="pt-8"
+                icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
                 title="Когда вы родились?"
                 subtitle="Точные данные нужны для расчёта натальной карты."
                 onLogin={() => openAuthModal('login')}
