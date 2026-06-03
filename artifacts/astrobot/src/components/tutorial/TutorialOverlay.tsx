@@ -22,9 +22,21 @@ interface StepCfg {
   padding?: number;
   borderRadius?: number;
   delay?: number;
+  /** Подпись основной кнопки на centered-шагах */
+  primaryCta?: string;
 }
 
 const STEPS: StepCfg[] = [
+  {
+    layout: 'centered',
+    title: 'Здорово, что ты здесь!',
+    text: (
+      <p>
+        Я хочу рассказать тебе, как тут все устроено, чтобы тебе было проще. Это займет 1 минуту.
+      </p>
+    ),
+    primaryCta: 'Пойдем?',
+  },
   {
     layout: 'spotlight',
     targetId: 'composer-area',
@@ -81,7 +93,7 @@ const STEPS: StepCfg[] = [
   },
   {
     layout: 'spotlight',
-    targetId: 'profile-account',
+    targetId: 'profile-auth',
     title: 'Войди в аккаунт и сохрани данные',
     text: (
       <p>
@@ -161,7 +173,7 @@ function CenteredStepCard({ cfg, step, isLast, onNext, onSkip }: CenteredCardPro
               onClick={onNext}
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] text-xs font-semibold shadow-sm hover:brightness-105 active:brightness-95 transition touch-manipulation min-h-[36px]"
             >
-              {isLast ? 'Готово ✓' : 'Далее →'}
+              {isLast ? 'Готово ✓' : cfg.primaryCta ?? 'Далее →'}
             </button>
           </div>
         </div>

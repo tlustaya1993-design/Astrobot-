@@ -7,7 +7,7 @@ const LEGACY_TUTORIAL_V1_KEY = 'astrobot_tutorial_v1';
 /** sessionStorage: после onboarding — ускоренный старт туториала на /chat */
 export const FRESH_ONBOARDING_KEY = 'astrobot_fresh_onboarding';
 
-export const TUTORIAL_TOTAL_STEPS = 6;
+export const TUTORIAL_TOTAL_STEPS = 7;
 
 interface TutorialContextValue {
   step: number;

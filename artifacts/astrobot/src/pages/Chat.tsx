@@ -617,15 +617,15 @@ export default function Chat() {
     return () => window.clearTimeout(t);
   }, [conversationId, paywallState?.open, isLoggedIn, tutorialActive, startTutorial]);
 
-  // Tutorial: profile open on step 6; closed on steps 1–5 spotlight
+  // Tutorial: profile open on step 7 (регистрация); closed on steps 1–6
   useEffect(() => {
     if (!tutorialActive) return;
-    if (tutorialStep === 6) {
+    if (tutorialStep === 7) {
       if (showHistory) setShowHistory(false);
       if (!showProfile) setShowProfile(true);
       return;
     }
-    if (tutorialStep >= 1 && tutorialStep <= 5 && showProfile) {
+    if (tutorialStep >= 1 && tutorialStep <= 6 && showProfile) {
       setShowProfile(false);
     }
   // showProfile / showHistory intentionally excluded to avoid re-trigger loops
