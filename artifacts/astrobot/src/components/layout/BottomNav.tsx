@@ -15,14 +15,14 @@ export default function BottomNav({ activeTab, onChatsClick, onProfileClick }: B
         <button
           type="button"
           onClick={onChatsClick}
-          aria-label="Чаты"
-          data-tutorial-id="nav-chats"
+          aria-label="История диалогов"
+          data-tutorial-id="nav-history"
           className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${
             activeTab === 'chats' ? 'text-primary' : 'text-muted-foreground'
           }`}
         >
           <MessageSquare className="w-5 h-5" />
-          <span className="text-[10px] mt-0.5 leading-none">Чаты</span>
+          <span className="text-[10px] mt-0.5 leading-none">История</span>
         </button>
         <button
           type="button"

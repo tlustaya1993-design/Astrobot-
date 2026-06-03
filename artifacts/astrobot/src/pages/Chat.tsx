@@ -617,12 +617,18 @@ export default function Chat() {
     return () => window.clearTimeout(t);
   }, [conversationId, paywallState?.open, isLoggedIn, tutorialActive, startTutorial]);
 
-  // Open / close profile sheet at the right tutorial steps
+  // Tutorial: profile open on step 6; closed on steps 1–5 spotlight
   useEffect(() => {
     if (!tutorialActive) return;
-    if (tutorialStep === 8 && !showProfile) setShowProfile(true);
-    if (tutorialStep === 10 && showProfile) setShowProfile(false);
-  // showProfile intentionally excluded to avoid re-triggering
+    if (tutorialStep === 6) {
+      if (showHistory) setShowHistory(false);
+      if (!showProfile) setShowProfile(true);
+      return;
+    }
+    if (tutorialStep >= 1 && tutorialStep <= 5 && showProfile) {
+      setShowProfile(false);
+    }
+  // showProfile / showHistory intentionally excluded to avoid re-trigger loops
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tutorialStep, tutorialActive]);
 
@@ -1309,6 +1315,7 @@ export default function Chat() {
 
           {/* Bottom: quick prompts + input + nav */}
           <div className="chat-composer-dock shrink-0">
+          <div data-tutorial-id="composer-area">
           {showQuickPrompts && (
             <ChatQuickPromptSlider
               prompts={activeQuickPrompts}
@@ -1368,17 +1375,18 @@ export default function Chat() {
               </motion.button>
             </form>
           </div>
+          </div>
           {/* Nav tabs — part of the unified bottom panel */}
           <div data-bottom-nav className="flex pb-safe">
             <button
               type="button"
               onClick={() => { if (showProfile) setShowProfile(false); setShowHistory((v) => !v); }}
-              data-tutorial-id="nav-chats"
-              aria-label="Чаты"
+              data-tutorial-id="nav-history"
+              aria-label="История диалогов"
               className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${showHistory ? 'text-primary' : 'text-muted-foreground'}`}
             >
               <MessageSquare className="w-5 h-5" />
-              <span className="text-[10px] mt-0.5 leading-none">Чаты</span>
+              <span className="text-[10px] mt-0.5 leading-none">История</span>
             </button>
             <button
               type="button"

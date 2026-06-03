@@ -26,7 +26,6 @@ export default function ChatQuickPromptSlider({
 
   return (
     <div
-      data-tutorial-id="quick-topics"
       className={`chat-quick-prompts mb-2.5 flex gap-2 overflow-x-auto px-4 scrollbar-none ${
         isStarter ? 'chat-quick-prompts--starter flex-nowrap' : ''
       }`}

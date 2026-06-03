@@ -419,6 +419,7 @@ export default function ProfileSheet({
                     </div>
                   )}
 
+                  <div data-tutorial-id="profile-account" className="space-y-3">
                   <div className="flex items-center gap-4">
                     <div className="relative shrink-0">
                       <div className="h-20 w-20 overflow-hidden rounded-full border-2 border-primary/40 shadow-[0_0_16px_rgba(212,175,55,0.2)]">
@@ -467,6 +468,7 @@ export default function ProfileSheet({
                   >
                     Хочу больше разборов
                   </button>
+                  </div>
 
                   {isLoggedIn && (
                     <div className="rounded-2xl border border-border/50 bg-white/[0.02] p-3 space-y-2">

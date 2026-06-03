@@ -1,10 +1,10 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 
-const TUTORIAL_KEY = 'astrobot_tutorial_v1';
+const TUTORIAL_KEY = 'astrobot_tutorial_v2';
 const LEGACY_ONBOARDING_KEY = 'astrobot_chat_onboarding_v1';
-export const FRESH_ONBOARDING_KEY = 'astrobot_fresh_onboarding';
+const LEGACY_TUTORIAL_V1_KEY = 'astrobot_tutorial_v1';
 
-export const TUTORIAL_TOTAL_STEPS = 10;
+export const TUTORIAL_TOTAL_STEPS = 6;
 
 interface TutorialContextValue {
   step: number;
@@ -30,6 +30,7 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
         try {
           localStorage.setItem(TUTORIAL_KEY, '1');
           localStorage.setItem(LEGACY_ONBOARDING_KEY, '1');
+          localStorage.setItem(LEGACY_TUTORIAL_V1_KEY, '1');
         } catch { /* ignore */ }
         return 0;
       }
@@ -41,6 +42,7 @@ export function TutorialProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(TUTORIAL_KEY, '1');
       localStorage.setItem(LEGACY_ONBOARDING_KEY, '1');
+      localStorage.setItem(LEGACY_TUTORIAL_V1_KEY, '1');
     } catch { /* ignore */ }
     setStep(0);
   }, []);
@@ -59,5 +61,12 @@ export function useTutorial(): TutorialContextValue {
 }
 
 export function isTutorialDone(): boolean {
-  try { return localStorage.getItem(TUTORIAL_KEY) === '1'; } catch { return false; }
+  try {
+    return (
+      localStorage.getItem(TUTORIAL_KEY) === '1' ||
+      localStorage.getItem(LEGACY_TUTORIAL_V1_KEY) === '1'
+    );
+  } catch {
+    return false;
+  }
 }
