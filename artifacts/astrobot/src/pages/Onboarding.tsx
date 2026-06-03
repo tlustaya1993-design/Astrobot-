@@ -1,7 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
-import { User, Sparkles, ArrowRight } from 'lucide-react';
+import {
+  User,
+  Sparkles,
+  ArrowRight,
+  ChevronLeft,
+  Calendar,
+  Clock,
+  MapPin,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateInput } from '@/components/ui/DateInput';
@@ -11,6 +20,118 @@ import { getAuthHeaders } from '@/lib/session';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { FRESH_ONBOARDING_KEY } from '@/context/TutorialContext';
+import { ONBOARDING_THEME_COLOR } from '@/lib/onboardingTheme';
+
+const slideVariants = {
+  enter: { x: 40, opacity: 0 },
+  center: { x: 0, opacity: 1 },
+  exit: { x: -40, opacity: 0 },
+};
+
+const ctaButtonClass =
+  'rounded-xl min-h-12 font-semibold border-0 bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] shadow-[0_0_28px_rgba(212,175,55,0.42),0_4px_20px_rgba(0,0,0,0.35)] hover:brightness-105 hover:shadow-[0_0_32px_rgba(212,175,55,0.5)] transition-[filter,box-shadow] disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100';
+
+function hasCitySelection(data: UpsertUserBody): boolean {
+  return Boolean(
+    data.birthPlace?.trim()
+      && data.birthLat != null
+      && data.birthLng != null
+      && Number.isFinite(Number(data.birthLat))
+      && Number.isFinite(Number(data.birthLng)),
+  );
+}
+
+const backLinkClass =
+  'w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors py-1';
+
+function OnboardingShell({
+  step,
+  icon,
+  title,
+  subtitle,
+  children,
+  footer,
+  onLogin,
+  contentClassName,
+}: {
+  step: number;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+  footer: React.ReactNode;
+  onLogin: () => void;
+  contentClassName?: string;
+}) {
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col px-4">
+      <header
+        className="onboarding-header relative z-20 shrink-0 bg-transparent pb-2"
+        style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))' }}
+      >
+        <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onLogin}
+            className="inline-flex min-w-0 items-center gap-0.5 text-left text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4 shrink-0" />
+            <span className="truncate">
+              Уже есть аккаунт?{' '}
+              <span className="text-primary font-medium">Войти</span>
+            </span>
+          </button>
+
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <div className="flex justify-end gap-1.5">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    'h-1 rounded-full transition-all duration-500',
+                    step === i
+                      ? 'w-8 bg-primary shadow-[0_0_8px_rgba(212,175,55,0.6)]'
+                      : step > i
+                        ? 'w-5 bg-primary/40'
+                        : 'w-5 bg-white/15',
+                  )}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground/80 whitespace-nowrap">Шаг {step} из 3</p>
+          </div>
+        </div>
+      </header>
+
+      <main
+        className={cn(
+          'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain px-2 flex flex-col justify-center',
+          contentClassName,
+        )}
+      >
+        <div className="mx-auto my-auto w-full max-w-sm py-4">
+          <div className="relative mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_28px_rgba(212,175,55,0.28),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
+            <div
+              className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl"
+              aria-hidden
+            />
+            <div className="relative z-[1] text-primary">{icon}</div>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-display font-bold text-center mb-1">{title}</h1>
+          <p className="text-muted-foreground text-center text-sm mb-4 leading-relaxed">{subtitle}</p>
+          {children}
+        </div>
+      </main>
+
+      <footer
+        className="relative z-20 shrink-0 px-2 pt-1"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+      >
+        <div className="mx-auto w-full max-w-sm">{footer}</div>
+      </footer>
+    </div>
+  );
+}
 
 export default function Onboarding() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -22,7 +143,10 @@ export default function Onboarding() {
   });
   const [step, setStep] = useState(1);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [cityError, setCityError] = useState<string | null>(null);
   const [birthTimeUnknown, setBirthTimeUnknown] = useState(false);
+  const [isCitySelected, setIsCitySelected] = useState(false);
+  const [cityDraft, setCityDraft] = useState('');
   const [formData, setFormData] = useState<UpsertUserBody>({
     name: '',
     birthDate: '',
@@ -31,16 +155,14 @@ export default function Onboarding() {
     birthLat: undefined,
     birthLng: undefined,
     tonePreferredDepth: 'deep',
-    tonePreferredStyle: 'mystical'
+    tonePreferredStyle: 'mystical',
   });
 
   const upsertMutation = useUpsertMe({
-    request: { headers: getAuthHeaders() }
+    request: { headers: getAuthHeaders() },
   });
 
   useEffect(() => {
-    // Prevent accidental profile overwrite via direct /onboarding link
-    // when the current account has already completed setup.
     if (!isMeLoading && me?.onboardingDone) {
       setLocation('/chat?onboardingBlocked=1', { replace: true });
     }
@@ -48,24 +170,237 @@ export default function Onboarding() {
 
   useEffect(() => {
     const onDismiss = () => {
-      scrollRef.current?.scrollTo({ top: 0 });
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     };
     window.addEventListener('astrobot:keyboard-dismiss', onDismiss);
     return () => window.removeEventListener('astrobot:keyboard-dismiss', onDismiss);
   }, []);
 
-  const handleNext = () => { setErrorMsg(null); setStep(s => s + 1); };
-  const handleBack = () => { setErrorMsg(null); setStep(s => s - 1); };
+  useEffect(() => {
+    const root = document.documentElement;
+    const params = new URLSearchParams(window.location.search);
+    root.classList.add('onboarding-route');
+
+    const debug = params.get('onboarding-debug') === '1';
+    const iosBgTest = params.get('ios-bg-test') === '1';
+    const flatBgTest = params.get('flat-bg-test') === '1';
+
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    const prevThemeColor = themeMeta?.getAttribute('content') ?? null;
+
+    if (!iosBgTest && !flatBgTest) {
+      themeMeta?.setAttribute('content', ONBOARDING_THEME_COLOR);
+    }
+
+    if (iosBgTest) {
+      root.classList.add('ios-bg-test');
+      themeMeta?.setAttribute('content', '#ff0000');
+    }
+    if (flatBgTest) {
+      root.classList.add('flat-bg-test');
+      console.info(
+        '[flat-bg-test] Solid #7a1f5c on .onboarding-screen; gradients/overlays off. '
+          + 'If top band remains → not onboarding background.',
+      );
+    }
+
+    const logEnv = () => {
+      const ua = navigator.userAgent;
+      const safeProbe = document.createElement('div');
+      safeProbe.style.cssText =
+        'position:fixed;visibility:hidden;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);';
+      document.body.appendChild(safeProbe);
+      const safeCs = getComputedStyle(safeProbe);
+      const safeArea = {
+        top: safeCs.paddingTop,
+        bottom: safeCs.paddingBottom,
+      };
+      safeProbe.remove();
+
+      console.log('[onboarding env]', {
+        displayMode: window.matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser',
+        iosStandalone: (navigator as Navigator & { standalone?: boolean }).standalone === true,
+        likelyTelegram: /Telegram/i.test(ua),
+        themeColorMeta: themeMeta?.getAttribute('content'),
+        manifestTheme: ONBOARDING_THEME_COLOR,
+        appleStatusBar: 'black-translucent (index.html)',
+        viewportFit: 'cover (index.html)',
+        safeArea,
+        innerHeight: window.innerHeight,
+        visualViewport: window.visualViewport
+          ? { height: window.visualViewport.height, offsetTop: window.visualViewport.offsetTop }
+          : null,
+      });
+    };
+
+    const probe = (label: string, el: Element | null) => {
+      if (!el) return { label, missing: true };
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return {
+        label,
+        top: Math.round(r.top),
+        height: Math.round(r.height),
+        bg: cs.backgroundColor,
+        transform: cs.transform,
+        paddingTop: cs.paddingTop,
+      };
+    };
+
+    const logLayout = () => {
+      console.table([
+        probe('html', document.documentElement),
+        probe('body', document.body),
+        probe('#root', document.getElementById('root')),
+        probe('.onboarding-screen', document.querySelector('[data-onboarding-screen]')),
+      ]);
+      console.log('CSS vars', {
+        vvh: getComputedStyle(root).getPropertyValue('--vvh'),
+        vvOffsetTop: getComputedStyle(root).getPropertyValue('--vv-offset-top'),
+      });
+    };
+
+    const logGeometry = () => {
+      const screen = document.querySelector<HTMLElement>('[data-onboarding-screen]');
+      const vv = window.visualViewport;
+      const viewport = {
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        outerWidth: window.outerWidth,
+        outerHeight: window.outerHeight,
+        devicePixelRatio: window.devicePixelRatio,
+      };
+      const visualViewport = vv
+        ? {
+            width: vv.width,
+            height: vv.height,
+            offsetTop: vv.offsetTop,
+            offsetLeft: vv.offsetLeft,
+            scale: vv.scale,
+          }
+        : null;
+
+      console.log('[flat-bg-test] viewport', viewport);
+      console.log('[flat-bg-test] visualViewport', visualViewport);
+
+      if (!screen) {
+        console.warn('[flat-bg-test] .onboarding-screen not found');
+        return;
+      }
+
+      const r = screen.getBoundingClientRect();
+      const cs = getComputedStyle(screen);
+      console.log('[flat-bg-test] .onboarding-screen rect', {
+        top: r.top,
+        left: r.left,
+        width: r.width,
+        height: r.height,
+        bottom: r.bottom,
+        right: r.right,
+      });
+      console.log('[flat-bg-test] .onboarding-screen computed', {
+        position: cs.position,
+        inset: `${cs.top} ${cs.right} ${cs.bottom} ${cs.left}`,
+        width: cs.width,
+        height: cs.height,
+        minWidth: cs.minWidth,
+        minHeight: cs.minHeight,
+        maxWidth: cs.maxWidth,
+        maxHeight: cs.maxHeight,
+        margin: cs.margin,
+        padding: cs.padding,
+        transform: cs.transform,
+        contain: cs.contain,
+        overflow: cs.overflow,
+        scale: cs.scale,
+        boxSizing: cs.boxSizing,
+      });
+
+      const parent = screen.parentElement;
+      if (parent) {
+        const pr = parent.getBoundingClientRect();
+        const pcs = getComputedStyle(parent);
+        console.log('[flat-bg-test] parent', {
+          tag: parent.tagName,
+          className: parent.className,
+          rect: { top: pr.top, left: pr.left, width: pr.width, height: pr.height },
+          transform: pcs.transform,
+          overflow: pcs.overflow,
+          width: pcs.width,
+          height: pcs.height,
+        });
+      }
+
+      const gaps = visualViewport
+        ? {
+            gapTop: r.top - visualViewport.offsetTop,
+            gapLeft: r.left - visualViewport.offsetLeft,
+            gapBottom: visualViewport.offsetTop + visualViewport.height - r.bottom,
+            gapRight: visualViewport.offsetLeft + visualViewport.width - r.right,
+          }
+        : {
+            gapTop: r.top,
+            gapLeft: r.left,
+            gapBottom: window.innerHeight - r.bottom,
+            gapRight: window.innerWidth - r.right,
+          };
+      console.log('[flat-bg-test] gaps vs visual viewport', gaps);
+    };
+
+    if (debug) root.classList.add('onboarding-debug');
+    if (debug || iosBgTest || flatBgTest) {
+      logEnv();
+      logLayout();
+      window.addEventListener('resize', logLayout);
+    }
+    if (flatBgTest) {
+      logGeometry();
+      window.addEventListener('resize', logGeometry);
+    }
+
+    return () => {
+      window.removeEventListener('resize', logLayout);
+      window.removeEventListener('resize', logGeometry);
+      root.classList.remove('onboarding-route', 'onboarding-debug', 'ios-bg-test', 'flat-bg-test');
+      if (prevThemeColor) themeMeta?.setAttribute('content', prevThemeColor);
+      else themeMeta?.setAttribute('content', ONBOARDING_THEME_COLOR);
+    };
+  }, []);
+
+  const handleNext = () => {
+    setErrorMsg(null);
+    setStep((s) => s + 1);
+  };
+
+  const handleBack = () => {
+    setErrorMsg(null);
+    setCityError(null);
+    setStep((s) => s - 1);
+  };
+
+  const canProceedStep2 = Boolean(
+    formData.birthDate?.trim() && (birthTimeUnknown || formData.birthTime?.trim()),
+  );
+
+  const canBuildChart = hasCitySelection(formData) && isCitySelected;
 
   const handleComplete = async () => {
     setErrorMsg(null);
+    setCityError(null);
+
+    if (!hasCitySelection(formData) || !isCitySelected) {
+      setCityError('Выберите город из списка подсказок');
+      return;
+    }
+
     try {
       await upsertMutation.mutateAsync({
         data: {
           ...formData,
           birthTime: birthTimeUnknown ? '12:00' : formData.birthTime,
+          birthTimeUnknown,
           onboardingDone: true,
-        }
+        },
       });
       try {
         sessionStorage.setItem(FRESH_ONBOARDING_KEY, '1');
@@ -85,143 +420,132 @@ export default function Onboarding() {
     }
   };
 
-  const slideVariants = {
-    enter: { x: 40, opacity: 0 },
-    center: { x: 0, opacity: 1 },
-    exit: { x: -40, opacity: 0 },
+  const scrollFocusedFieldIntoView = (el: HTMLElement | null) => {
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
   };
 
-  const ctaButtonClass =
-    'rounded-xl min-h-12 font-semibold border-0 bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] shadow-[0_0_28px_rgba(212,175,55,0.42),0_4px_20px_rgba(0,0,0,0.35)] hover:brightness-105 hover:shadow-[0_0_32px_rgba(212,175,55,0.5)] transition-[filter,box-shadow] disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100';
-
-  return (
-    <div className="relative min-h-[100dvh] overflow-hidden bg-[#06060c]" style={{ minHeight: 'var(--vvh, 100dvh)' }}>
+  const screen = (
+    <div
+      ref={scrollRef}
+      data-onboarding-screen
+      className="onboarding-screen flex flex-col overflow-hidden"
+    >
       <div
-        className="absolute inset-0 pointer-events-none bg-background"
-        aria-hidden
-      />
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.85]"
+        data-onboarding-bg-layer
+        className="pointer-events-none absolute inset-0 opacity-[0.1] mix-blend-screen"
         style={{
-          background:
-            "radial-gradient(ellipse 120% 80% at 50% 20%, rgba(139, 92, 246, 0.35), transparent 55%), radial-gradient(circle at 20% 0%, rgba(167, 139, 250, 0.25), transparent 45%), radial-gradient(circle at 85% 95%, rgba(212, 175, 55, 0.22), transparent 50%)",
-        }}
-      />
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.12] mix-blend-screen"
-        style={{
-          backgroundImage: `radial-gradient(circle at 1px 1px, rgba(255,255,255,0.35) 1px, transparent 0)`,
+          backgroundImage:
+            'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.35) 1px, transparent 0)',
           backgroundSize: '48px 48px',
         }}
+        aria-hidden
       />
 
-      {/* Progress dots */}
-      <div className="absolute top-10 inset-x-0 flex justify-center gap-2 z-10">
-        {[1, 2, 3].map(i => (
-          <div
-            key={i}
-            className={`h-1.5 rounded-full transition-all duration-500 ${
-              step === i
-                ? 'w-8 bg-primary shadow-[0_0_8px_rgba(212,175,55,0.6)]'
-                : 'w-4 bg-white/20'
-            }`}
-          />
-        ))}
-      </div>
-
-      <div className="absolute top-16 inset-x-0 z-20 flex justify-center px-6">
-        <Button
-          type="button"
-          variant="ghost"
-          className="h-9 rounded-full border border-primary/30 bg-black/20 px-4 text-xs sm:text-sm font-medium text-primary hover:bg-primary/10"
-          onClick={() => openAuthModal('login')}
-        >
-          Войти / зарегистрироваться
-        </Button>
-      </div>
-
-      {/* Centered content — overflow-y-auto lets the form scroll when the
-          Android Chrome virtual keyboard shrinks the visible viewport */}
-      <div
-        ref={scrollRef}
-        className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain flex flex-col items-center px-6 pt-16 pb-10 pb-safe"
-      >
-        <div className="relative w-full max-w-sm my-auto py-4">
-          <AnimatePresence mode="wait">
-
-            {step === 1 && (
-              <motion.div
-                key="step1"
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.35, ease: 'easeInOut' }}
-              >
-                <div className="relative mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full border border-primary/25 bg-secondary/90 shadow-[0_0_40px_rgba(212,175,55,0.35),inset_0_1px_0_rgba(255,255,255,0.12)] ring-2 ring-primary/20">
-                  <div className="pointer-events-none absolute inset-[-20%] rounded-full bg-primary/15 blur-2xl" aria-hidden />
-                  <Sparkles className="relative z-[1] h-10 w-10 text-primary drop-shadow-[0_0_12px_rgba(212,175,55,0.55)]" />
-                </div>
-                <h1 className="text-3xl font-display font-bold text-center mb-2">Добро пожаловать</h1>
-                <p className="text-muted-foreground text-center mb-8">Ваш личный AI-астролог. Начнём с того, чтобы познакомиться.</p>
-
-                <div className="space-y-4">
-                  <Input
-                    icon={<User className="w-5 h-5" />}
-                    placeholder="Ваше имя"
-                    value={formData.name || ''}
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    onKeyDown={e => e.key === 'Enter' && formData.name?.trim() && handleNext()}
-                  />
+      <div className="onboarding-content">
+        <AnimatePresence mode="wait">
+          {step === 1 && (
+            <motion.div
+              key="step1"
+              className="flex flex-col h-full min-h-0"
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+            >
+              <OnboardingShell
+                step={1}
+                icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
+                title="Добро пожаловать"
+                subtitle="Ваш личный AI-астролог. Начнём с того, чтобы познакомиться."
+                onLogin={() => openAuthModal('login')}
+                footer={
                   <Button
-                    className={cn('w-full', ctaButtonClass)}
+                    className={cn('w-full max-w-sm mx-auto block', ctaButtonClass)}
                     onClick={handleNext}
                     disabled={!formData.name?.trim()}
                   >
-                    Продолжить <ArrowRight className="w-4 h-4" />
+                    Продолжить <ArrowRight className="w-4 h-4 ml-1 inline" />
                   </Button>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 2 && (
-              <motion.div
-                key="step2"
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.35, ease: 'easeInOut' }}
+                }
               >
-                <h1 className="text-3xl font-display font-bold text-center mb-2">Данные рождения</h1>
-                <p className="text-muted-foreground text-center mb-6">Точные данные нужны для расчёта натальной карты.</p>
+                <Input
+                  icon={<User className="w-5 h-5" />}
+                  placeholder="Ваше имя"
+                  value={formData.name || ''}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onKeyDown={(e) => e.key === 'Enter' && formData.name?.trim() && handleNext()}
+                  onFocus={(e) => scrollFocusedFieldIntoView(e.currentTarget)}
+                />
+              </OnboardingShell>
+            </motion.div>
+          )}
 
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground pl-1">Дата рождения</label>
+          {step === 2 && (
+            <motion.div
+              key="step2"
+              className="flex flex-col h-full min-h-0"
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+            >
+              <OnboardingShell
+                step={2}
+                icon={<Sparkles className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
+                title="Когда вы родились?"
+                subtitle="Точные данные нужны для расчёта натальной карты."
+                onLogin={() => openAuthModal('login')}
+                footer={
+                  <div className="space-y-3 w-full max-w-sm mx-auto">
+                    <button type="button" onClick={handleBack} className={backLinkClass}>
+                      ← Назад
+                    </button>
+                    <Button
+                      className={cn('w-full', ctaButtonClass)}
+                      onClick={handleNext}
+                      disabled={!canProceedStep2}
+                    >
+                      Далее <ArrowRight className="w-4 h-4 ml-1 inline" />
+                    </Button>
+                  </div>
+                }
+              >
+                <div className="space-y-4 rounded-2xl border border-border/50 bg-card/30 p-4 relative z-10">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-primary" />
+                      Дата рождения
+                    </label>
                     <DateInput
                       value={formData.birthDate || ''}
-                      onChange={date => setFormData({ ...formData, birthDate: date })}
+                      onChange={(date) => setFormData({ ...formData, birthDate: date })}
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground pl-1">
-                      Время рождения <span className="text-muted-foreground/50">(необязательно)</span>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-primary" />
+                      Время рождения
                     </label>
                     <input
                       type="time"
                       value={birthTimeUnknown ? '12:00' : (formData.birthTime || '')}
-                      onChange={e => {
+                      onChange={(e) => {
                         setBirthTimeUnknown(false);
                         setFormData({ ...formData, birthTime: e.target.value });
                       }}
                       disabled={birthTimeUnknown}
-                      className="w-full bg-card/50 backdrop-blur-sm border border-border rounded-xl text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all duration-300 px-4 py-3.5"
+                      onFocus={(e) => scrollFocusedFieldIntoView(e.currentTarget)}
+                      className="w-full bg-card/50 backdrop-blur-sm border border-border rounded-xl text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/50 transition-all duration-300 px-4 py-3.5 disabled:opacity-60"
                     />
                   </div>
 
-                  <label className="flex items-start gap-2 rounded-xl border border-border bg-card/30 px-3 py-2.5">
+                  <label className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-background/20 px-3 py-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={birthTimeUnknown}
@@ -233,7 +557,7 @@ export default function Onboarding() {
                           birthTime: checked ? '12:00' : '',
                         });
                       }}
-                      className="mt-0.5"
+                      className="mt-0.5 shrink-0"
                     />
                     <span className="text-xs text-muted-foreground leading-relaxed">
                       Я не знаю точное время рождения.
@@ -241,114 +565,96 @@ export default function Onboarding() {
                       Используем 12:00 по умолчанию. Ответы будут менее конкретными.
                     </span>
                   </label>
+                </div>
+              </OnboardingShell>
+            </motion.div>
+          )}
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground pl-1">Город рождения</label>
-                    <CityAutocomplete
-                      value={formData.birthPlace || ''}
-                      onChange={(city, lat, lng) => setFormData({
+          {step === 3 && (
+            <motion.div
+              key="step3"
+              className="flex flex-col h-full min-h-0"
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+            >
+              <OnboardingShell
+                step={3}
+                icon={<MapPin className="h-6 w-6 drop-shadow-[0_0_10px_rgba(212,175,55,0.55)]" />}
+                title="Где вы родились?"
+                subtitle="Введите название города и выберите его из списка."
+                onLogin={() => openAuthModal('login')}
+                footer={
+                  <div className="space-y-3 w-full max-w-sm mx-auto">
+                    {errorMsg && (
+                      <p className="text-red-400 text-sm text-center bg-red-500/10 rounded-xl px-3 py-2">
+                        {errorMsg}
+                      </p>
+                    )}
+                    <button type="button" onClick={handleBack} className={backLinkClass}>
+                      ← Назад
+                    </button>
+                    <Button
+                      className={cn('w-full', ctaButtonClass)}
+                      onClick={handleComplete}
+                      disabled={!canBuildChart || upsertMutation.isPending}
+                      isLoading={upsertMutation.isPending}
+                    >
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        Построить карту
+                        <Sparkles className="w-4 h-4" />
+                      </span>
+                    </Button>
+                  </div>
+                }
+              >
+                <div className="space-y-2 rounded-2xl border border-border/50 bg-card/30 p-4">
+                  <label className="text-xs font-medium text-muted-foreground pl-1 flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                    Город рождения
+                  </label>
+                  <CityAutocomplete
+                    value={formData.birthPlace || ''}
+                    placeholder="Начните вводить город…"
+                    onChange={(city, lat, lng) => {
+                      setCityError(null);
+                      setIsCitySelected(
+                        typeof lat === 'number' &&
+                          typeof lng === 'number' &&
+                          Number.isFinite(lat) &&
+                          Number.isFinite(lng),
+                      );
+                      setFormData({
                         ...formData,
                         birthPlace: city,
                         birthLat: lat,
-                        birthLng: lng
-                      })}
-                    />
-                  </div>
-
-                  <div className="flex gap-3 pt-2">
-                    <Button variant="outline" className="flex-1" onClick={handleBack}>Назад</Button>
-                    <Button
-                      className={cn('flex-1', ctaButtonClass)}
-                      onClick={handleNext}
-                      disabled={!formData.birthDate || !formData.birthPlace}
-                    >
-                      Далее
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-
-            {step === 3 && (
-              <motion.div
-                key="step3"
-                variants={slideVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.35, ease: 'easeInOut' }}
-              >
-                <h1 className="text-3xl font-display font-bold text-center mb-2">Стиль общения</h1>
-                <p className="text-muted-foreground text-center mb-6">Как вы хотите, чтобы AstroBot говорил с вами?</p>
-
-                <div className="space-y-5">
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium text-foreground/80">Глубина</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { value: 'simple', label: 'Просто и ясно' },
-                        { value: 'deep', label: 'Глубоко и детально' },
-                      ].map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setFormData({ ...formData, tonePreferredDepth: opt.value as any })}
-                          className={`py-3 px-2 rounded-xl border transition-all text-sm leading-tight ${
-                            formData.tonePreferredDepth === opt.value
-                              ? 'bg-primary/20 border-primary text-primary'
-                              : 'bg-card/50 border-border text-muted-foreground hover:border-white/20'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium text-foreground/80">Тон</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { value: 'modern', label: 'Современный' },
-                        { value: 'mystical', label: 'Мистический' },
-                      ].map(opt => (
-                        <button
-                          key={opt.value}
-                          onClick={() => setFormData({ ...formData, tonePreferredStyle: opt.value as any })}
-                          className={`py-3 px-2 rounded-xl border transition-all text-sm ${
-                            formData.tonePreferredStyle === opt.value
-                              ? 'bg-primary/20 border-primary text-primary'
-                              : 'bg-card/50 border-border text-muted-foreground hover:border-white/20'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {errorMsg && (
-                    <p className="text-red-400 text-sm text-center bg-red-500/10 rounded-xl px-3 py-2">
-                      {errorMsg}
+                        birthLng: lng,
+                      });
+                    }}
+                    onDraftChange={(draft) => {
+                      setCityDraft(draft);
+                      // После любого изменения текста запретим построение, пока
+                      // пользователь снова не выберет значение из списка.
+                      setIsCitySelected(false);
+                    }}
+                    onFocusInput={(el) => scrollFocusedFieldIntoView(el)}
+                  />
+                  {cityError && <p className="text-red-400 text-xs pl-1">{cityError}</p>}
+                  {cityDraft.trim() && !canBuildChart && (
+                    <p className="text-amber-400/90 text-xs pl-1">
+                      Выберите город из выпадающего списка
                     </p>
                   )}
-
-                  <div className="flex gap-3">
-                    <Button variant="outline" className="flex-1" onClick={handleBack}>Назад</Button>
-                    <Button
-                      className={cn('flex-1', ctaButtonClass)}
-                      onClick={handleComplete}
-                      isLoading={upsertMutation.isPending}
-                    >
-                      Начать
-                    </Button>
-                  </div>
                 </div>
-              </motion.div>
-            )}
-
-          </AnimatePresence>
-        </div>
+              </OnboardingShell>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
+
+  return createPortal(screen, document.body);
 }

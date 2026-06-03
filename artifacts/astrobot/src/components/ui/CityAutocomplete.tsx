@@ -22,6 +22,12 @@ interface Props {
   onChange: (value: string, lat?: number, lng?: number) => void;
   placeholder?: string;
   className?: string;
+  onFocusInput?: (el: HTMLInputElement) => void;
+  /**
+   * Draft callback: вызывается при наборе текста (без координат).
+   * Используется для сброса "выбранности" города на стороне родителя.
+   */
+  onDraftChange?: (draft: string) => void;
 }
 
 function getCityLabel(result: CityResult): string {
@@ -36,7 +42,14 @@ function getCityLabel(result: CityResult): string {
   return parts.length > 0 ? parts.join(', ') : result.display_name.split(',').slice(0, 2).join(',').trim();
 }
 
-export function CityAutocomplete({ value, onChange, placeholder = 'Город рождения', className }: Props) {
+export function CityAutocomplete({
+  value,
+  onChange,
+  placeholder = 'Город рождения',
+  className,
+  onFocusInput,
+  onDraftChange,
+}: Props) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<CityResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -90,14 +103,12 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
     const rect = el.getBoundingClientRect();
     const vv = window.visualViewport;
     const visibleH = vv?.height ?? window.innerHeight;
-    const spaceBelow = visibleH - rect.bottom - 8;
-    const spaceAbove = rect.top - 8;
-    const maxHeight = Math.min(220, Math.max(96, Math.max(spaceBelow, spaceAbove) - 8));
-    const openAbove = spaceBelow < 120 && spaceAbove > spaceBelow;
+    const spaceBelow = Math.max(0, visibleH - rect.bottom - 8);
+    const maxHeight = Math.min(220, Math.max(120, spaceBelow - 12));
 
     setListStyle({
       position: 'fixed',
-      top: openAbove ? Math.max(8, rect.top - maxHeight - 4) : rect.bottom + 4,
+      top: rect.bottom + 4,
       left: rect.left,
       width: rect.width,
       maxHeight,
@@ -210,11 +221,22 @@ export function CityAutocomplete({ value, onChange, placeholder = 'Город р
           type="text"
           value={query}
           onChange={e => {
-            setQuery(e.target.value);
-            if (!e.target.value.trim()) onChange('');
+            const next = e.target.value;
+            setQuery(next);
+            onDraftChange?.(next);
+            // Очищаем выбор только при полном очищении инпута.
+            // При обычном наборе родителю не передаём текст, чтобы поиск не
+            // ломался из-за условия query===value (поиск должен зависеть от
+            // расхождения query и value).
+            if (!next.trim()) {
+              onChange('');
+              return;
+            }
+            if (!onDraftChange) onChange(next);
           }}
           onKeyDown={handleKeyDown}
-          onFocus={() => {
+          onFocus={(e) => {
+            onFocusInput?.(e.currentTarget);
             if (results.length > 0) {
               setIsOpen(true);
               updateListPosition();

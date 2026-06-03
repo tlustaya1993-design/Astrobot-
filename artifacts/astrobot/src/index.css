@@ -53,6 +53,11 @@
   
   --border: 240 20% 18%;
   --ring: 43 74% 66%;
+
+  /* Status bar / browser chrome — matches chat scene top (#2D2152) */
+  --app-chrome-top: #2d2152;
+  --onboarding-top: #2d2152;
+  --onboarding-base: #0a0912;
 }
 
 @layer base {
@@ -67,7 +72,7 @@
     overscroll-behavior: none;
     /* Dark background on html prevents white flash on Android Chrome
        when the body hasn't painted yet */
-    background-color: hsl(240 25% 4%);
+    background-color: var(--app-chrome-top, #2d2152);
     /* --vvh / --vv-offset-top are set by useVisualViewport (App.tsx). */
     --vvh: 100dvh;
     --vv-offset-top: 0px;
@@ -175,6 +180,324 @@ html.keyboard-open [data-bottom-nav] {
 }
 .pr-safe {
   padding-right: env(safe-area-inset-right, 0px);
+}
+
+/*
+ * Onboarding: one continuous background from y=0 (incl. iOS status bar).
+ * theme-color meta is set to --onboarding-top in Onboarding.tsx.
+ * Screen is portaled to <body> (see Onboarding.tsx).
+ */
+html.onboarding-route {
+  background-color: var(--onboarding-top);
+  background-image:
+    linear-gradient(180deg, var(--onboarding-top) 0%, #161024 26%, var(--onboarding-base) 52%),
+    radial-gradient(ellipse 120% 75% at 50% 12%, rgba(139, 92, 246, 0.34), transparent 58%),
+    radial-gradient(circle at 88% 96%, rgba(212, 175, 55, 0.18), transparent 48%),
+    radial-gradient(circle at 12% 28%, rgba(167, 139, 250, 0.14), transparent 42%);
+}
+
+html.onboarding-route body {
+  background: transparent;
+}
+
+html.onboarding-route #root {
+  transform: none !important;
+  height: 100dvh;
+  background: transparent;
+}
+
+/* Full-bleed onboarding — portaled to <body>, must cover layout + visual viewport */
+.onboarding-screen {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  min-width: 100vw;
+  min-height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  transform: none;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: var(--onboarding-top);
+  background-image:
+    linear-gradient(180deg, var(--onboarding-top) 0%, #161024 26%, var(--onboarding-base) 52%),
+    radial-gradient(ellipse 120% 75% at 50% 12%, rgba(139, 92, 246, 0.34), transparent 58%),
+    radial-gradient(circle at 88% 96%, rgba(212, 175, 55, 0.18), transparent 48%),
+    radial-gradient(circle at 12% 28%, rgba(167, 139, 250, 0.14), transparent 42%);
+}
+
+.onboarding-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  box-sizing: border-box;
+}
+
+/* While soft keyboard is open, follow visual viewport (set by useVisualViewport) */
+html.keyboard-open .onboarding-screen {
+  inset: auto;
+  top: var(--vv-offset-top, 0px);
+  left: 0;
+  right: 0;
+  bottom: auto;
+  width: 100vw;
+  height: var(--vvh, 100dvh);
+  min-height: 0;
+}
+
+/* Dev-only layout probe: /onboarding?onboarding-debug=1 */
+html.onboarding-debug::before {
+  content: "html";
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 99999;
+  font: 10px/1.2 monospace;
+  color: #fff;
+  background: rgba(255, 0, 0, 0.85);
+  padding: 2px 4px;
+  pointer-events: none;
+}
+html.onboarding-debug body::before {
+  content: "body";
+  position: fixed;
+  top: 14px;
+  left: 0;
+  z-index: 99999;
+  font: 10px/1.2 monospace;
+  color: #fff;
+  background: rgba(0, 128, 255, 0.85);
+  padding: 2px 4px;
+  pointer-events: none;
+}
+html.onboarding-debug #root::before {
+  content: "#root";
+  position: fixed;
+  top: 28px;
+  left: 0;
+  z-index: 99999;
+  font: 10px/1.2 monospace;
+  color: #000;
+  background: rgba(0, 255, 0, 0.85);
+  padding: 2px 4px;
+  pointer-events: none;
+}
+html.onboarding-debug .onboarding-screen::before {
+  content: "onboarding";
+  position: fixed;
+  top: 42px;
+  left: 0;
+  z-index: 99999;
+  font: 10px/1.2 monospace;
+  color: #fff;
+  background: rgba(255, 165, 0, 0.9);
+  padding: 2px 4px;
+  pointer-events: none;
+}
+
+/*
+ * iOS/PWA probe: /onboarding?ios-bg-test=1
+ * If the top band turns red → html/body (or theme-color) in our page.
+ * If it stays black → iOS shell / WebView chrome outside DOM.
+ */
+html.ios-bg-test,
+html.ios-bg-test body {
+  background: #ff0000 !important;
+  background-image: none !important;
+}
+
+html.ios-bg-test.onboarding-route {
+  background: #ff0000 !important;
+  background-image: none !important;
+}
+
+html.ios-bg-test .onboarding-screen {
+  background: rgba(255, 0, 0, 0.25) !important;
+  background-image: none !important;
+}
+
+html.ios-bg-test::after {
+  content: "ios-bg-test: red=DOM / black=iOS chrome";
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 100000;
+  font: 11px/1.3 system-ui, sans-serif;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 6px 8px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/*
+ * Onboarding background probe: /onboarding?flat-bg-test=1
+ * Band gone → culprit is .onboarding-screen gradient/overlay.
+ * Band remains → inspect with elementFromPoint.
+ */
+html.flat-bg-test,
+html.flat-bg-test body,
+html.flat-bg-test.onboarding-route {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+html.flat-bg-test .onboarding-screen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  transform: none !important;
+  background: #7a1f5c !important;
+  background-image: none !important;
+}
+
+html.flat-bg-test .onboarding-screen::before,
+html.flat-bg-test .onboarding-screen::after {
+  display: none !important;
+  content: none !important;
+}
+
+html.flat-bg-test .onboarding-screen [data-onboarding-bg-layer] {
+  display: none !important;
+}
+
+html.flat-bg-test .onboarding-header {
+  display: none !important;
+}
+
+html.flat-bg-test::after {
+  content: "flat-bg-test: band gone = onboarding bg/overlay";
+  position: fixed;
+  top: env(safe-area-inset-top, 0px);
+  left: 0;
+  right: 0;
+  z-index: 100000;
+  font: 11px/1.3 system-ui, sans-serif;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 6px 8px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Chat main screen — premium calm gradient (no stars/textures) */
+.chat-scene {
+  position: relative;
+  isolation: isolate;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at center, rgba(120, 70, 255, 0.12) 0%, transparent 60%),
+    linear-gradient(180deg, #2d2152 0%, #18132f 45%, #090b18 100%);
+}
+
+.chat-scene > * {
+  position: relative;
+  z-index: 1;
+}
+
+.chat-hero-icon {
+  box-shadow: 0 0 60px rgba(140, 90, 255, 0.15);
+}
+
+.chat-compat-chip {
+  box-shadow: 0 0 16px rgba(120, 70, 255, 0.18);
+}
+
+.chat-composer-dock {
+  background: linear-gradient(180deg, rgba(20, 16, 40, 0.85), rgba(10, 10, 20, 0.95));
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(12px);
+}
+
+.chat-quick-prompt-chip--starter {
+  height: auto;
+  min-height: 40px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.chat-quick-prompts--starter {
+  flex-wrap: nowrap;
+}
+
+.chat-quick-prompt-chip {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(200, 160, 50, 0.5);
+  background: rgba(255, 220, 100, 0.07);
+  backdrop-filter: blur(12px);
+  color: #d4a93a;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.chat-quick-prompt-chip:hover {
+  background: rgba(255, 220, 100, 0.11);
+  border-color: rgba(200, 160, 50, 0.65);
+}
+
+.chat-follow-up-chip {
+  height: auto;
+  min-height: 34px;
+  padding: 8px 14px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.chat-follow-up-chip--affirm {
+  background: rgba(255, 220, 100, 0.14);
+  border-color: rgba(200, 160, 50, 0.75);
+  font-weight: 600;
+}
+
+.chat-quick-prompts {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.chat-quick-prompts::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 /* Custom Scrollbar */

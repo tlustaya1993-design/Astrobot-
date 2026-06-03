@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'wouter';
 import { getAuthHeaders } from '@/lib/session';
@@ -25,8 +25,6 @@ export interface Contact {
 interface PeoplePanelProps {
   selectedContactId: number | null;
   onSelect: (id: number | null) => void;
-  /** Показать метку режима при выбранном контакте: база или расширение. */
-  contactTier?: 'base' | 'extended' | null;
   /** После загрузки списка контактов — для одноразового онбординга в чате. */
   onContactsLoaded?: (count: number) => void;
   /** Подсветка кнопки «Добавить» во втором шаге онбординга. */
@@ -36,7 +34,6 @@ interface PeoplePanelProps {
 export default function PeoplePanel({
   selectedContactId,
   onSelect,
-  contactTier = null,
   onContactsLoaded,
   onboardingHighlightAdd = false,
 }: PeoplePanelProps) {
@@ -100,15 +97,19 @@ export default function PeoplePanel({
     return colors[id % colors.length];
   };
 
+  const hasContacts = contacts.length > 0;
+
   return (
     <>
-      <div data-tutorial-id="people-panel" className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto scrollbar-none bg-background/60 border-b border-border/50">
+      <div
+        data-tutorial-id="people-panel"
+        className="flex items-center gap-2 overflow-x-auto bg-transparent px-3 py-2 scrollbar-none"
+      >
 
-        {/* "Я" chip — shows avatar, opens profile */}
+        {/* «Я» */}
         <motion.button
           whileTap={{ scale: 0.93 }}
           onClick={() => {
-            // When in synastry, first return to "self" chat context.
             if (selectedContactId !== null) {
               onSelect(null);
               return;
@@ -117,8 +118,8 @@ export default function PeoplePanel({
           }}
           className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-sm font-medium shrink-0 transition-all border ${
             selectedContactId === null
-              ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
-              : 'bg-card border-border text-muted-foreground hover:border-primary/40'
+              ? 'border-primary bg-primary/20 text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
+              : 'border-white/10 bg-white/[0.06] text-muted-foreground backdrop-blur-sm hover:border-primary/40'
           }`}
         >
           <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/30 shrink-0">
@@ -127,7 +128,7 @@ export default function PeoplePanel({
           <span>Я</span>
         </motion.button>
 
-        {/* Contact chips */}
+        {/* Контакты */}
         <AnimatePresence initial={false}>
           {contacts.map(contact => (
             <motion.div
@@ -145,10 +146,10 @@ export default function PeoplePanel({
                   }
                   onSelect(contact.id);
                 }}
-                className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-sm font-medium transition-all border ${
+                className={`flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-sm font-medium transition-all ${
                   selectedContactId === contact.id
-                    ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
-                    : 'bg-card border-border text-muted-foreground hover:border-primary/40'
+                    ? 'border-primary bg-primary/20 text-primary shadow-[0_0_10px_rgba(212,175,55,0.25)]'
+                    : 'border-white/10 bg-white/[0.06] text-muted-foreground backdrop-blur-sm hover:border-primary/40'
                 }`}
               >
                 <div className={`w-6.5 h-6.5 rounded-full overflow-hidden border border-primary/30 shrink-0 ${
@@ -168,7 +169,6 @@ export default function PeoplePanel({
                 )}
               </button>
 
-              {/* Delete button on hover */}
               <button
                 onClick={(e) => handleDelete(e, contact.id)}
                 disabled={deleting === contact.id}
@@ -180,41 +180,41 @@ export default function PeoplePanel({
           ))}
         </AnimatePresence>
 
-        {/* Add button */}
-        <motion.button
-          type="button"
-          data-onboarding-target="add-contact"
-          whileTap={{ scale: 0.95 }}
-          onClick={() => setShowModal(true)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm text-muted-foreground border border-dashed border-border hover:border-primary/40 hover:text-primary transition-all shrink-0 ${
-            onboardingHighlightAdd ? 'ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse' : ''
-          }`}
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Добавить</span>
-        </motion.button>
-
-        {/* Synastry indicator */}
-        {selectedContactId !== null && contactTier && (
-          <motion.div
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="shrink-0 ml-auto text-[11px] text-primary/70 font-medium whitespace-nowrap"
+        {/* Состояние 1: нет людей — большая кнопка совместимости */}
+        {contactsFetchDone && !hasContacts && (
+          <motion.button
+            type="button"
+            data-onboarding-target="add-contact"
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowModal(true)}
+            className={`chat-compat-chip flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-violet-400/30 bg-violet-950/25 px-2.5 pl-1.5 text-sm font-medium text-foreground/90 backdrop-blur-md transition-all hover:border-violet-400/45 ${
+              onboardingHighlightAdd ? 'ring-2 ring-primary ring-offset-2 ring-offset-transparent animate-pulse' : ''
+            }`}
           >
-            {contactTier === 'extended' ? 'Расширенный разбор' : 'Базовый разбор'}
-          </motion.div>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-600/80 text-white">
+              <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+            </span>
+            <span className="whitespace-nowrap leading-none">Совместимость</span>
+            <Users className="h-4 w-4 shrink-0 text-violet-300/85" strokeWidth={1.75} />
+          </motion.button>
+        )}
+
+        {/* Состояние 2: есть люди — компактная «+» */}
+        {hasContacts && (
+          <motion.button
+            type="button"
+            data-onboarding-target="add-contact"
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowModal(true)}
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-dashed border-white/15 bg-white/[0.04] text-muted-foreground backdrop-blur-sm transition-all hover:border-primary/50 hover:text-primary ${
+              onboardingHighlightAdd ? 'ring-2 ring-primary ring-offset-2 ring-offset-background animate-pulse' : ''
+            }`}
+            aria-label="Добавить человека"
+          >
+            <Plus className="w-4 h-4" />
+          </motion.button>
         )}
       </div>
-
-      {contactsFetchDone && contacts.length === 0 && (
-        <div className="px-3 py-2 border-b border-border/50 bg-primary/[0.06]">
-          <p className="text-[11px] text-muted-foreground leading-relaxed max-w-2xl">
-            <span className="text-foreground/90 font-medium">Совместимость и пары:</span>{' '}
-            добавьте человека по дате рождения — кнопка <span className="text-primary/90">«Добавить»</span> выше. Тогда
-            АстроБот сможет смотреть вашу связь вместе с картой этого человека.
-          </p>
-        </div>
-      )}
 
       <AddContactModal
         open={showModal}

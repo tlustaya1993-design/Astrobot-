@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useRoute, useLocation } from 'wouter';
-import { Send, Sparkles, ChevronLeft, ChevronDown, ChevronUp, Copy, CircleHelp, X, RotateCcw, MessageSquare, User } from 'lucide-react';
+import { Send, Sparkles, ChevronLeft, Copy, RotateCcw, MessageSquare, User } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTutorial, isTutorialDone, FRESH_ONBOARDING_KEY } from '@/context/TutorialContext';
@@ -14,6 +14,15 @@ import { getAuthHeaders, getSessionId } from '@/lib/session';
 import { useChatStream } from '@/hooks/use-chat-stream';
 import AstroMarkdown from '@/components/chat/AstroMarkdown';
 import PeoplePanel from '@/components/chat/PeoplePanel';
+import ContactAnalysisModeScreen from '@/components/chat/ContactAnalysisModeScreen';
+import ContactHeaderModeSwitch from '@/components/chat/ContactHeaderModeSwitch';
+import ChatQuickPromptSlider from '@/components/chat/ChatQuickPromptSlider';
+import FollowUpChips from '@/components/chat/FollowUpChips';
+import { buildFollowUpChips } from '@/lib/follow-up-chips';
+import {
+  buildFollowUpAssistantKey,
+  fetchFollowUpChipsFromApi,
+} from '@/lib/fetch-follow-up-chips';
 import { ChatOnboardingOverlay, type ChatOnboardingPhase } from '@/components/chat/ChatOnboardingOverlay';
 import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
@@ -24,6 +33,10 @@ import PwaInstallBanner, { type PwaInstallBannerHandle } from '@/components/pwa/
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { getToken } from '@/lib/session';
+import {
+  getContactExtendedMode as loadContactExtendedMode,
+  setContactExtendedMode as saveContactExtendedMode,
+} from '@/lib/contactAnalysisMode';
 
 const POST_PAYMENT_REGISTER_NUDGE_KEY = 'astrobot_post_payment_register_nudge';
 const CHAT_ONBOARDING_STORAGE_KEY = 'astrobot_chat_onboarding_v1';
@@ -77,46 +90,52 @@ function pronounsByGender(gender: Gender): {
   return { subject: 'он', object: 'его', possessiveCap: 'Его' };
 }
 
+const SELF_EMPTY_HEADING = 'Привет, я твой АстроБот!';
+
+const SELF_EMPTY_WELCOME =
+  'У тебя есть 5 бесплатных запросов. Спрашивай про отношения, работу, деньги, ребёнка или любую ситуацию, которая сейчас занимает мысли — я посмотрю её через твою карту и помогу разобраться';
+
 function selfPrompts(): QuickPrompt[] {
   return [
-    { label: '🌙 Обо мне', prompt: 'Что звёзды могут сказать обо мне?' },
-    { label: '🌀 Мой период', prompt: 'Какой период я сейчас переживаю?' },
-    { label: '🍀 Моя удача', prompt: 'Часть моей удачи - на что мне обратить внимание?' },
-    { label: '💼 Моя Карьера', prompt: 'Куда мне двигаться в карьере?' },
-    { label: '💰 Мои Деньги', prompt: 'Что у меня с финансовым потенциалом на этот период?' },
+    { label: 'Хочу узнать себя лучше', prompt: 'Хочу узнать себя лучше' },
+    { label: 'Что сейчас за период в моей жизни?', prompt: 'Что сейчас за период в моей жизни?' },
+    { label: 'Мне тяжело. Что может помочь?', prompt: 'Мне тяжело. Что может помочь?' },
+    { label: 'Что у меня с отношениями?', prompt: 'Что у меня с отношениями?' },
+    { label: 'Что у меня с работой?', prompt: 'Что у меня с работой?' },
+    { label: 'Что у меня с деньгами?', prompt: 'Что у меня с деньгами?' },
   ];
 }
 
 function partnerPrompts(gender: Gender): QuickPrompt[] {
   const p = pronounsByGender(gender);
   return [
-    { label: '💞 Совместимость', prompt: 'Расскажи о нашей совместимости' },
-    { label: `🌀 Как ${p.subject} сейчас?`, prompt: 'Что сейчас происходит в его/ее жизни?' },
-    { label: '🔮 Наше будущее', prompt: 'Дай прогноз по нам на ближайшее будущее.' },
-    { label: '⚡ Наши проблемы', prompt: 'Что мешает нам в отношениях?' },
-    { label: '📅 5 лет вперёд', prompt: 'Дай прогноз по нам на ближайшие 5 лет.' },
+    { label: 'Совместимость', prompt: 'Расскажи о нашей совместимости' },
+    { label: `Как ${p.subject} сейчас`, prompt: 'Что сейчас происходит в его/ее жизни?' },
+    { label: 'Наше будущее', prompt: 'Дай прогноз по нам на ближайшее будущее.' },
+    { label: 'Наши проблемы', prompt: 'Что мешает нам в отношениях?' },
+    { label: '5 лет вперёд', prompt: 'Дай прогноз по нам на ближайшие 5 лет.' },
   ];
 }
 
 function bossPrompts(gender: Gender): QuickPrompt[] {
   const p = pronounsByGender(gender);
   return [
-    { label: '🤝 Как общаться?', prompt: 'Как лучше выстроить коммуникацию с начальником?' },
-    { label: '📈 Моё повышение', prompt: 'Могу ли я рассчитывать на повышение?' },
-    { label: '😬 Увольнение', prompt: 'Есть ли риск увольнения в ближайшее время?' },
-    { label: `🌀 Что ${p.subject} думает`, prompt: 'Что он/она думает обо мне в рабочем контексте?' },
-    { label: '💰 Рост дохода', prompt: 'Что поможет мне вырастить доход в работе?' },
+    { label: 'Как общаться', prompt: 'Как лучше выстроить коммуникацию с начальником?' },
+    { label: 'Моё повышение', prompt: 'Могу ли я рассчитывать на повышение?' },
+    { label: 'Риск увольнения', prompt: 'Есть ли риск увольнения в ближайшее время?' },
+    { label: `Что ${p.subject} думает`, prompt: 'Что он/она думает обо мне в рабочем контексте?' },
+    { label: 'Рост дохода', prompt: 'Что поможет мне вырастить доход в работе?' },
   ];
 }
 
 function childPrompts(gender: Gender): QuickPrompt[] {
   const p = pronounsByGender(gender);
   return [
-    { label: `🧩 Лучше узнать ${p.object}`, prompt: 'Помоги мне лучше понять моего ребенка' },
-    { label: `🌟 ${p.possessiveCap} таланты`, prompt: 'В чём природный талант моего ребёнка?' },
-    { label: `💚 ${p.possessiveCap} здоровье`, prompt: 'Что у ребенка по здоровью?' },
-    { label: '🗣️ Наше общение', prompt: 'Что я могу улучшить в нашем общении?' },
-    { label: `🌀 Как ${p.subject} сейчас?`, prompt: 'Что сейчас происходит у ребёнка?' },
+    { label: `Лучше узнать ${p.object}`, prompt: 'Помоги мне лучше понять моего ребенка' },
+    { label: `${p.possessiveCap} таланты`, prompt: 'В чём природный талант моего ребёнка?' },
+    { label: `${p.possessiveCap} здоровье`, prompt: 'Что у ребенка по здоровью?' },
+    { label: 'Наше общение', prompt: 'Что я могу улучшить в нашем общении?' },
+    { label: `Как ${p.subject} сейчас`, prompt: 'Что сейчас происходит у ребёнка?' },
   ];
 }
 
@@ -230,12 +249,10 @@ export default function Chat() {
   const [showProfile, setShowProfile] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [contextSwitchTargetId, setContextSwitchTargetId] = useState<number | null | undefined>(undefined);
-  const [showContactModeHint, setShowContactModeHint] = useState(false);
-  /** Сворачивание плашки режима разбора (чекбокс); состояние галочки не сбрасывается. */
-  const [contactSynastryBarExpanded, setContactSynastryBarExpanded] = useState(true);
   const [contactsCount, setContactsCount] = useState<number | null>(null);
   const [onboardingPhase, setOnboardingPhase] = useState<ChatOnboardingPhase | null>(null);
   const [contactRelationById, setContactRelationById] = useState<Record<number, string>>({});
+  const [contactNameById, setContactNameById] = useState<Record<number, string>>({});
   const [contactGenderById, setContactGenderById] = useState<Record<number, Gender>>({});
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -250,6 +267,19 @@ export default function Chat() {
 
   const lastSendHapticAtRef = useRef(0);
   const pwaInstallRef = useRef<PwaInstallBannerHandle>(null);
+
+  type LlmFollowUpState = {
+    key: string;
+    messageId: number | null;
+    chips: ReturnType<typeof buildFollowUpChips>;
+    status: 'loading' | 'done' | 'error';
+  };
+  const [llmFollowUp, setLlmFollowUp] = useState<LlmFollowUpState | null>(null);
+  const followUpFetchAbortRef = useRef<AbortController | null>(null);
+  const followUpFetchedKeyRef = useRef<string | null>(null);
+  const conversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
+  const wasStreamingOnThisChatRef = useRef(false);
 
   const resizeComposer = () => {
     const el = inputRef.current;
@@ -342,12 +372,47 @@ export default function Chat() {
       setSelectedContactId(null);
     }
     setContactExtendedMode(Boolean(conversation.contactExtendedMode));
+    if (conversation.contactId != null && conversation.contactId > 0) {
+      saveContactExtendedMode(conversation.contactId, Boolean(conversation.contactExtendedMode));
+    }
   }, [conversationId, conversation]);
+
+  const persistContactExtendedMode = useCallback(
+    async (next: boolean) => {
+      setContactExtendedMode(next);
+      if (selectedContactId != null) {
+        saveContactExtendedMode(selectedContactId, next);
+      }
+      if (conversationId) {
+        try {
+          await fetch(`/api/openai/conversations/${conversationId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders(),
+            },
+            body: JSON.stringify({
+              title: conversation?.title?.trim() || 'Чат',
+              contactExtendedMode: next,
+            }),
+          });
+          await queryClient.invalidateQueries({
+            queryKey: getGetOpenaiConversationQueryKey(conversationId),
+          });
+          await queryClient.invalidateQueries({
+            queryKey: getListOpenaiConversationsQueryKey(),
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+    [selectedContactId, conversationId, conversation?.title, queryClient],
+  );
 
   useEffect(() => {
     if (selectedContactId === null) {
       setContactExtendedMode(false);
-      setShowContactModeHint(false);
     }
   }, [selectedContactId]);
 
@@ -398,14 +463,23 @@ export default function Chat() {
       try {
         const res = await fetch('/api/contacts', { headers: getAuthHeaders() });
         if (!res.ok) return;
-        const rows = (await res.json()) as Array<{ id: number; relation?: string | null; gender?: string | null; sex?: string | null }>;
+        const rows = (await res.json()) as Array<{
+          id: number;
+          name: string;
+          relation?: string | null;
+          gender?: string | null;
+          sex?: string | null;
+        }>;
         const next: Record<number, string> = {};
+        const nextNames: Record<number, string> = {};
         const nextGender: Record<number, Gender> = {};
         for (const row of rows) {
           next[row.id] = row.relation || '';
+          nextNames[row.id] = row.name || '';
           nextGender[row.id] = resolveGender(row.gender ?? row.sex ?? null);
         }
         setContactRelationById(next);
+        setContactNameById(nextNames);
         setContactGenderById(nextGender);
       } catch {
         /* ignore */
@@ -543,12 +617,18 @@ export default function Chat() {
     return () => window.clearTimeout(t);
   }, [conversationId, paywallState?.open, isLoggedIn, tutorialActive, startTutorial]);
 
-  // Open / close profile sheet at the right tutorial steps
+  // Tutorial: profile open on step 7 (регистрация); closed on steps 1–6
   useEffect(() => {
     if (!tutorialActive) return;
-    if (tutorialStep === 8 && !showProfile) setShowProfile(true);
-    if (tutorialStep === 10 && showProfile) setShowProfile(false);
-  // showProfile intentionally excluded to avoid re-triggering
+    if (tutorialStep === 7) {
+      if (showHistory) setShowHistory(false);
+      if (!showProfile) setShowProfile(true);
+      return;
+    }
+    if (tutorialStep >= 1 && tutorialStep <= 6 && showProfile) {
+      setShowProfile(false);
+    }
+  // showProfile / showHistory intentionally excluded to avoid re-trigger loops
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tutorialStep, tutorialActive]);
 
@@ -680,6 +760,22 @@ export default function Chat() {
 
   const inputTooLong = inputValue.length > MAX_CHAT_MESSAGE_CHARS;
 
+  const handleFollowUpSelect = async (prompt: string) => {
+    if (!prompt.trim() || isStreaming) return;
+    trySendHaptic(lastSendHapticAtRef);
+    pendingScrollAfterSendRef.current = true;
+    autoScrollEnabledRef.current = true;
+    try {
+      const newConvId = await sendMessage(prompt.trim(), selectedContactId, contactExtendedMode, conversationId);
+      if (!conversationId && newConvId) {
+        setLocation(`/chat/${newConvId}`, { replace: true });
+      }
+      if (newConvId) pwaInstallRef.current?.check();
+    } catch {
+      pendingScrollAfterSendRef.current = false;
+    }
+  };
+
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputValue.trim() || isStreaming || inputTooLong) return;
@@ -722,6 +818,9 @@ export default function Chat() {
     if (nextId === selectedContactId) return;
     if (!conversationId || displayMessages.length === 0) {
       setSelectedContactId(nextId);
+      if (nextId != null) {
+        setContactExtendedMode(loadContactExtendedMode(nextId));
+      }
       return;
     }
     setShowHistory(false);
@@ -735,10 +834,18 @@ export default function Chat() {
     if (typeof nextId === 'undefined') return;
     if (mode === 'new' && conversationId) {
       setSelectedContactId(nextId);
+      if (nextId != null) {
+        setContactExtendedMode(loadContactExtendedMode(nextId));
+      } else {
+        setContactExtendedMode(false);
+      }
       setLocation('/chat');
       return;
     }
     setSelectedContactId(nextId);
+    if (nextId != null) {
+      setContactExtendedMode(loadContactExtendedMode(nextId));
+    }
   };
 
   // IDs of messages added during this session (not loaded from DB) — they get a fade-in entry
@@ -748,6 +855,12 @@ export default function Chat() {
     : undefined;
 
   const isNew = !conversationId && displayMessages.length === 0;
+  const showContactModePicker =
+    selectedContactId != null && displayMessages.length === 0 && !isLoading;
+  const showContactChatHeader =
+    selectedContactId != null && displayMessages.length > 0;
+  const selectedContactName =
+    selectedContactId != null ? contactNameById[selectedContactId] || 'Контакт' : '';
   const selectedRelation = selectedContactId != null ? (contactRelationById[selectedContactId] || '') : '';
   const selectedKind = detectContactKind(selectedRelation);
   const selectedProfileGender = selectedContactId != null ? (contactGenderById[selectedContactId] || 'unknown') : 'unknown';
@@ -761,73 +874,231 @@ export default function Chat() {
       : selectedKind === 'child'
         ? childPrompts(contactGender)
         : [
-          { label: '💫 Совместимость', prompt: 'Расскажи о нашей совместимости' },
-          { label: '🌟 Таланты', prompt: 'Какие у этого человека сильные аспекты?' },
-          { label: '💚 Здоровье', prompt: 'Что у этого человека по здоровью?' },
-          { label: '🌀 Что сейчас', prompt: 'Какой период сейчас у этого человека?' },
-          { label: '🗣️ Общение', prompt: 'Как лучше выстроить контакт с этим человеком?' },
+          { label: 'Совместимость', prompt: 'Расскажи о нашей совместимости' },
+          { label: 'Таланты', prompt: 'Какие у этого человека сильные аспекты?' },
+          { label: 'Здоровье', prompt: 'Что у этого человека по здоровью?' },
+          { label: 'Что сейчас', prompt: 'Какой период сейчас у этого человека?' },
+          { label: 'Общение', prompt: 'Как лучше выстроить контакт с этим человеком?' },
         ];
 
-  const promptSubtitle = selectedContactId == null
-    ? (!isLoggedIn ? '5 бесплатных запросов - пробуйте и оцените формат.' : '')
-    : selectedKind === 'child'
-      ? 'Базовый разбор: карта ребёнка, его период и совместимость с вами.'
-      : selectedKind === 'husband'
-        ? 'Базовый разбор: его карта, текущий период и совместимость с вами.'
-        : selectedKind === 'boss'
-          ? 'Базовый разбор: карта руководителя, его период и совместимость с вами.'
-          : 'Базовый разбор: карта человека, его период и совместимость с вами.';
+  const showQuickPrompts = !isLoading && displayMessages.length === 0;
+  const showSelfEmptyHero = isNew && !isLoading && selectedContactId == null;
+  const activeQuickPrompts = selectedContactId != null ? contactPromptSet : selfPrompts();
+
+  useEffect(() => {
+    followUpFetchAbortRef.current?.abort();
+    followUpFetchAbortRef.current = null;
+    followUpFetchedKeyRef.current = null;
+    setLlmFollowUp(null);
+    wasStreamingOnThisChatRef.current = false;
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (isStreamVisibleHere && isStreaming) {
+      followUpFetchAbortRef.current?.abort();
+      followUpFetchedKeyRef.current = null;
+      setLlmFollowUp(null);
+      wasStreamingOnThisChatRef.current = true;
+    }
+  }, [isStreamVisibleHere, isStreaming]);
+
+  useEffect(() => {
+    const streamingHere = isStreamVisibleHere && isStreaming;
+    if (streamingHere) return;
+    if (!wasStreamingOnThisChatRef.current) return;
+    wasStreamingOnThisChatRef.current = false;
+
+    if (!conversationId) return;
+
+    const last = displayMessages[displayMessages.length - 1];
+    if (!last || last.role !== 'assistant' || !last.content?.trim()) return;
+    if (isErrorMessage(String(last.content))) return;
+
+    const lastUser = [...displayMessages]
+      .reverse()
+      .find((m) => m.role === 'user' && m.content?.trim());
+    const userText = lastUser ? String(lastUser.content).trim() : '';
+    const assistantText = String(last.content).trim();
+    const assistantKey = buildFollowUpAssistantKey(conversationId, assistantText);
+
+    if (followUpFetchedKeyRef.current === assistantKey) return;
+    followUpFetchedKeyRef.current = assistantKey;
+
+    const ac = new AbortController();
+    followUpFetchAbortRef.current = ac;
+    const convId = conversationId;
+
+    setLlmFollowUp({
+      key: assistantKey,
+      messageId: last.id,
+      chips: [],
+      status: 'loading',
+    });
+
+    void (async () => {
+      try {
+        const chips = await fetchFollowUpChipsFromApi({
+          conversationId: convId,
+          userText,
+          assistantText,
+          contactId: selectedContactId,
+          contactExtendedMode,
+          messageId: last.id > 0 ? last.id : null,
+          signal: ac.signal,
+        });
+        if (conversationIdRef.current !== convId) return;
+        if (followUpFetchedKeyRef.current !== assistantKey) return;
+        setLlmFollowUp({
+          key: assistantKey,
+          messageId: last.id,
+          chips,
+          status: 'done',
+        });
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (conversationIdRef.current !== convId) return;
+        if (followUpFetchedKeyRef.current !== assistantKey) return;
+        setLlmFollowUp({
+          key: assistantKey,
+          messageId: last.id,
+          chips: [],
+          status: 'error',
+        });
+      }
+    })();
+  }, [
+    isStreaming,
+    isStreamVisibleHere,
+    conversationId,
+    displayMessages,
+    selectedContactId,
+    contactExtendedMode,
+  ]);
+
+  useEffect(() => {
+    if (!llmFollowUp || !conversationId) return;
+    const last = displayMessages[displayMessages.length - 1];
+    if (!last || last.role !== 'assistant' || !last.content?.trim()) return;
+    const key = buildFollowUpAssistantKey(conversationId, String(last.content));
+    if (key !== llmFollowUp.key || llmFollowUp.messageId === last.id) return;
+    setLlmFollowUp((prev) => (prev ? { ...prev, messageId: last.id } : prev));
+  }, [displayMessages, conversationId, llmFollowUp]);
+
+  const lastFollowUp = useMemo(() => {
+    if (isLoading || (isStreamVisibleHere && isStreaming)) {
+      return { messageId: null as number | null, chips: [] as ReturnType<typeof buildFollowUpChips> };
+    }
+    const last = displayMessages[displayMessages.length - 1];
+    if (!last || last.role !== 'assistant' || !last.content?.trim() || isErrorMessage(last.content)) {
+      return { messageId: null, chips: [] };
+    }
+    const userMessages = displayMessages
+      .filter((m) => m.role === 'user' && m.content?.trim())
+      .map((m) => String(m.content).trim());
+    const heuristicChips = buildFollowUpChips(String(last.content), userMessages, {
+      hasContact: selectedContactId != null,
+    });
+    const assistantKey =
+      conversationId != null
+        ? buildFollowUpAssistantKey(conversationId, String(last.content))
+        : null;
+    const llm =
+      assistantKey && llmFollowUp?.key === assistantKey ? llmFollowUp : null;
+
+    let chips = heuristicChips;
+    if (llm?.status === 'done' && llm.chips.length > 0) {
+      chips = llm.chips;
+    }
+
+    return { messageId: last.id, chips };
+  }, [
+    displayMessages,
+    isLoading,
+    isStreamVisibleHere,
+    isStreaming,
+    selectedContactId,
+    conversationId,
+    llmFollowUp,
+  ]);
 
   return (
     <>
-      <AppLayout>
+      <AppLayout immersive>
         <div
-          className="flex-1 flex flex-col min-h-0 min-w-0 overflow-x-hidden"
+          className="chat-scene min-h-0 min-w-0 flex-1 overflow-x-hidden"
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
         >
           {/* Header */}
-          <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 px-3 py-1.5 flex items-center justify-between shadow-sm">
-            {conversationId ? (
-              <button
-                onClick={() => setLocation('/chat')}
-                className="p-1.5 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-            ) : (
-              <div className="w-8" />
-            )}
-
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent p-[1px]">
-                <div className="w-full h-full rounded-full bg-background flex items-center justify-center overflow-hidden relative">
-                  <Sparkles className="w-3.5 h-3.5 text-primary/70 absolute" />
-                  <img
-                    src={`${import.meta.env.BASE_URL}images/avatar-bot.png`}
-                    alt="AstroBot"
-                    className="w-full h-full rounded-full object-cover relative z-10"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
+          <header className="sticky top-0 z-40 flex min-h-[44px] items-center gap-2 bg-transparent px-3 py-1.5">
+            {showContactChatHeader ? (
+              <>
+                {conversationId ? (
+                  <button
+                    type="button"
+                    onClick={() => setLocation('/chat')}
+                    className="p-1.5 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition shrink-0"
+                    aria-label="Назад"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                ) : (
+                  <div className="w-8 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-[10px] font-bold text-white shrink-0">
+                    {selectedContactName.slice(0, 2).toUpperCase()}
+                  </div>
+                  <p className="text-sm font-medium truncate">
+                    {selectedContactName}
+                    {selectedRelation ? (
+                      <span className="text-muted-foreground"> · {selectedRelation}</span>
+                    ) : null}
+                  </p>
                 </div>
-              </div>
-              <h2 className="font-display font-semibold text-sm">AstroBot</h2>
-            </div>
+                <ContactHeaderModeSwitch
+                  extended={contactExtendedMode}
+                  onChange={(next) => void persistContactExtendedMode(next)}
+                  disabled={isStreaming}
+                />
+              </>
+            ) : (
+              <>
+                {conversationId ? (
+                  <button
+                    onClick={() => setLocation('/chat')}
+                    className="p-1.5 -ml-1 rounded-full hover:bg-white/5 text-muted-foreground hover:text-foreground transition"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                ) : (
+                  <div className="w-8" />
+                )}
 
-            <div className="w-10" />
+                <div className="flex-1 flex items-center justify-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent p-[1px]">
+                    <div className="w-full h-full rounded-full bg-background flex items-center justify-center overflow-hidden relative">
+                      <Sparkles className="w-3.5 h-3.5 text-primary/70 absolute" />
+                      <img
+                        src={`${import.meta.env.BASE_URL}images/avatar-bot.png`}
+                        alt="AstroBot"
+                        className="w-full h-full rounded-full object-cover relative z-10"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    </div>
+                  </div>
+                  <h2 className="font-display font-semibold text-sm">AstroBot</h2>
+                </div>
+
+                <div className="w-10 shrink-0" />
+              </>
+            )}
           </header>
 
           {/* People Panel */}
           <PeoplePanel
             selectedContactId={selectedContactId}
             onSelect={requestContextSwitch}
-            contactTier={
-              selectedContactId != null
-                ? contactExtendedMode
-                  ? 'extended'
-                  : 'base'
-                : null
-            }
             onContactsLoaded={setContactsCount}
             onboardingHighlightAdd={onboardingPhase === 'step2'}
           />
@@ -835,7 +1106,9 @@ export default function Chat() {
           {/* Messages */}
           <div
             ref={messagesScrollRef}
-            className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-3 space-y-4 [overflow-anchor:none]"
+            className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-3 [overflow-anchor:none] ${
+              showContactModePicker || showSelfEmptyHero ? 'flex flex-col' : 'space-y-4'
+            }`}
             onTouchStart={stopAutoScroll}
             onPointerDown={stopAutoScroll}
           >
@@ -845,56 +1118,43 @@ export default function Chat() {
               </div>
             )}
 
-            {isNew && !isLoading && (
+            {showContactModePicker && (
+              <div className="flex flex-1 flex-col items-center justify-center min-h-[min(52vh,440px)] py-6">
+                <div className="chat-hero-icon mb-5 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
+                  <Sparkles className="h-6 w-6 text-primary" />
+                </div>
+                <ContactAnalysisModeScreen
+                  extended={contactExtendedMode}
+                  onChange={(next) => void persistContactExtendedMode(next)}
+                />
+              </div>
+            )}
+
+            {showSelfEmptyHero && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center justify-center py-2 text-center"
+                className="flex min-h-0 flex-1 flex-col"
               >
-                {/* Daily Forecast Card */}
-                {!selectedContactId && (
-                  <div className="w-full max-w-md mb-3" data-tutorial-id="forecast-card">
-                    <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
-                  </div>
-                )}
-
-                <div className="w-12 h-12 rounded-full bg-secondary/50 border border-primary/20 flex items-center justify-center mb-2.5 shadow-[0_0_20px_rgba(212,175,55,0.14)]">
-                  <Sparkles className="w-6 h-6 text-primary" />
+                <div className="mx-auto w-full max-w-md shrink-0" data-tutorial-id="forecast-card">
+                  <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
                 </div>
-                <h3 className="text-base font-display font-semibold mb-1">С чего начнем?</h3>
-                {promptSubtitle ? (
-                  <p
-                    data-tutorial-id="free-requests"
-                    className="mb-3 max-w-md text-sm text-primary/85 leading-relaxed"
-                  >
-                    {promptSubtitle}
-                  </p>
-                ) : (
-                  <p
-                    data-tutorial-id="free-requests"
-                    aria-hidden="true"
-                    className="sr-only"
-                  >
-                    5 бесплатных запросов - пробуйте и оцените формат.
-                  </p>
-                )}
-                <div data-tutorial-id="quick-topics" className="flex flex-wrap justify-center gap-2 w-full max-w-md">
-                  {(selectedContactId
-                    ? contactPromptSet
-                    : selfPrompts()
-                  ).map((prompt, i) => (
-                    <motion.button
-                      key={i}
-                      type="button"
-                      onClick={() => setInputValue(prompt.prompt)}
-                      whileTap={reduceMotion ? undefined : { scale: 0.96 }}
-                      whileHover={reduceMotion ? undefined : { scale: 1.03 }}
-                      transition={{ type: 'spring', stiffness: 520, damping: 28 }}
-                      className="w-auto px-4 py-2.5 rounded-2xl text-sm bg-card/70 border border-white/10 hover:border-primary/50 hover:bg-white/5 transition-colors text-center leading-snug"
+
+                <div className="chat-hero-welcome flex flex-1 flex-col items-center justify-center pb-12 pt-2 text-center">
+                  <div className="mx-auto flex w-full max-w-md flex-col items-center">
+                    <div className="chat-hero-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
+                      <Sparkles className="h-6 w-6 text-primary" />
+                    </div>
+                    <h3 className="mb-2 w-full font-display text-lg font-semibold leading-snug text-foreground">
+                      {SELF_EMPTY_HEADING}
+                    </h3>
+                    <p
+                      data-tutorial-id="free-requests"
+                      className="w-full text-[13px] leading-normal text-muted-foreground"
                     >
-                      {prompt.label}
-                    </motion.button>
-                  ))}
+                      {SELF_EMPTY_WELCOME}
+                    </p>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -957,6 +1217,18 @@ export default function Chat() {
                       )
                     ) : msg.content}
                   </div>
+                  {msg.role === 'assistant' &&
+                    !isErrMsg &&
+                    !isStreamingMsg &&
+                    msg.id === lastFollowUp.messageId &&
+                    lastFollowUp.chips.length > 0 && (
+                      <FollowUpChips
+                        chips={lastFollowUp.chips}
+                        disabled={isStreaming}
+                        reduceMotion={reduceMotion}
+                        onSelect={(chip) => handleFollowUpSelect(chip.prompt)}
+                      />
+                    )}
                   {msg.content?.trim() && !isStreamingMsg && (
                     <div className={`mt-1.5 flex gap-1.5 ${msg.role === 'user' ? 'self-end' : 'self-start'}`}>
                       <button
@@ -1041,131 +1313,18 @@ export default function Chat() {
             <div className="h-4 shrink-0" aria-hidden />
           </div>
 
-          {/* Unified bottom panel: input + nav tabs */}
-          <div className="shrink-0 bg-background/80 backdrop-blur-xl border-t border-border">
-          <div className="px-4 pt-2 pb-2">
-            {selectedContactId !== null && (
-              <div className="mb-2 px-1">
-                {contactSynastryBarExpanded ? (
-                  <div id="contact-synastry-mode-panel" className="space-y-2">
-                    <div className="relative flex w-full min-w-0 max-w-full items-center gap-2 pr-11 text-xs text-primary/70">
-                      <span className="text-base leading-none shrink-0">⚯</span>
-                      <span className="min-w-0 flex-1 truncate font-medium">Режим разбора</span>
-                      <button
-                        type="button"
-                        aria-label="Подсказка по режимам разбора"
-                        onClick={() => setShowContactModeHint((v) => !v)}
-                        className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-primary/30 text-primary/80 hover:bg-primary/10 transition"
-                      >
-                        <CircleHelp className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-expanded={true}
-                        aria-controls="contact-synastry-mode-panel"
-                        aria-label="Свернуть настройки режима разбора"
-                        title="Свернуть"
-                        onClick={() => {
-                          setContactSynastryBarExpanded(false);
-                          setShowContactModeHint(false);
-                        }}
-                        className="absolute right-0 top-1/2 z-[25] inline-flex h-9 w-9 -translate-y-1/2 shrink-0 items-center justify-center rounded-lg border border-primary/35 bg-background/95 text-primary shadow-sm shadow-black/20 backdrop-blur-sm hover:bg-primary/15 active:bg-primary/20"
-                      >
-                        <ChevronUp className="h-5 w-5 stroke-2" aria-hidden />
-                      </button>
-
-                      <AnimatePresence>
-                        {showContactModeHint && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 6, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                            transition={{ duration: 0.2 }}
-                            className="absolute left-0 right-0 bottom-full mb-2 rounded-xl border border-primary/20 bg-card/95 backdrop-blur-sm p-3 text-xs text-foreground shadow-xl z-20"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => setShowContactModeHint(false)}
-                              className="absolute right-2 top-2 p-1 rounded-md hover:bg-white/5 text-muted-foreground"
-                              aria-label="Закрыть подсказку"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                            <p className="pr-6">
-                              По умолчанию Астробот разбирает характер человека и вашу связь прямо сейчас. За каждый вопрос спишется 1 запрос.
-                            </p>
-                            <p className="mt-1.5 pr-6 text-muted-foreground">
-                              Но АстроБот может больше - включите галочку в чате с человеком и вы получите прогноз на несколько лет, углубленный анализ, детали. Каждый вопрос = 2 или 3 запроса (в зависимости от объема).
-                            </p>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        className="rounded border-border bg-background accent-primary shrink-0"
-                        checked={contactExtendedMode}
-                        onChange={async (e) => {
-                          const next = e.target.checked;
-                          setContactExtendedMode(next);
-                          if (conversationId) {
-                            try {
-                              await fetch(`/api/openai/conversations/${conversationId}`, {
-                                method: 'PUT',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  ...getAuthHeaders(),
-                                },
-                                body: JSON.stringify({
-                                  title: conversation?.title?.trim() || 'Чат',
-                                  contactExtendedMode: next,
-                                }),
-                              });
-                              await queryClient.invalidateQueries({
-                                queryKey: getGetOpenaiConversationQueryKey(conversationId),
-                              });
-                              await queryClient.invalidateQueries({
-                                queryKey: getListOpenaiConversationsQueryKey(),
-                              });
-                            } catch {
-                              /* ignore */
-                            }
-                          }
-                        }}
-                      />
-                      <span>
-                        Углубить разбор контакта —{' '}
-                        <span className="text-primary/80 font-medium">
-                          2 запроса за сообщение
-                        </span>
-                        <span className="text-muted-foreground"> (очень длинное — 3)</span>
-                      </span>
-                    </label>
-                  </div>
-                ) : (
-                  <div className="flex w-full min-w-0 max-w-full items-center gap-2 rounded-lg border border-primary/20 bg-primary/[0.04] px-2 py-1.5 text-xs">
-                    <button
-                      type="button"
-                      aria-expanded={false}
-                      aria-label="Развернуть настройки режима разбора"
-                      title="Развернуть"
-                      onClick={() => setContactSynastryBarExpanded(true)}
-                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/35 bg-background/80 text-primary shadow-sm hover:bg-primary/15 active:bg-primary/20"
-                    >
-                      <ChevronDown className="h-5 w-5 stroke-2" aria-hidden />
-                    </button>
-                    <span className="text-base leading-none shrink-0">⚯</span>
-                    <span className="min-w-0 flex-1 truncate text-muted-foreground">
-                      Режим:{' '}
-                      <span className="font-medium text-foreground">
-                        {contactExtendedMode ? 'углублённый' : 'базовый'}
-                      </span>
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
+          {/* Bottom: quick prompts + input + nav */}
+          <div className="chat-composer-dock shrink-0">
+          <div data-tutorial-id="composer-area">
+          {showQuickPrompts && (
+            <ChatQuickPromptSlider
+              prompts={activeQuickPrompts}
+              onSelect={setInputValue}
+              reduceMotion={reduceMotion}
+              variant={selectedContactId == null ? 'starter' : 'default'}
+            />
+          )}
+          <div className="px-4 pb-2 pt-0">
             {inputValue.length > CHAR_COUNTER_THRESHOLD && (
               <div className={`text-right text-xs mb-1 tabular-nums ${inputValue.length > MAX_CHAT_MESSAGE_CHARS ? 'text-destructive font-medium' : inputValue.length > MAX_CHAT_MESSAGE_CHARS * 0.9 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
                 {inputValue.length}/{MAX_CHAT_MESSAGE_CHARS}
@@ -1193,7 +1352,7 @@ export default function Chat() {
                     : 'Спросите звёзды...'
                 }
                 rows={1}
-                className="w-full min-h-[52px] max-h-[140px] resize-none overflow-y-auto bg-card border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/50 rounded-3xl py-3 pl-4 pr-14 text-foreground placeholder:text-muted-foreground outline-none transition-all shadow-inner shadow-black/50 leading-relaxed"
+                className="w-full min-h-[52px] max-h-[140px] resize-none overflow-y-auto rounded-3xl border border-white/[0.08] bg-white/[0.04] py-3 pl-4 pr-14 text-foreground leading-relaxed outline-none backdrop-blur-sm transition-all placeholder:text-muted-foreground focus:border-primary/35 focus:ring-1 focus:ring-primary/30"
                 disabled={isStreaming}
               />
               <motion.button
@@ -1216,17 +1375,18 @@ export default function Chat() {
               </motion.button>
             </form>
           </div>
+          </div>
           {/* Nav tabs — part of the unified bottom panel */}
           <div data-bottom-nav className="flex pb-safe">
             <button
               type="button"
               onClick={() => { if (showProfile) setShowProfile(false); setShowHistory((v) => !v); }}
-              data-tutorial-id="nav-chats"
-              aria-label="Чаты"
+              data-tutorial-id="nav-history"
+              aria-label="История диалогов"
               className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[44px] transition-colors touch-manipulation ${showHistory ? 'text-primary' : 'text-muted-foreground'}`}
             >
               <MessageSquare className="w-5 h-5" />
-              <span className="text-[10px] mt-0.5 leading-none">Чаты</span>
+              <span className="text-[10px] mt-0.5 leading-none">История</span>
             </button>
             <button
               type="button"
