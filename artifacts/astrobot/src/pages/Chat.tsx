@@ -86,8 +86,10 @@ function pronounsByGender(gender: Gender): {
   return { subject: 'он', object: 'его', possessiveCap: 'Его' };
 }
 
+const SELF_EMPTY_HEADING = 'Привет, я - Твой АстроБот!';
+
 const SELF_EMPTY_WELCOME =
-  'Привет! У тебя есть 5 бесплатных запросов. Спрашивай про отношения, работу, деньги, ребёнка или любую ситуацию, которая сейчас занимает мысли — я посмотрю её через твою карту и помогу разобраться';
+  '«Привет! У тебя есть 5 бесплатных запросов. Спрашивай про отношения, работу, деньги, ребёнка или любую ситуацию, которая сейчас занимает мысли — я посмотрю её через твою карту и помогу разобраться»';
 
 function selfPrompts(): QuickPrompt[] {
   return [
@@ -856,9 +858,8 @@ export default function Chat() {
           { label: 'Общение', prompt: 'Как лучше выстроить контакт с этим человеком?' },
         ];
 
-  const promptSubtitle = selectedContactId == null ? SELF_EMPTY_WELCOME : '';
-
   const showQuickPrompts = !isLoading && displayMessages.length === 0;
+  const showSelfEmptyHero = isNew && !isLoading && selectedContactId == null;
   const activeQuickPrompts = selectedContactId != null ? contactPromptSet : selfPrompts();
 
   const lastFollowUp = useMemo(() => {
@@ -964,7 +965,7 @@ export default function Chat() {
           <div
             ref={messagesScrollRef}
             className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-3 [overflow-anchor:none] ${
-              showContactModePicker ? 'flex flex-col' : 'space-y-4'
+              showContactModePicker || showSelfEmptyHero ? 'flex flex-col' : 'space-y-4'
             }`}
             onTouchStart={stopAutoScroll}
             onPointerDown={stopAutoScroll}
@@ -987,31 +988,30 @@ export default function Chat() {
               </div>
             )}
 
-            {isNew && !isLoading && selectedContactId == null && (
+            {showSelfEmptyHero && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="chat-hero flex flex-col items-center justify-center py-3 text-center"
+                className="flex min-h-0 flex-1 flex-col"
               >
-                {/* Daily Forecast Card — unchanged */}
-                {!selectedContactId && (
-                  <div className="w-full max-w-md mb-3" data-tutorial-id="forecast-card">
-                    <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
-                  </div>
-                )}
-
-                <div className="chat-hero-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
-                  <Sparkles className="h-6 w-6 text-primary" />
+                <div className="mx-auto w-full max-w-md shrink-0" data-tutorial-id="forecast-card">
+                  <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
                 </div>
-                <h3 className="mb-1.5 text-base font-display font-semibold text-foreground">С чего начнём?</h3>
-                {promptSubtitle ? (
+
+                <div className="chat-hero-welcome flex flex-1 flex-col items-center justify-center px-2 py-6 text-center">
+                  <div className="chat-hero-icon mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
+                    <Sparkles className="h-6 w-6 text-primary" />
+                  </div>
+                  <h3 className="mb-3 max-w-[17rem] font-display text-lg font-semibold leading-snug text-foreground">
+                    {SELF_EMPTY_HEADING}
+                  </h3>
                   <p
                     data-tutorial-id="free-requests"
-                    className="max-w-md px-1 text-sm leading-relaxed text-[#d4a93a]/90"
+                    className="max-w-[18.5rem] text-sm leading-relaxed text-[#d4a93a]/90"
                   >
-                    {promptSubtitle}
+                    {SELF_EMPTY_WELCOME}
                   </p>
-                ) : null}
+                </div>
               </motion.div>
             )}
 
