@@ -114,7 +114,7 @@ function ogSiteUrl(origin: string): string {
  */
 /** Версия в query — сброс кэша Telegram после смены картинки */
 const OG_IMAGE_CACHE_KEY =
-  process.env.OG_IMAGE_CACHE_KEY?.trim() || "20260404b";
+  process.env.OG_IMAGE_CACHE_KEY?.trim() || "20260603a";
 
 const ADMIN_MANIFEST_VERSION = process.env.ADMIN_MANIFEST_VERSION?.trim() || "1";
 
