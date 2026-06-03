@@ -468,15 +468,6 @@ export default function ProfileSheet({
                     Хочу больше разборов
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setSection("edit")}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium text-foreground transition hover:bg-white/5"
-                  >
-                    <Pencil className="h-4 w-4" />
-                    Редактировать данные профиля
-                  </button>
-
                   {isLoggedIn && (
                     <div className="rounded-2xl border border-border/50 bg-white/[0.02] p-3 space-y-2">
                       <div className="flex items-center justify-between gap-2">
@@ -537,6 +528,15 @@ export default function ProfileSheet({
                   {profile?.birthPlace && (
                     <InfoRow label="Место рождения" value={profile.birthPlace} />
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => setSection("edit")}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium text-foreground transition hover:bg-white/5"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Редактировать данные профиля
+                  </button>
 
                   {!profile?.birthDate && !profile?.name && (
                     <p className="text-sm text-muted-foreground text-center py-3">
