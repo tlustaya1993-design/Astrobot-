@@ -89,7 +89,7 @@ function pronounsByGender(gender: Gender): {
 const SELF_EMPTY_HEADING = 'Привет, я - Твой АстроБот!';
 
 const SELF_EMPTY_WELCOME =
-  '«Привет! У тебя есть 5 бесплатных запросов. Спрашивай про отношения, работу, деньги, ребёнка или любую ситуацию, которая сейчас занимает мысли — я посмотрю её через твою карту и помогу разобраться»';
+  'Привет! У тебя есть 5 бесплатных запросов. Спрашивай про отношения, работу, деньги, ребёнка или любую ситуацию, которая сейчас занимает мысли — я посмотрю её через твою карту и помогу разобраться';
 
 function selfPrompts(): QuickPrompt[] {
   return [
@@ -998,19 +998,21 @@ export default function Chat() {
                   <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
                 </div>
 
-                <div className="chat-hero-welcome flex flex-1 flex-col items-center justify-center px-2 py-6 text-center">
-                  <div className="chat-hero-icon mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
-                    <Sparkles className="h-6 w-6 text-primary" />
+                <div className="chat-hero-welcome flex flex-1 flex-col items-center justify-center py-6 text-center">
+                  <div className="mx-auto flex w-full max-w-md flex-col items-center">
+                    <div className="chat-hero-icon mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
+                      <Sparkles className="h-6 w-6 text-primary" />
+                    </div>
+                    <h3 className="mb-3 w-full font-display text-lg font-semibold leading-snug text-foreground">
+                      {SELF_EMPTY_HEADING}
+                    </h3>
+                    <p
+                      data-tutorial-id="free-requests"
+                      className="w-full text-sm leading-relaxed text-[#d4a93a]/90"
+                    >
+                      {SELF_EMPTY_WELCOME}
+                    </p>
                   </div>
-                  <h3 className="mb-3 max-w-[17rem] font-display text-lg font-semibold leading-snug text-foreground">
-                    {SELF_EMPTY_HEADING}
-                  </h3>
-                  <p
-                    data-tutorial-id="free-requests"
-                    className="max-w-[18.5rem] text-sm leading-relaxed text-[#d4a93a]/90"
-                  >
-                    {SELF_EMPTY_WELCOME}
-                  </p>
                 </div>
               </motion.div>
             )}
