@@ -96,7 +96,7 @@ const CHIP_TEMPLATES: ChipTemplate[] = [
   {
     intentId: 'career.blockers',
     topics: ['career'],
-    signals: [/мешает/i, /блок/i, /уровень/i, /препятств/i, /тормоз/i, /напряжен/i],
+    signals: [/мешает/i, /блок/i, /уровень/i, /препятств/i, /тормоз/i, /карьер.*мешает/i],
     label: 'Что мешает мне выйти на новый уровень?',
     prompt: 'Что по карте мешает мне выйти на новый уровень в карьере?',
     weight: 2,
@@ -300,11 +300,11 @@ const CHIP_TEMPLATES: ChipTemplate[] = [
     prompt: 'Что по карте поддержит меня по здоровью сейчас?',
   },
 
-  // —— default (только при явных сигналах в ответе) ——
+  // —— default (сигналы из ответа, не универсальные заглушки) ——
   {
     intentId: 'default.period_meaning',
     topics: ['default'],
-    signals: [/период/i, /транзит/i, /фаза/i, /цикл/i],
+    signals: [/период/i, /транзит/i, /фаз\w*/i, /цикл/i, /этап/i],
     label: 'Что этот период значит для меня сейчас?',
     prompt: 'Что этот период значит для меня сейчас по карте?',
     weight: 2,
@@ -315,14 +315,31 @@ const CHIP_TEMPLATES: ChipTemplate[] = [
     signals: [/линия/i, /аспект/i, /положени/i, /сигнал/i, /✦/],
     label: 'Разбери глубже самую сильную линию из ответа',
     prompt: 'Разбери глубже самую сильную линию из твоего ответа',
-    weight: 1,
+    weight: 2,
   },
   {
-    intentId: 'default.life_manifest',
+    intentId: 'default.inner_shift',
     topics: ['default'],
-    signals: [/прояв/i, /жизн/i, /быт/i, /наблюда/i],
-    label: 'Как это может проявиться в моей жизни?',
-    prompt: 'Как это из ответа может проявиться в моей жизни по карте?',
+    signals: [/пересбор/i, /внутрен/i, /рост/i, /изменен/i, /трансформ/i],
+    label: 'Как этот внутренний сдвиг отразится в делах и отношениях?',
+    prompt: 'Как этот внутренний сдвиг из ответа может отразиться в делах и отношениях?',
+    weight: 2,
+  },
+  {
+    intentId: 'default.decision_step',
+    topics: ['default'],
+    signals: [/решен/i, /выбор/i, /шаг/i, /действ/i, /тороп/i],
+    label: 'Какой шаг сейчас для меня разумнее по карте?',
+    prompt: 'Какой шаг сейчас для меня разумнее по карте?',
+    weight: 2,
+  },
+  {
+    intentId: 'default.main_theme',
+    topics: ['default'],
+    signals: [/важн/i, /ключев/i, /главн/i, /акцент/i, /фокус/i],
+    label: 'Что в этом ответе для меня главное сейчас?',
+    prompt: 'Что в этом ответе для меня главное сейчас по карте?',
+    weight: 2,
   },
 ];
 
@@ -385,7 +402,9 @@ const INTENT_FROM_USER_TEXT: Record<string, RegExp[]> = {
   'health.support': [/поддержит.*здоров/i],
   'default.period_meaning': [/период значит/i],
   'default.line_deeper': [/глубже.*линию/i],
-  'default.life_manifest': [/проявиться.*жизн/i],
+  'default.inner_shift': [/внутренн.*сдвиг/i],
+  'default.decision_step': [/шаг.*разумнее/i],
+  'default.main_theme': [/главное сейчас/i],
 };
 
 function assistantFocusText(assistantText: string): string {
@@ -405,6 +424,17 @@ function templateMatchesAssistant(template: ChipTemplate, assistantText: string)
   return template.signals.some((re) => re.test(focus));
 }
 
+/** Мягкое совпадение: ключевые слова из вопроса есть в ответе (только как fallback) */
+function templateSoftMatchesAssistant(template: ChipTemplate, assistantText: string): boolean {
+  if (templateMatchesAssistant(template, assistantText)) return true;
+  const focus = assistantFocusText(assistantText);
+  if (!focus || focus.length < 40) return false;
+  const words = (template.label.match(/[\p{L}]{5,}/gu) ?? []).map((w) => w.toLowerCase());
+  if (words.length < 2) return false;
+  const hits = words.filter((w) => focus.includes(w));
+  return hits.length >= 2;
+}
+
 function templateRelevanceScore(template: ChipTemplate, assistantText: string): number {
   const focus = assistantFocusText(assistantText);
   const hits = template.signals.filter((re) => re.test(focus)).length;
@@ -421,6 +451,7 @@ function classifyTopicFromText(text: string, hasContact: boolean): TopicKey {
   ) {
     return 'relations';
   }
+  if (/(между вами|между нами|партнер|партнёр|отношен|любов|брак|ссор|конфликт)/.test(t)) return 'relations';
   if (/(соратник|друг|знаком|встреч|окружен|сообществ|ищу людей|новые люди|своих людей)/.test(t)) return 'people';
   if (/(деньг|доход|финанс|зарплат|оплат|бюджет)/.test(t)) return 'money';
   if (/(карьер|работ|увольн|повышен|проект|бизнес|предназнач|професс|реализац|соляр)/.test(t)) return 'career';
@@ -443,10 +474,9 @@ function normalizeForDedup(s: string): string {
     .trim();
 }
 
-/** Какие смысловые ветки уже открыты в этой теме (по истории user-сообщений) */
-export function collectExploredIntents(userMessages: string[], topic: TopicKey): Set<string> {
+/** Какие смысловые ветки уже открыты (по истории user-сообщений) */
+export function collectExploredIntents(userMessages: string[], _topic: TopicKey): Set<string> {
   const explored = new Set<string>();
-  const topicIntentSet = new Set(TOPIC_INTENT_IDS[topic]);
 
   for (const raw of userMessages) {
     const msg = raw.trim();
@@ -454,14 +484,13 @@ export function collectExploredIntents(userMessages: string[], topic: TopicKey):
     const normalized = normalizeForDedup(msg);
 
     for (const [intentId, patterns] of Object.entries(INTENT_FROM_USER_TEXT)) {
-      if (!topicIntentSet.has(intentId) && intentId !== AFFIRM_INTENT) continue;
+      if (intentId === AFFIRM_INTENT) continue;
       if (patterns.some((re) => re.test(msg) || re.test(normalized))) {
         explored.add(intentId);
       }
     }
 
     for (const template of CHIP_TEMPLATES) {
-      if (!template.topics.includes(topic)) continue;
       const p = normalizeForDedup(template.prompt);
       if (p.length >= 10 && (normalized.includes(p) || p.includes(normalized))) {
         explored.add(template.intentId);
@@ -489,18 +518,28 @@ function templateToChip(template: ChipTemplate): FollowUpChip {
   };
 }
 
-function pickContextualChips(
-  topic: TopicKey,
+type MatchMode = 'strict' | 'soft';
+
+function templateMatches(template: ChipTemplate, assistantText: string, mode: MatchMode): boolean {
+  return mode === 'strict'
+    ? templateMatchesAssistant(template, assistantText)
+    : templateSoftMatchesAssistant(template, assistantText);
+}
+
+function pickFromTemplates(
+  templates: ChipTemplate[],
   assistantText: string,
   exploredIntents: Set<string>,
   userMessages: string[],
   limit: number,
+  mode: MatchMode,
+  existing: FollowUpChip[] = [],
 ): FollowUpChip[] {
-  const out: FollowUpChip[] = [];
-  const seen = new Set<string>();
+  const out = [...existing];
+  const seen = new Set(out.map((c) => c.intentId));
 
-  const candidates = CHIP_TEMPLATES.filter((t) => t.topics.includes(topic))
-    .filter((t) => templateMatchesAssistant(t, assistantText))
+  const candidates = templates
+    .filter((t) => templateMatches(t, assistantText, mode))
     .filter((t) => !isGenericChip(templateToChip(t)))
     .sort((a, b) => templateRelevanceScore(b, assistantText) - templateRelevanceScore(a, assistantText));
 
@@ -517,6 +556,79 @@ function pickContextualChips(
   return out;
 }
 
+/** Последний рубеж: 1–2 вопроса строго по словам из ответа */
+function answerAnchoredChips(assistantText: string, topic: TopicKey): FollowUpChip[] {
+  const focus = assistantFocusText(assistantText);
+  if (!focus) return [];
+
+  const rules: { test: RegExp; chip: FollowUpChip; topics?: TopicKey[] }[] = [
+    {
+      test: /карьер|работ|професс|реализац|предназнач|соляр/i,
+      topics: ['career', 'default'],
+      chip: {
+        intentId: 'anchor.career_focus',
+        label: 'Что сейчас главное для моей карьеры?',
+        prompt: 'Что сейчас главное для моей карьеры по карте?',
+      },
+    },
+    {
+      test: /отношен|партнер|близк|любов|синастр|муж|жена/i,
+      topics: ['relations', 'default'],
+      chip: {
+        intentId: 'anchor.relations_focus',
+        label: 'Что сейчас самое чувствительное в отношениях?',
+        prompt: 'Что сейчас самое чувствительное в отношениях по карте?',
+      },
+    },
+    {
+      test: /деньг|доход|финанс|зарплат/i,
+      topics: ['money', 'default'],
+      chip: {
+        intentId: 'anchor.money_focus',
+        label: 'На что опереться в финансах сейчас?',
+        prompt: 'На что мне опереться в финансах сейчас по карте?',
+      },
+    },
+    {
+      test: /ребён|ребен|сын|дочь/i,
+      topics: ['child', 'default'],
+      chip: {
+        intentId: 'anchor.child_focus',
+        label: 'На что родителям обратить внимание сейчас?',
+        prompt: 'На что родителям обратить внимание сейчас по карте ребёнка?',
+      },
+    },
+    {
+      test: /период|транзит|фаз\w*|цикл|этап/i,
+      topics: ['default'],
+      chip: {
+        intentId: 'anchor.period',
+        label: 'Что этот период значит для меня сейчас?',
+        prompt: 'Что этот период значит для меня сейчас по карте?',
+      },
+    },
+    {
+      test: /напряжен|конфликт|триггер|ссор/i,
+      topics: ['relations', 'default'],
+      chip: {
+        intentId: 'anchor.tension',
+        label: 'Что делать с этим напряжением?',
+        prompt: 'Что делать с этим напряжением по карте?',
+      },
+    },
+  ];
+
+  const out: FollowUpChip[] = [];
+  for (const rule of rules) {
+    if (out.length >= 2) break;
+    if (rule.topics && !rule.topics.includes(topic) && topic !== 'default') continue;
+    if (!rule.test.test(focus)) continue;
+    if (isGenericChip(rule.chip)) continue;
+    out.push(rule.chip);
+  }
+  return out;
+}
+
 export function buildFollowUpChips(
   assistantText: string,
   userMessages: string[],
@@ -528,13 +640,47 @@ export function buildFollowUpChips(
   const exploredIntents = collectExploredIntents(userMessages, topic);
 
   const withHook = detectInvitationHook(assistantText);
-  const topicChips = pickContextualChips(
-    topic,
+
+  const topicTemplates = CHIP_TEMPLATES.filter((t) => t.topics.includes(topic));
+  let topicChips = pickFromTemplates(
+    topicTemplates,
     assistantText,
     exploredIntents,
     userMessages,
     MAX_TOPIC_CHIPS,
+    'strict',
   );
+
+  if (topicChips.length < 2) {
+    topicChips = pickFromTemplates(
+      CHIP_TEMPLATES,
+      assistantText,
+      exploredIntents,
+      userMessages,
+      MAX_TOPIC_CHIPS,
+      'strict',
+      topicChips,
+    );
+  }
+
+  if (topicChips.length < 1) {
+    topicChips = pickFromTemplates(
+      CHIP_TEMPLATES,
+      assistantText,
+      exploredIntents,
+      userMessages,
+      MAX_TOPIC_CHIPS,
+      'soft',
+      topicChips,
+    );
+  }
+
+  if (topicChips.length < 1) {
+    const anchored = answerAnchoredChips(assistantText, topic).filter(
+      (c) => !exploredIntents.has(c.intentId) && !isChipRedundantWithHistory(c, userMessages),
+    );
+    topicChips = [...topicChips, ...anchored].slice(0, MAX_TOPIC_CHIPS);
+  }
 
   const showAffirm = withHook && !exploredIntents.has(AFFIRM_INTENT);
   if (showAffirm) {
