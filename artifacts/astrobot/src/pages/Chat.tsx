@@ -1142,9 +1142,15 @@ export default function Chat() {
 
                 <div className="chat-hero-welcome flex flex-1 flex-col items-center justify-center pb-12 pt-2 text-center">
                   <div className="mx-auto flex w-full max-w-md flex-col items-center">
-                    <div className="chat-hero-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
-                      <Sparkles className="h-6 w-6 text-primary" />
-                    </div>
+                    <img
+                      src={`${import.meta.env.BASE_URL}images/welcome-astrobot.png`}
+                      alt=""
+                      role="presentation"
+                      width={120}
+                      height={120}
+                      draggable={false}
+                      className="mb-4 h-[7.5rem] w-[7.5rem] shrink-0 object-contain object-center"
+                    />
                     <h3 className="mb-2 w-full font-display text-lg font-semibold leading-snug text-foreground">
                       {SELF_EMPTY_HEADING}
                     </h3>
