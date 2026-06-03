@@ -867,8 +867,10 @@ export default function Chat() {
     if (!last || last.role !== 'assistant' || !last.content?.trim() || isErrorMessage(last.content)) {
       return { messageId: null, chips: [] };
     }
-    const prevUser = [...displayMessages].reverse().find((m) => m.role === 'user');
-    const chips = buildFollowUpChips(String(last.content), String(prevUser?.content || ''), {
+    const userMessages = displayMessages
+      .filter((m) => m.role === 'user' && m.content?.trim())
+      .map((m) => String(m.content).trim());
+    const chips = buildFollowUpChips(String(last.content), userMessages, {
       hasContact: selectedContactId != null,
     });
     return { messageId: last.id, chips };
