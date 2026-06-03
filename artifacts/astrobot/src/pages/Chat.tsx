@@ -19,6 +19,10 @@ import ContactHeaderModeSwitch from '@/components/chat/ContactHeaderModeSwitch';
 import ChatQuickPromptSlider from '@/components/chat/ChatQuickPromptSlider';
 import FollowUpChips from '@/components/chat/FollowUpChips';
 import { buildFollowUpChips } from '@/lib/follow-up-chips';
+import {
+  buildFollowUpAssistantKey,
+  fetchFollowUpChipsFromApi,
+} from '@/lib/fetch-follow-up-chips';
 import { ChatOnboardingOverlay, type ChatOnboardingPhase } from '@/components/chat/ChatOnboardingOverlay';
 import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
@@ -263,6 +267,19 @@ export default function Chat() {
 
   const lastSendHapticAtRef = useRef(0);
   const pwaInstallRef = useRef<PwaInstallBannerHandle>(null);
+
+  type LlmFollowUpState = {
+    key: string;
+    messageId: number | null;
+    chips: ReturnType<typeof buildFollowUpChips>;
+    status: 'loading' | 'done' | 'error';
+  };
+  const [llmFollowUp, setLlmFollowUp] = useState<LlmFollowUpState | null>(null);
+  const followUpFetchAbortRef = useRef<AbortController | null>(null);
+  const followUpFetchedKeyRef = useRef<string | null>(null);
+  const conversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
+  const wasStreamingOnThisChatRef = useRef(false);
 
   const resizeComposer = () => {
     const el = inputRef.current;
@@ -862,6 +879,105 @@ export default function Chat() {
   const showSelfEmptyHero = isNew && !isLoading && selectedContactId == null;
   const activeQuickPrompts = selectedContactId != null ? contactPromptSet : selfPrompts();
 
+  useEffect(() => {
+    followUpFetchAbortRef.current?.abort();
+    followUpFetchAbortRef.current = null;
+    followUpFetchedKeyRef.current = null;
+    setLlmFollowUp(null);
+    wasStreamingOnThisChatRef.current = false;
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (isStreamVisibleHere && isStreaming) {
+      followUpFetchAbortRef.current?.abort();
+      followUpFetchedKeyRef.current = null;
+      setLlmFollowUp(null);
+      wasStreamingOnThisChatRef.current = true;
+    }
+  }, [isStreamVisibleHere, isStreaming]);
+
+  useEffect(() => {
+    const streamingHere = isStreamVisibleHere && isStreaming;
+    if (streamingHere) return;
+    if (!wasStreamingOnThisChatRef.current) return;
+    wasStreamingOnThisChatRef.current = false;
+
+    if (!conversationId) return;
+
+    const last = displayMessages[displayMessages.length - 1];
+    if (!last || last.role !== 'assistant' || !last.content?.trim()) return;
+    if (isErrorMessage(String(last.content))) return;
+
+    const lastUser = [...displayMessages]
+      .reverse()
+      .find((m) => m.role === 'user' && m.content?.trim());
+    const userText = lastUser ? String(lastUser.content).trim() : '';
+    const assistantText = String(last.content).trim();
+    const assistantKey = buildFollowUpAssistantKey(conversationId, assistantText);
+
+    if (followUpFetchedKeyRef.current === assistantKey) return;
+    followUpFetchedKeyRef.current = assistantKey;
+
+    const ac = new AbortController();
+    followUpFetchAbortRef.current = ac;
+    const convId = conversationId;
+
+    setLlmFollowUp({
+      key: assistantKey,
+      messageId: last.id,
+      chips: [],
+      status: 'loading',
+    });
+
+    void (async () => {
+      try {
+        const chips = await fetchFollowUpChipsFromApi({
+          conversationId: convId,
+          userText,
+          assistantText,
+          contactId: selectedContactId,
+          contactExtendedMode,
+          messageId: last.id > 0 ? last.id : null,
+          signal: ac.signal,
+        });
+        if (conversationIdRef.current !== convId) return;
+        if (followUpFetchedKeyRef.current !== assistantKey) return;
+        setLlmFollowUp({
+          key: assistantKey,
+          messageId: last.id,
+          chips,
+          status: 'done',
+        });
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (conversationIdRef.current !== convId) return;
+        if (followUpFetchedKeyRef.current !== assistantKey) return;
+        setLlmFollowUp({
+          key: assistantKey,
+          messageId: last.id,
+          chips: [],
+          status: 'error',
+        });
+      }
+    })();
+  }, [
+    isStreaming,
+    isStreamVisibleHere,
+    conversationId,
+    displayMessages,
+    selectedContactId,
+    contactExtendedMode,
+  ]);
+
+  useEffect(() => {
+    if (!llmFollowUp || !conversationId) return;
+    const last = displayMessages[displayMessages.length - 1];
+    if (!last || last.role !== 'assistant' || !last.content?.trim()) return;
+    const key = buildFollowUpAssistantKey(conversationId, String(last.content));
+    if (key !== llmFollowUp.key || llmFollowUp.messageId === last.id) return;
+    setLlmFollowUp((prev) => (prev ? { ...prev, messageId: last.id } : prev));
+  }, [displayMessages, conversationId, llmFollowUp]);
+
   const lastFollowUp = useMemo(() => {
     if (isLoading || (isStreamVisibleHere && isStreaming)) {
       return { messageId: null as number | null, chips: [] as ReturnType<typeof buildFollowUpChips> };
@@ -873,11 +989,31 @@ export default function Chat() {
     const userMessages = displayMessages
       .filter((m) => m.role === 'user' && m.content?.trim())
       .map((m) => String(m.content).trim());
-    const chips = buildFollowUpChips(String(last.content), userMessages, {
+    const heuristicChips = buildFollowUpChips(String(last.content), userMessages, {
       hasContact: selectedContactId != null,
     });
+    const assistantKey =
+      conversationId != null
+        ? buildFollowUpAssistantKey(conversationId, String(last.content))
+        : null;
+    const llm =
+      assistantKey && llmFollowUp?.key === assistantKey ? llmFollowUp : null;
+
+    let chips = heuristicChips;
+    if (llm?.status === 'done' && llm.chips.length > 0) {
+      chips = llm.chips;
+    }
+
     return { messageId: last.id, chips };
-  }, [displayMessages, isLoading, isStreamVisibleHere, isStreaming, selectedContactId]);
+  }, [
+    displayMessages,
+    isLoading,
+    isStreamVisibleHere,
+    isStreaming,
+    selectedContactId,
+    conversationId,
+    llmFollowUp,
+  ]);
 
   return (
     <>
