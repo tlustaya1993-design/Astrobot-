@@ -457,6 +457,20 @@ html.flat-bg-test::after {
   border-color: rgba(200, 160, 50, 0.65);
 }
 
+.chat-follow-up-chip {
+  height: auto;
+  min-height: 34px;
+  padding: 8px 14px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.chat-follow-up-chip--affirm {
+  background: rgba(255, 220, 100, 0.14);
+  border-color: rgba(200, 160, 50, 0.75);
+  font-weight: 600;
+}
+
 .chat-quick-prompts {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;

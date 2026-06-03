@@ -17,6 +17,8 @@ import PeoplePanel from '@/components/chat/PeoplePanel';
 import ContactAnalysisModeScreen from '@/components/chat/ContactAnalysisModeScreen';
 import ContactHeaderModeSwitch from '@/components/chat/ContactHeaderModeSwitch';
 import ChatQuickPromptSlider from '@/components/chat/ChatQuickPromptSlider';
+import FollowUpChips from '@/components/chat/FollowUpChips';
+import { buildFollowUpChips } from '@/lib/follow-up-chips';
 import { ChatOnboardingOverlay, type ChatOnboardingPhase } from '@/components/chat/ChatOnboardingOverlay';
 import HistoryDrawer from '@/components/chat/HistoryDrawer';
 import AuthModal from '@/components/AuthModal';
@@ -729,6 +731,22 @@ export default function Chat() {
 
   const inputTooLong = inputValue.length > MAX_CHAT_MESSAGE_CHARS;
 
+  const handleFollowUpSelect = async (prompt: string) => {
+    if (!prompt.trim() || isStreaming) return;
+    trySendHaptic(lastSendHapticAtRef);
+    pendingScrollAfterSendRef.current = true;
+    autoScrollEnabledRef.current = true;
+    try {
+      const newConvId = await sendMessage(prompt.trim(), selectedContactId, contactExtendedMode, conversationId);
+      if (!conversationId && newConvId) {
+        setLocation(`/chat/${newConvId}`, { replace: true });
+      }
+      if (newConvId) pwaInstallRef.current?.check();
+    } catch {
+      pendingScrollAfterSendRef.current = false;
+    }
+  };
+
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputValue.trim() || isStreaming || inputTooLong) return;
@@ -840,6 +858,21 @@ export default function Chat() {
 
   const showQuickPrompts = !isLoading && displayMessages.length === 0;
   const activeQuickPrompts = selectedContactId != null ? contactPromptSet : selfPrompts();
+
+  const lastFollowUp = useMemo(() => {
+    if (isLoading || (isStreamVisibleHere && isStreaming)) {
+      return { messageId: null as number | null, chips: [] as ReturnType<typeof buildFollowUpChips> };
+    }
+    const last = displayMessages[displayMessages.length - 1];
+    if (!last || last.role !== 'assistant' || !last.content?.trim() || isErrorMessage(last.content)) {
+      return { messageId: null, chips: [] };
+    }
+    const prevUser = [...displayMessages].reverse().find((m) => m.role === 'user');
+    const chips = buildFollowUpChips(String(last.content), String(prevUser?.content || ''), {
+      hasContact: selectedContactId != null,
+    });
+    return { messageId: last.id, chips };
+  }, [displayMessages, isLoading, isStreamVisibleHere, isStreaming, selectedContactId]);
 
   return (
     <>
@@ -1044,6 +1077,18 @@ export default function Chat() {
                       )
                     ) : msg.content}
                   </div>
+                  {msg.role === 'assistant' &&
+                    !isErrMsg &&
+                    !isStreamingMsg &&
+                    msg.id === lastFollowUp.messageId &&
+                    lastFollowUp.chips.length > 0 && (
+                      <FollowUpChips
+                        chips={lastFollowUp.chips}
+                        disabled={isStreaming}
+                        reduceMotion={reduceMotion}
+                        onSelect={(chip) => handleFollowUpSelect(chip.prompt)}
+                      />
+                    )}
                   {msg.content?.trim() && !isStreamingMsg && (
                     <div className={`mt-1.5 flex gap-1.5 ${msg.role === 'user' ? 'self-end' : 'self-start'}`}>
                       <button
