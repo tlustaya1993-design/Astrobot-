@@ -14,7 +14,6 @@ export default function FollowUpChips({ chips, disabled, reduceMotion, onSelect 
 
   return (
     <div className="mt-3 w-full min-w-0" data-testid="follow-up-chips">
-      <p className="mb-2 text-sm font-medium text-[#d4a93a]">Продолжить тему</p>
       <div className="flex flex-col gap-2">
         {chips.map((chip) => (
           <motion.button
