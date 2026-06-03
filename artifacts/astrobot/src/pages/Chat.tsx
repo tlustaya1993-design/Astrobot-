@@ -89,7 +89,7 @@ function pronounsByGender(gender: Gender): {
 const SELF_EMPTY_HEADING = 'Привет, я твой АстроБот!';
 
 const SELF_EMPTY_WELCOME =
-  'Привет! У тебя есть 5 бесплатных запросов. Спрашивай про отношения, работу, деньги, ребёнка или любую ситуацию, которая сейчас занимает мысли — я посмотрю её через твою карту и помогу разобраться';
+  'У тебя есть 5 бесплатных запросов. Спрашивай про отношения, работу, деньги, ребёнка или любую ситуацию, которая сейчас занимает мысли — я посмотрю её через твою карту и помогу разобраться';
 
 function selfPrompts(): QuickPrompt[] {
   return [
@@ -998,17 +998,17 @@ export default function Chat() {
                   <DailyForecastCard onAskQuestion={(q) => { setInputValue(q); }} />
                 </div>
 
-                <div className="chat-hero-welcome flex flex-1 flex-col items-center justify-center py-5 text-center">
+                <div className="chat-hero-welcome flex flex-1 flex-col items-center justify-center pb-12 pt-2 text-center">
                   <div className="mx-auto flex w-full max-w-md flex-col items-center">
                     <div className="chat-hero-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
                       <Sparkles className="h-6 w-6 text-primary" />
                     </div>
-                    <h3 className="mb-2 w-full font-display text-base font-semibold leading-snug text-foreground">
+                    <h3 className="mb-2 w-full font-display text-lg font-semibold leading-snug text-foreground">
                       {SELF_EMPTY_HEADING}
                     </h3>
                     <p
                       data-tutorial-id="free-requests"
-                      className="w-full text-[13px] leading-normal text-muted-foreground"
+                      className="w-full text-[13px] leading-normal text-[#d4a93a]/55"
                     >
                       {SELF_EMPTY_WELCOME}
                     </p>
