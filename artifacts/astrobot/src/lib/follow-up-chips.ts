@@ -194,8 +194,76 @@ const TOPIC_INTENT_IDS: Record<TopicKey, string[]> = {
   default: ['default.priority', 'default.practice', 'default.attention', 'money.timing'],
 };
 
-function classifyTopic(combined: string, hasContact: boolean): TopicKey {
-  const t = combined.toLowerCase();
+/** Сигналы в последнем ответе ассистента — chip показываем только при явной связи */
+const CHIP_ASSISTANT_SIGNALS: Record<string, RegExp[]> = {
+  'relations.tension': [/напряжен|напряжён/i, /конфликт|ссор/i, /триггер/i, /бесит|раздраж/i, /тяжел|тяжёл/i],
+  'relations.temporal': [/временн|паттерн|постоянн|период\s+или|пройд[её]т|долго\s+ли/i],
+  'relations.partner_view': [/воспринимает|думает\s+о|его\s+взгляд|её\s+взгляд|позици[яи]/i, /как\s+(?:он|она)\s+/i],
+  'relations.help_now': [/поможет\s+сейчас|делать\s+сейчас|действовать\s+сейчас|первый\s+шаг/i],
+  'relations.dynamics': [/динамик|взаимодейств|между\s+вами|механик|цепляет/i],
+  'child.parent_focus': [/родител|ребён|ребен|как\s+понять\s+реб/i],
+  'child.activities': [/кружк|занят|секци|хобби|чем\s+занять/i],
+  'child.difficulties': [/сложност|трудност|тяжело\s+будет|риск/i],
+  'child.talent_support': [/талант|поддержать|развить|способност/i],
+  'child.communication': [/общени|разговарив|контакт\s+с\s+реб/i],
+  'people.opportunity': [
+    /возможност/i,
+    /новые\s+люди|новых\s+людей|окружен/i,
+    /знакомств|связи\s+с\s+люд/i,
+  ],
+  'people.timing': [/встреч/i, /знакомств/i, /появлени\w*\s+человек/i, /когда.*встреч/i],
+  'people.old_ties': [/стары\w*\s+друз/i, /прошлы\w*\s+связ/i, /стары\w*\s+связ/i, /дружб\w*\s+из\s+прошл/i],
+  'people.where_find': [/где\s+искать|где\s+найти|где\s+встретить/i],
+  'people.ideal_match': [/идеальн\w*\s+друг|соратник|свои\s+люди|какой\s+человек/i],
+  'money.week_action': [/на\s+этой\s+неделе/i, /шаг.*деньг|деньг.*шаг/i, /ближайш\w*\s+действ/i],
+  'money.timing': [/когда.*(?:деньг|финанс|ясн)/i, /срок.*(?:деньг|финанс)/i],
+  'money.support': [/опор|опереться|ресурс/i],
+  'money.income_format': [/формат.*(?:доход|заработ)|источник.*доход|зарабатыва/i],
+  'career.direction': [
+    /карьер/i,
+    /професс/i,
+    /предназнач/i,
+    /реализац/i,
+    /призван/i,
+    /сильн\w*\s+сторон/i,
+    /направлен/i,
+    /соляр/i,
+    /работ/i,
+  ],
+  'career.format_change': [/менять\s+формат|смен\w*\s+работ|увольн|фриланс|свой\s+проект/i],
+  'career.timing': [/когда.*(?:действ|шаг|лучше)|лучшее\s+время|срок|окно/i, /соляр/i, /транзит/i],
+  'health.focus': [/здоров|самочувств|бодрост/i],
+  'health.duration': [/временн|постоянн|период\s+или/i],
+  'health.support': [/поддержит|ресурс.*здоров/i],
+  'default.priority': [/важн|главн|приоритет|фокус|сильн\w*\s+сторон/i],
+  'default.practice': [/прояв|практик|в\s+жизни|реализац|быт/i],
+  'default.attention': [/обратить\s+вниман|следить|ближайш/i],
+};
+
+function assistantFocusText(assistantText: string): string {
+  const trimmed = assistantText.trim();
+  if (!trimmed) return '';
+  return trimmed.slice(Math.max(0, trimmed.length - 2800)).toLowerCase();
+}
+
+function isChipRelevantToAssistant(chip: FollowUpChip, assistantText: string): boolean {
+  if (chip.isAffirm) return true;
+  const focus = assistantFocusText(assistantText);
+  if (!focus) return false;
+  const patterns = CHIP_ASSISTANT_SIGNALS[chip.intentId];
+  if (!patterns?.length) return false;
+  return patterns.some((re) => re.test(focus));
+}
+
+function chipRelevanceScore(chip: FollowUpChip, assistantText: string): number {
+  const focus = assistantFocusText(assistantText);
+  const patterns = CHIP_ASSISTANT_SIGNALS[chip.intentId] ?? [];
+  return patterns.filter((re) => re.test(focus)).length;
+}
+
+function classifyTopicFromText(text: string, hasContact: boolean): TopicKey {
+  const t = text.toLowerCase();
+  if (!t.trim()) return 'default';
   if (/(ребён|ребен|дочь|сын|родител|школ|круж)/.test(t)) return 'child';
   if (
     hasContact &&
@@ -205,10 +273,17 @@ function classifyTopic(combined: string, hasContact: boolean): TopicKey {
   }
   if (/(соратник|друг|знаком|встреч|окружен|сообществ|ищу людей|новые люди|своих людей)/.test(t)) return 'people';
   if (/(деньг|доход|финанс|зарплат|оплат|бюджет)/.test(t)) return 'money';
-  if (/(карьер|работ|увольн|повышен|проект|бизнес)/.test(t)) return 'career';
+  if (/(карьер|работ|увольн|повышен|проект|бизнес|предназнач|професс|реализац|соляр)/.test(t)) return 'career';
   if (/(здоров|болезн|анализ|самочувств)/.test(t)) return 'health';
   if (hasContact) return 'relations';
   return 'default';
+}
+
+/** Тема — по последнему ответу, затем по последнему вопросу пользователя */
+function classifyTopic(assistantText: string, lastUserText: string, hasContact: boolean): TopicKey {
+  const fromAssistant = classifyTopicFromText(assistantText, hasContact);
+  if (fromAssistant !== 'default') return fromAssistant;
+  return classifyTopicFromText(lastUserText, hasContact);
 }
 
 function normalizeForDedup(s: string): string {
@@ -260,6 +335,7 @@ function pickTopicChips(
   pool: FollowUpChip[],
   exploredIntents: Set<string>,
   userMessages: string[],
+  assistantText: string,
   limit: number,
 ): FollowUpChip[] {
   const out: FollowUpChip[] = [];
@@ -268,6 +344,7 @@ function pickTopicChips(
   const tryAdd = (chip: FollowUpChip) => {
     if (out.length >= limit) return;
     if (chip.isAffirm) return;
+    if (!isChipRelevantToAssistant(chip, assistantText)) return;
     if (exploredIntents.has(chip.intentId)) return;
     if (seen.has(chip.intentId)) return;
     if (isChipRedundantWithHistory(chip, userMessages)) return;
@@ -275,11 +352,11 @@ function pickTopicChips(
     out.push(chip);
   };
 
-  for (const chip of pool) tryAdd(chip);
+  const ranked = [...pool].sort(
+    (a, b) => chipRelevanceScore(b, assistantText) - chipRelevanceScore(a, assistantText),
+  );
 
-  if (out.length < limit) {
-    for (const chip of POOLS.default) tryAdd(chip);
-  }
+  for (const chip of ranked) tryAdd(chip);
 
   return out;
 }
@@ -291,15 +368,14 @@ export function buildFollowUpChips(
 ): FollowUpChip[] {
   const hasContact = Boolean(options.hasContact);
   const lastUserText = userMessages[userMessages.length - 1] || '';
-  const combined = `${userMessages.join('\n')}\n${assistantText}`;
-  const topic = classifyTopic(combined, hasContact);
+  const topic = classifyTopic(assistantText, lastUserText, hasContact);
   const pool = POOLS[topic];
   const exploredIntents = collectExploredIntents(userMessages, topic);
 
   const withHook = detectInvitationHook(assistantText);
   const maxTotal = 4;
   const topicLimit = withHook ? maxTotal - 1 : maxTotal;
-  const topicChips = pickTopicChips(pool, exploredIntents, userMessages, topicLimit);
+  const topicChips = pickTopicChips(pool, exploredIntents, userMessages, assistantText, topicLimit);
 
   const showAffirm = withHook && !exploredIntents.has(AFFIRM_INTENT);
   if (showAffirm) {
