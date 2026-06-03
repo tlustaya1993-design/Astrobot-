@@ -1008,7 +1008,7 @@ export default function Chat() {
                     </h3>
                     <p
                       data-tutorial-id="free-requests"
-                      className="w-full text-[13px] leading-normal text-[#d4a93a]/55"
+                      className="w-full text-[13px] leading-normal text-muted-foreground"
                     >
                       {SELF_EMPTY_WELCOME}
                     </p>
