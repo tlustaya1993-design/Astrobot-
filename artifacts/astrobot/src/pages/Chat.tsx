@@ -86,13 +86,17 @@ function pronounsByGender(gender: Gender): {
   return { subject: 'он', object: 'его', possessiveCap: 'Его' };
 }
 
+const SELF_EMPTY_WELCOME =
+  'Привет! У тебя есть 5 бесплатных запросов. Спрашивай про отношения, работу, деньги, ребёнка или любую ситуацию, которая сейчас занимает мысли — я посмотрю её через твою карту и помогу разобраться';
+
 function selfPrompts(): QuickPrompt[] {
   return [
-    { label: 'Обо мне', prompt: 'Что звёзды могут сказать обо мне?' },
-    { label: 'Мой период', prompt: 'Какой период я сейчас переживаю?' },
-    { label: 'Моя удача', prompt: 'Часть моей удачи - на что мне обратить внимание?' },
-    { label: 'Моя карьера', prompt: 'Куда мне двигаться в карьере?' },
-    { label: 'Мои деньги', prompt: 'Что у меня с финансовым потенциалом на этот период?' },
+    { label: 'Хочу узнать себя лучше', prompt: 'Хочу узнать себя лучше' },
+    { label: 'Что сейчас за период в моей жизни?', prompt: 'Что сейчас за период в моей жизни?' },
+    { label: 'Мне тяжело. Что может помочь?', prompt: 'Мне тяжело. Что может помочь?' },
+    { label: 'Что у меня с отношениями?', prompt: 'Что у меня с отношениями?' },
+    { label: 'Что у меня с работой?', prompt: 'Что у меня с работой?' },
+    { label: 'Что у меня с деньгами?', prompt: 'Что у меня с деньгами?' },
   ];
 }
 
@@ -852,9 +856,7 @@ export default function Chat() {
           { label: 'Общение', prompt: 'Как лучше выстроить контакт с этим человеком?' },
         ];
 
-  const promptSubtitle = selectedContactId == null
-    ? (!isLoggedIn ? '5 бесплатных запросов - пробуйте и оцените формат' : '')
-    : '';
+  const promptSubtitle = selectedContactId == null ? SELF_EMPTY_WELCOME : '';
 
   const showQuickPrompts = !isLoading && displayMessages.length === 0;
   const activeQuickPrompts = selectedContactId != null ? contactPromptSet : selfPrompts();
@@ -1001,23 +1003,15 @@ export default function Chat() {
                 <div className="chat-hero-icon mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/[0.06]">
                   <Sparkles className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="mb-1.5 text-base font-display font-semibold text-foreground">С чего начнем?</h3>
+                <h3 className="mb-1.5 text-base font-display font-semibold text-foreground">С чего начнём?</h3>
                 {promptSubtitle ? (
                   <p
                     data-tutorial-id="free-requests"
-                    className="max-w-md text-sm leading-relaxed text-[#d4a93a]/90"
+                    className="max-w-md px-1 text-sm leading-relaxed text-[#d4a93a]/90"
                   >
                     {promptSubtitle}
                   </p>
-                ) : (
-                  <p
-                    data-tutorial-id="free-requests"
-                    aria-hidden="true"
-                    className="sr-only"
-                  >
-                    5 бесплатных запросов - пробуйте и оцените формат
-                  </p>
-                )}
+                ) : null}
               </motion.div>
             )}
 
@@ -1182,6 +1176,7 @@ export default function Chat() {
               prompts={activeQuickPrompts}
               onSelect={setInputValue}
               reduceMotion={reduceMotion}
+              variant={selectedContactId == null ? 'starter' : 'default'}
             />
           )}
           <div className="px-4 pb-2 pt-0">

@@ -437,6 +437,18 @@ html.flat-bg-test::after {
   backdrop-filter: blur(12px);
 }
 
+.chat-quick-prompt-chip--starter {
+  height: auto;
+  min-height: 40px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.chat-quick-prompts--starter {
+  flex-wrap: nowrap;
+}
+
 .chat-quick-prompt-chip {
   height: 34px;
   padding: 0 14px;
