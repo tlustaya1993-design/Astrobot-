@@ -1,299 +1,246 @@
-import React, { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useImperativeHandle, useState } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Sparkles, X } from 'lucide-react';
 import { isTestMode } from '@/lib/session';
 import { isStandalone, detectPwaDevice, type PwaDevice } from '@/lib/pwa-detect';
 import {
-  shouldShowPwaTutorial,
+  PWA_FIRST_AI_SUCCESS_EVENT,
+  shouldShowPwaPrompt,
   recordTutorialShown,
   recordTutorialDismissed,
 } from '@/lib/pwa-hints';
-
-// ---------------------------------------------------------------------------
-// Types
-
-type Phase = 'hidden' | 'banner' | 'instructions';
+import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 export type PwaInstallBannerHandle = {
+  /** @deprecated Prompt opens via first-AI-success event; kept for compatibility. */
   check: () => void;
 };
 
 // ---------------------------------------------------------------------------
-// Device instruction content
-
-type InstructionStep = { icon: React.ReactNode; text: string };
-
-type DeviceInstructions = {
-  title: string;
-  steps?: InstructionStep[];
-  note?: string;
-  copyLink?: boolean;
-};
+// Instruction icons (inline SVG — same set as before)
 
 const ShareIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-    <polyline points="16 6 12 2 8 6"/>
-    <line x1="12" y1="2" x2="12" y2="15"/>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+    <polyline points="16 6 12 2 8 6" />
+    <line x1="12" y1="2" x2="12" y2="15" />
   </svg>
 );
-const PlusSquareIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="2"/>
-    <line x1="12" y1="8" x2="12" y2="16"/>
-    <line x1="8" y1="12" x2="16" y2="12"/>
+const PlusCircleIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="8" x2="12" y2="16" />
+    <line x1="8" y1="12" x2="16" y2="12" />
   </svg>
 );
 const AddToHomeIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-    <polyline points="9 22 9 12 15 12 15 22"/>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <polyline points="9 22 9 12 15 12 15 22" />
   </svg>
 );
 const MenuIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="5" r="1" fill="currentColor"/>
-    <circle cx="12" cy="12" r="1" fill="currentColor"/>
-    <circle cx="12" cy="19" r="1" fill="currentColor"/>
-  </svg>
-);
-const CheckIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12"/>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+    <circle cx="12" cy="5" r="1" fill="currentColor" />
+    <circle cx="12" cy="12" r="1" fill="currentColor" />
+    <circle cx="12" cy="19" r="1" fill="currentColor" />
   </svg>
 );
 
-function getInstructions(device: PwaDevice): DeviceInstructions {
-  switch (device) {
-    case 'ios-safari':
-      return {
-        title: 'Как добавить на главный экран',
-        steps: [
-          { icon: <ShareIcon />, text: 'Нажмите «Поделиться» внизу браузера' },
-          { icon: <AddToHomeIcon />, text: 'Выберите «На экран Домой»' },
-          { icon: <CheckIcon />, text: 'Нажмите «Добавить»' },
-        ],
-      };
-    case 'ios-other':
-      return {
-        title: 'Добавление через Safari',
-        note: 'На iPhone добавление на экран стабильнее всего работает через Safari.\n\nСкопируйте ссылку, откройте сайт в Safari:\nПоделиться → На экран Домой → Добавить.',
-        copyLink: true,
-      };
-    case 'android-chrome':
-      return {
-        title: 'Как добавить на главный экран',
-        steps: [
-          { icon: <MenuIcon />, text: 'Нажмите меню ⋮ в браузере' },
-          { icon: <AddToHomeIcon />, text: 'Выберите «Добавить на главный экран» или «Установить приложение»' },
-          { icon: <CheckIcon />, text: 'Подтвердите' },
-        ],
-      };
-    case 'android-yandex':
-    case 'android-other':
-      return {
-        title: 'Как добавить на главный экран',
-        steps: [
-          { icon: <MenuIcon />, text: 'Откройте меню браузера' },
-          { icon: <PlusSquareIcon />, text: 'Найдите «Добавить на экран», «Добавить ярлык» или «Установить приложение»' },
-          { icon: <CheckIcon />, text: 'Подтвердите' },
-        ],
-      };
-    default:
-      return {
-        title: 'Добавление на главный экран',
-        note: 'Откройте меню браузера и выберите добавление сайта на главный экран.\n\nЕсли такого пункта нет — откройте сайт в Safari на iPhone или Chrome на Android.',
-      };
-  }
+type FlowStep = { icon: React.ReactNode; caption: string; pill?: string };
+
+const IOS_FLOW: FlowStep[] = [
+  { icon: <ShareIcon />, caption: 'Нажмите «Поделиться»' },
+  { icon: <PlusCircleIcon />, caption: 'Выберите «На экран «Домой»' },
+  { icon: <Sparkles className="w-5 h-5 text-primary" aria-hidden />, caption: 'При желании переименуйте' },
+  { icon: null, caption: 'Нажмите «Добавить»', pill: 'Добавить' },
+];
+
+const ANDROID_FLOW: FlowStep[] = [
+  { icon: <MenuIcon />, caption: 'Откройте меню' },
+  { icon: <PlusCircleIcon />, caption: 'Выберите «Добавить на главный экран»' },
+  { icon: null, caption: 'Нажмите «Добавить»', pill: 'Добавить' },
+];
+
+function FlowArrow() {
+  return (
+    <span className="text-muted-foreground/40 text-xs shrink-0 px-0.5" aria-hidden>
+      →
+    </span>
+  );
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-
-function Step({ n, icon, text }: { n: number; icon: React.ReactNode; text: string }) {
+function FlowRow({ steps }: { steps: FlowStep[] }) {
   return (
-    <div className="flex items-start gap-3">
-      <div className="flex-none w-9 h-9 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center text-primary">
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0 pt-1.5">
-        <span className="text-xs text-muted-foreground mr-1.5">{n}.</span>
-        <span className="text-sm">{text}</span>
-      </div>
+    <div className="flex items-start gap-1 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+      {steps.map((step, i) => (
+        <React.Fragment key={i}>
+          {i > 0 ? <FlowArrow /> : null}
+          <div className="flex flex-col items-center gap-1.5 min-w-[4.5rem] max-w-[5.5rem] shrink-0">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/80 bg-background/80 text-primary">
+              {step.pill ? (
+                <span className="rounded-md bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  {step.pill}
+                </span>
+              ) : (
+                step.icon
+              )}
+            </div>
+            <p className="text-[10px] leading-tight text-center text-muted-foreground">{step.caption}</p>
+          </div>
+        </React.Fragment>
+      ))}
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
+function PlatformBlock({
+  emoji,
+  label,
+  steps,
+  defaultOpen,
+}: {
+  emoji: string;
+  label: string;
+  steps: FlowStep[];
+  defaultOpen: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background/40 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex w-full items-center gap-2 px-3.5 py-3 text-left touch-manipulation"
+      >
+        <span className="text-base" aria-hidden>{emoji}</span>
+        <span className="flex-1 text-sm font-semibold">{label}</span>
+        <span className="text-muted-foreground text-xs">{open ? '▾' : '▸'}</span>
+      </button>
+      {open ? (
+        <div className="px-3.5 pb-3.5 pt-0 border-t border-border/40">
+          <FlowRow steps={steps} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 type Props = {
   handle?: React.Ref<PwaInstallBannerHandle>;
+  /** When true, do not open (welcome screen, chat onboarding, tutorial, etc.). */
+  blocked?: boolean;
 };
 
-export default function PwaInstallBanner({ handle }: Props) {
-  const [phase, setPhase] = useState<Phase>('hidden');
-  const [iosTab, setIosTab] = useState<'ios' | 'android'>('ios');
-  const device = useRef<PwaDevice>('desktop');
+export default function PwaInstallBanner({ handle, blocked = false }: Props) {
+  const [open, setOpen] = useState(false);
+  const device = detectPwaDevice();
+  const defaultIos = device === 'ios-safari' || device === 'ios-other';
 
   const tryShow = useCallback(() => {
-    if (isStandalone() || isTestMode()) return;
-    const { show } = shouldShowPwaTutorial();
-    if (!show) return;
-    device.current = detectPwaDevice();
+    if (blocked || isStandalone() || isTestMode()) return;
+    if (!shouldShowPwaPrompt()) return;
     recordTutorialShown();
-    setPhase('banner');
-  }, []);
+    setOpen(true);
+  }, [blocked]);
 
-  // Check on mount (covers session_count condition)
-  useEffect(() => { tryShow(); }, [tryShow]);
-
-  // Expose imperative handle so Chat.tsx can call check() after AI success
   useImperativeHandle(handle, () => ({ check: tryShow }), [tryShow]);
+
+  useEffect(() => {
+    const onFirstSuccess = () => {
+      window.setTimeout(() => tryShow(), 400);
+    };
+    window.addEventListener(PWA_FIRST_AI_SUCCESS_EVENT, onFirstSuccess);
+    return () => window.removeEventListener(PWA_FIRST_AI_SUCCESS_EVENT, onFirstSuccess);
+  }, [tryShow]);
 
   const dismiss = useCallback(() => {
     recordTutorialDismissed();
-    setPhase('hidden');
+    setOpen(false);
   }, []);
 
-  const openInstructions = useCallback(() => {
-    const d = detectPwaDevice();
-    device.current = d;
-    // Pre-select the matching tab
-    setIosTab(d === 'ios-safari' || d === 'ios-other' ? 'ios' : 'android');
-    setPhase('instructions');
-  }, []);
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) dismiss();
+    },
+    [dismiss],
+  );
 
-  const copyLink = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.origin);
-      // small visual feedback via the button text would need state, skip for simplicity
-    } catch { /* ignore */ }
-  }, []);
-
-  if (phase === 'hidden') return null;
-
-  const BOTTOM_NAV_HEIGHT = 'calc(2.5rem + env(safe-area-inset-bottom, 0px))';
-
-  // ---- BANNER ----
-  if (phase === 'banner') {
-    return (
-      <div
-        className="fixed left-3 right-3 z-[45] rounded-2xl border border-amber-500/40 bg-card/95 backdrop-blur-md shadow-xl px-3 py-3 flex items-center gap-3"
-        style={{ bottom: `calc(${BOTTOM_NAV_HEIGHT} + 0.5rem)` }}
-      >
-        {/* Icon */}
-        <div className="flex-none w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 text-xl">
-          ✦
-        </div>
-
-        {/* Text */}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-tight">Добавь AstroBot на экран</p>
-          <p className="text-xs text-muted-foreground mt-0.5 leading-snug">Будет как приложение и быстрее открываться</p>
-        </div>
-
-        {/* Actions */}
-        <button
-          type="button"
-          onClick={openInstructions}
-          className="flex-none px-3.5 py-2 rounded-xl bg-amber-500 text-black text-sm font-semibold hover:bg-amber-400 transition-colors"
-        >
-          Добавить
-        </button>
-        <button
-          type="button"
-          onClick={dismiss}
-          className="flex-none text-xs text-muted-foreground hover:text-foreground transition-colors px-1"
-        >
-          Позже
-        </button>
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Закрыть"
-          className="flex-none text-muted-foreground hover:text-foreground transition-colors -mr-1"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-      </div>
-    );
-  }
-
-  // ---- INSTRUCTIONS SHEET ----
-  const iosDevice: PwaDevice = 'ios-safari';
-  const androidDevice: PwaDevice = 'android-chrome';
-  const activeDevice = iosTab === 'ios' ? iosDevice : androidDevice;
-  const instructions = getInstructions(activeDevice);
+  if (!open) return null;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[44] bg-black/40 backdrop-blur-sm"
-        onClick={dismiss}
-      />
-
-      {/* Sheet */}
-      <div
-        className="fixed left-0 right-0 z-[45] rounded-t-2xl border-t border-border bg-card shadow-2xl px-4 pt-4 pb-6"
-        style={{ bottom: 0 }}
-      >
-        {/* Handle + close */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="w-8 h-1 rounded-full bg-border mx-auto absolute left-1/2 -translate-x-1/2 top-2.5" />
-          <p className="text-base font-semibold">{instructions.title}</p>
-          <button type="button" onClick={dismiss} className="text-muted-foreground hover:text-foreground transition-colors">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* Tab switcher */}
-        <div className="flex gap-2 mb-5 p-1 rounded-xl bg-background border border-border">
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogPortal>
+        <DialogOverlay className="z-[380] bg-black/65 backdrop-blur-sm" />
+        <DialogPrimitive.Content
+          className={cn(
+            'fixed left-[50%] top-[50%] z-[381] w-[calc(100%-2rem)] max-w-md max-h-[min(90dvh,var(--vvh,100dvh))]',
+            'translate-x-[-50%] translate-y-[-50%] overflow-y-auto overscroll-contain',
+            'rounded-2xl border border-primary/20 bg-card p-0 shadow-2xl',
+            'duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+            'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+          )}
+          onOpenAutoFocus={e => e.preventDefault()}
+        >
           <button
             type="button"
-            onClick={() => setIosTab('ios')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${iosTab === 'ios' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+            onClick={dismiss}
+            aria-label="Закрыть"
+            className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground transition touch-manipulation"
           >
-            <span>🍎</span> iPhone (Safari)
+            <X className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            onClick={() => setIosTab('android')}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors ${iosTab === 'android' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            <span>🤖</span> Android (Chrome)
-          </button>
-        </div>
 
-        {/* Steps or note */}
-        {instructions.steps ? (
-          <div className="space-y-3.5">
-            {instructions.steps.map((s, i) => (
-              <Step key={i} n={i + 1} icon={s.icon} text={s.text} />
-            ))}
+          <div className="relative px-4 pt-5 pb-4">
+            <div className="flex gap-3 items-start pr-8">
+              <div className="flex-1 min-w-0">
+                <div className="mb-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-primary text-sm">
+                  ✦
+                </div>
+                <h2 className="font-display text-lg font-bold leading-snug text-foreground">
+                  Пользоваться удобнее
+                  <br />
+                  <span className="text-primary">как приложением</span>
+                </h2>
+                <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+                  Добавьте AstroBot на главный экран телефона — он будет открываться отдельно,
+                  быстрее и без лишних элементов браузера.
+                </p>
+              </div>
+              <img
+                src={`${import.meta.env.BASE_URL}images/pwa-prompt-bot.png`}
+                alt=""
+                role="presentation"
+                width={88}
+                height={88}
+                className="shrink-0 w-[5.5rem] h-[5.5rem] object-contain object-center -mt-1"
+                draggable={false}
+              />
+            </div>
+
+            <div className="mt-4 space-y-2.5">
+              <PlatformBlock emoji="🍎" label="iPhone (Safari)" steps={IOS_FLOW} defaultOpen={defaultIos} />
+              <PlatformBlock emoji="🤖" label="Android (Chrome)" steps={ANDROID_FLOW} defaultOpen={!defaultIos} />
+            </div>
+
+            <p className="mt-3 flex items-center gap-2 rounded-xl border border-border/50 bg-background/30 px-3 py-2.5 text-[11px] text-muted-foreground leading-snug">
+              <Sparkles className="w-3.5 h-3.5 shrink-0 text-primary/70" aria-hidden />
+              После добавления иконка AstroBot появится на вашем экране.
+            </p>
+
+            <button
+              type="button"
+              onClick={dismiss}
+              className="mt-4 w-full rounded-xl bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] py-3 text-sm font-semibold text-[#1a1508] shadow-sm hover:brightness-105 active:brightness-95 transition touch-manipulation"
+            >
+              Понятно
+            </button>
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">
-            {instructions.note}
-          </p>
-        )}
-
-        {instructions.copyLink && (
-          <button
-            type="button"
-            onClick={copyLink}
-            className="mt-5 w-full py-3 rounded-xl bg-primary/10 border border-primary/30 text-primary text-sm font-medium hover:bg-primary/20 transition-colors"
-          >
-            Скопировать ссылку
-          </button>
-        )}
-
-        {/* Safe area spacer */}
-        <div style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
-      </div>
-    </>
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    </Dialog>
   );
 }
