@@ -766,7 +766,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
         }
       }
 
-      // Save to DB and charge regardless of whether client is still connected.
+      // Save to DB regardless of whether client is still connected.
       // Tag as 'astro' when the response was built with a full natal chart (date+time+coords),
       // meaning it likely contains house/planet assignments that become stale over deploys.
       const hasNatalHouses = !!(userProfile?.birthDate && userProfile?.birthTime && userProfile?.birthLat);
