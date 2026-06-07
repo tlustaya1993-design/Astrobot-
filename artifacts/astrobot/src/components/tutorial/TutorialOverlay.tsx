@@ -182,21 +182,22 @@ export function TutorialOverlay() {
   const { step, isActive, next, skip } = useTutorial();
   const [spotRect, setSpotRect] = useState<SpotRect | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [spotlightFallback, setSpotlightFallback] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const retryRef = useRef(0);
 
   const measure = useCallback((s: number) => {
     const cfg = STEPS[s - 1];
     if (!cfg || cfg.layout !== 'spotlight' || !cfg.targetId) {
       setSpotRect(null);
       setTooltipPos(null);
-      return;
+      setSpotlightFallback(false);
+      return true;
     }
     const el = document.querySelector<HTMLElement>(`[data-tutorial-id="${cfg.targetId}"]`);
     if (!el) {
       setSpotRect(null);
       setTooltipPos(null);
-      return;
+      return false;
     }
     el.scrollIntoView({ block: 'nearest', behavior: 'instant' });
     const r = el.getBoundingClientRect();
@@ -211,45 +212,54 @@ export function TutorialOverlay() {
     };
     setSpotRect(spot);
     setTooltipPos(calcTooltipPos(spot));
+    setSpotlightFallback(false);
+    return true;
   }, []);
 
   useEffect(() => {
     if (!isActive) {
       setSpotRect(null);
       setTooltipPos(null);
+      setSpotlightFallback(false);
       return;
     }
-    retryRef.current = 0;
     if (timerRef.current) clearTimeout(timerRef.current);
 
     const cfg = STEPS[step - 1];
+    setSpotlightFallback(false);
     if (!cfg || cfg.layout !== 'spotlight') {
       setSpotRect(null);
       setTooltipPos(null);
       return;
     }
 
+    let cancelled = false;
+    let retries = 0;
+    const maxRetries = 8;
+    const retryEveryMs = 200;
+
+    const runMeasure = () => {
+      if (cancelled) return;
+      if (measure(step)) return;
+      if (retries >= maxRetries) {
+        setSpotlightFallback(true);
+        return;
+      }
+      retries += 1;
+      timerRef.current = setTimeout(runMeasure, retryEveryMs);
+    };
+
     const delay = cfg.delay ?? 0;
     if (delay > 0) {
-      timerRef.current = setTimeout(() => measure(step), delay);
+      timerRef.current = setTimeout(runMeasure, delay);
     } else {
-      measure(step);
+      runMeasure();
     }
     return () => {
+      cancelled = true;
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [step, isActive, measure]);
-
-  useEffect(() => {
-    if (!isActive) return;
-    const cfg = STEPS[step - 1];
-    if (!cfg || cfg.layout !== 'spotlight' || spotRect !== null) return;
-    if (!cfg.targetId) return;
-    if (retryRef.current >= 8) return;
-    retryRef.current += 1;
-    const t = setTimeout(() => measure(step), 200);
-    return () => clearTimeout(t);
-  }, [step, isActive, spotRect, measure]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -294,7 +304,17 @@ export function TutorialOverlay() {
             />
           )}
 
-          {isSpotlight && (
+          {isSpotlight && spotlightFallback && (
+            <CenteredStepCard
+              cfg={cfg}
+              step={step}
+              isLast={isLast}
+              onNext={next}
+              onSkip={skip}
+            />
+          )}
+
+          {isSpotlight && !spotlightFallback && (
             <>
               {spotRect ? (
                 <>
