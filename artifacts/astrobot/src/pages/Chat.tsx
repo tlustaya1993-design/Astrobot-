@@ -217,6 +217,7 @@ export default function Chat() {
   const { isLoggedIn, openAuthModal, logout } = useAuth();
   const { step: tutorialStep, isActive: tutorialActive, start: startTutorial } = useTutorial();
   const [showPostPaymentRegisterNudge, setShowPostPaymentRegisterNudge] = useState(false);
+  const [postPaymentAppliedCredits, setPostPaymentAppliedCredits] = useState<number | null>(null);
   const conversationId = match && params?.id ? parseInt(params.id, 10) : undefined;
   const queryClient = useQueryClient();
 
@@ -594,6 +595,7 @@ export default function Chat() {
         /* ignore */
       }
       setShowPostPaymentRegisterNudge(false);
+      setPostPaymentAppliedCredits(null);
     }
   }, [isLoggedIn]);
 
@@ -604,6 +606,7 @@ export default function Chat() {
     if (isTutorialDone()) return;
     if (tutorialActive) return;
     if (paywallState?.open) return;
+    if (showPostPaymentRegisterNudge) return;
 
     const isFresh = (() => {
       try { return sessionStorage.getItem(FRESH_ONBOARDING_KEY) === '1'; } catch { return false; }
@@ -615,7 +618,7 @@ export default function Chat() {
       try { sessionStorage.removeItem(FRESH_ONBOARDING_KEY); } catch { /* ignore */ }
     }, delay);
     return () => window.clearTimeout(t);
-  }, [conversationId, paywallState?.open, isLoggedIn, tutorialActive, startTutorial]);
+  }, [conversationId, paywallState?.open, isLoggedIn, tutorialActive, startTutorial, showPostPaymentRegisterNudge]);
 
   // Tutorial: profile open on step 7 (регистрация); closed on steps 1–6
   useEffect(() => {
@@ -641,6 +644,8 @@ export default function Chat() {
     window.history.replaceState({}, '', qs ? `${path}?${qs}` : path);
 
     const onPaymentSuccess = async () => {
+      closePaywall();
+
       let applied = 0;
       let reconcileFailed = false;
       try {
@@ -659,18 +664,18 @@ export default function Chat() {
       }
 
       const loggedIn = Boolean(getToken());
-      toast({
-        title: loggedIn ? 'Спасибо!' : 'Спасибо, всё прошло хорошо',
-        description: applied > 0
-          ? `Пакет зачислен: +${applied} запросов.`
-          : loggedIn
-            ? reconcileFailed
-              ? 'Оплата подтверждена, но баланс обновить не удалось. Попробуйте обновить страницу.'
-              : 'Оплата подтверждена. Баланс обновится автоматически.'
-            : 'Запросы привязаны к этому устройству. Если захотите, зарегистрируйтесь здесь же и они сохранятся за аккаунтом.',
-      });
 
-      if (!loggedIn) {
+      if (loggedIn) {
+        toast({
+          title: 'Спасибо!',
+          description: applied > 0
+            ? `Пакет зачислен: +${applied} запросов.`
+            : reconcileFailed
+              ? 'Оплата подтверждена, но баланс обновить не удалось. Попробуйте обновить страницу.'
+              : 'Оплата подтверждена. Баланс обновится автоматически.',
+        });
+      } else {
+        setPostPaymentAppliedCredits(applied > 0 ? applied : null);
         try {
           sessionStorage.setItem(POST_PAYMENT_REGISTER_NUDGE_KEY, '1');
         } catch {
@@ -681,7 +686,7 @@ export default function Chat() {
     };
 
     void onPaymentSuccess();
-  }, []);
+  }, [closePaywall]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -721,6 +726,7 @@ export default function Chat() {
       /* ignore */
     }
     setShowPostPaymentRegisterNudge(false);
+    setPostPaymentAppliedCredits(null);
   };
 
   const handleRetry = async (errorMsgId: number, userContent: string, userMsgId?: number) => {
@@ -881,8 +887,13 @@ export default function Chat() {
           { label: 'Общение', prompt: 'Как лучше выстроить контакт с этим человеком?' },
         ];
 
-  const showQuickPrompts = !isLoading && displayMessages.length === 0;
-  const showSelfEmptyHero = isNew && !isLoading && selectedContactId == null;
+  const showQuickPrompts = !isLoading && displayMessages.length === 0 && !showPostPaymentRegisterNudge;
+  const showPostPaymentGuestHero =
+    showPostPaymentRegisterNudge && !isLoggedIn && isNew && !isLoading && selectedContactId == null;
+  const showPostPaymentChatNudge =
+    showPostPaymentRegisterNudge && !isLoggedIn && !showPostPaymentGuestHero;
+  const showSelfEmptyHero =
+    isNew && !isLoading && selectedContactId == null && !showPostPaymentGuestHero;
   const activeQuickPrompts = selectedContactId != null ? contactPromptSet : selfPrompts();
 
   useEffect(() => {
@@ -1107,7 +1118,7 @@ export default function Chat() {
           <div
             ref={messagesScrollRef}
             className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-3 py-3 [overflow-anchor:none] ${
-              showContactModePicker || showSelfEmptyHero ? 'flex flex-col' : 'space-y-4'
+              showContactModePicker || showSelfEmptyHero || showPostPaymentGuestHero ? 'flex flex-col' : 'space-y-4'
             }`}
             onTouchStart={stopAutoScroll}
             onPointerDown={stopAutoScroll}
@@ -1128,6 +1139,50 @@ export default function Chat() {
                   onChange={(next) => void persistContactExtendedMode(next)}
                 />
               </div>
+            )}
+
+            {showPostPaymentGuestHero && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex min-h-0 flex-1 flex-col"
+              >
+                <div className="chat-hero-welcome flex flex-1 flex-col items-center justify-center pb-12 pt-6 text-center">
+                  <div className="mx-auto flex w-full max-w-md flex-col items-center px-2">
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/15 border border-primary/30 text-2xl">
+                      ✓
+                    </div>
+                    <h3 className="mb-2 w-full font-display text-lg font-semibold leading-snug text-foreground">
+                      Спасибо, всё прошло хорошо
+                    </h3>
+                    <p className="w-full text-[13px] leading-relaxed text-muted-foreground">
+                      {postPaymentAppliedCredits != null && postPaymentAppliedCredits > 0
+                        ? `Пакет зачислен: +${postPaymentAppliedCredits} запросов. `
+                        : 'Запросы привязаны к этому устройству. '}
+                      Если пройдёте регистрацию, я смогу помнить чаты при входе с другого телефона или браузера.
+                    </p>
+                    <div className="mt-5 flex w-full flex-col gap-2.5 sm:flex-row sm:justify-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          dismissPostPaymentNudge();
+                          openAuthModal('register');
+                        }}
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#c9a227] via-[#e8d18c] to-[#f4e4a8] text-[#1a1508] text-sm font-semibold shadow-sm hover:brightness-105 active:brightness-95 transition touch-manipulation"
+                      >
+                        Зарегистрироваться
+                      </button>
+                      <button
+                        type="button"
+                        onClick={dismissPostPaymentNudge}
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm bg-white/5 border border-border hover:bg-white/10 transition touch-manipulation"
+                      >
+                        Продолжить чат
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             )}
 
             {showSelfEmptyHero && (
@@ -1272,7 +1327,7 @@ export default function Chat() {
               );
             })}
 
-            {showPostPaymentRegisterNudge && !isLoggedIn && (
+            {showPostPaymentChatNudge && (
               <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}

@@ -71,6 +71,10 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!open) setShowAuthModal(false);
+  }, [open]);
+
   const selected = useMemo(
     () => PACKAGES.find((p) => p.code === selectedCode) ?? null,
     [selectedCode],
