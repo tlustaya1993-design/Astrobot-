@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
-import { db, paymentsTable, usersTable } from "@workspace/db";
+import { db, paymentsTable, usersTable, type Payment } from "@workspace/db";
 import {
   createYookassaPayment,
   getYookassaPayment,
@@ -358,6 +358,73 @@ function appendReturnFlag(returnUrl: string): string {
   }
 }
 
+type ProviderPaymentForVerification = {
+  id?: unknown;
+  status?: unknown;
+  paid?: unknown;
+  amount?: {
+    value?: unknown;
+    currency?: unknown;
+  };
+  metadata?: Record<string, unknown>;
+};
+
+type PaymentVerificationRow = Pick<
+  Payment,
+  | "providerPaymentId"
+  | "appPaymentId"
+  | "sessionId"
+  | "packageCode"
+  | "creditsGranted"
+  | "amountRub"
+  | "currency"
+>;
+
+export function verifyProviderPaymentMatchesRow(
+  providerPayment: ProviderPaymentForVerification,
+  paymentRow: PaymentVerificationRow,
+): { ok: true } | { ok: false; reason: string } {
+  if (typeof providerPayment.id !== "string" || providerPayment.id !== paymentRow.providerPaymentId) {
+    return { ok: false, reason: "provider_payment_id_mismatch" };
+  }
+  if (typeof providerPayment.status !== "string" || providerPayment.status.length === 0) {
+    return { ok: false, reason: "missing_provider_status" };
+  }
+  if (providerPayment.status === "succeeded" && providerPayment.paid !== true) {
+    return { ok: false, reason: "succeeded_payment_not_marked_paid" };
+  }
+  if (!providerPayment.amount || typeof providerPayment.amount.value !== "string") {
+    return { ok: false, reason: "amount_or_currency_mismatch" };
+  }
+  try {
+    if (
+      typeof providerPayment.amount.currency !== "string" ||
+      toKopecks(providerPayment.amount.value) !== toKopecks(paymentRow.amountRub) ||
+      providerPayment.amount.currency !== paymentRow.currency
+    ) {
+      return { ok: false, reason: "amount_or_currency_mismatch" };
+    }
+  } catch {
+    return { ok: false, reason: "amount_or_currency_mismatch" };
+  }
+
+  const metadata = providerPayment.metadata ?? {};
+  if (metadata.appPaymentId !== paymentRow.appPaymentId) {
+    return { ok: false, reason: "app_payment_id_mismatch" };
+  }
+  if (metadata.sessionId !== paymentRow.sessionId) {
+    return { ok: false, reason: "session_id_mismatch" };
+  }
+  if (metadata.packageCode !== paymentRow.packageCode) {
+    return { ok: false, reason: "package_code_mismatch" };
+  }
+  if (metadata.credits !== String(paymentRow.creditsGranted)) {
+    return { ok: false, reason: "credits_mismatch" };
+  }
+
+  return { ok: true };
+}
+
 async function ensurePaymentsTableReady(): Promise<void> {
   if (!paymentsTableChecked) {
     paymentsTableChecked = (async () => {
@@ -685,18 +752,30 @@ router.post("/payments/reconcile", async (req, res) => {
   if (applied === 0 && latest.providerPaymentId && effectiveStatus !== "succeeded") {
     try {
       const providerPayment = await getYookassaPayment(latest.providerPaymentId);
-      if (providerPayment?.status) {
+      const verification = verifyProviderPaymentMatchesRow(providerPayment, latest);
+      if (!verification.ok) {
+        logger.warn(
+          {
+            paymentId: latest.id,
+            providerPaymentId: latest.providerPaymentId,
+            sessionId,
+            reason: verification.reason,
+          },
+          "Payment reconcile provider verification failed",
+        );
+      } else if (providerPayment?.status) {
         effectiveStatus = providerPayment.status;
         await db
           .update(paymentsTable)
           .set({
             status: providerPayment.status,
             metadata: providerPayment as unknown as Record<string, unknown>,
+            webhookVerified: true,
             updatedAt: new Date(),
           })
           .where(eq(paymentsTable.id, latest.id));
       }
-      if (effectiveStatus === "succeeded") {
+      if (verification.ok && effectiveStatus === "succeeded") {
         applied = await applyCreditsIfNeededByPaymentId(latest.id);
       }
     } catch (err) {
@@ -722,8 +801,10 @@ router.post("/payments/webhook", async (req, res) => {
   }
   await ensurePaymentsTableReady();
 
-  const notification = parseYookassaNotification(req.body);
-  if (!notification) {
+  let notification: ReturnType<typeof parseYookassaNotification>;
+  try {
+    notification = parseYookassaNotification(req.body);
+  } catch {
     res.status(400).json({ error: "Invalid payload" });
     return;
   }
@@ -746,13 +827,44 @@ router.post("/payments/webhook", async (req, res) => {
     return;
   }
 
-  const nextStatus = notification.object.status;
+  let providerPayment;
+  try {
+    providerPayment = await getYookassaPayment(providerPaymentId);
+  } catch (err) {
+    logger.warn(
+      {
+        err,
+        paymentId: paymentRow.id,
+        providerPaymentId,
+      },
+      "Payment webhook provider verification request failed",
+    );
+    res.status(200).json({ ok: true, verified: false });
+    return;
+  }
+
+  const verification = verifyProviderPaymentMatchesRow(providerPayment, paymentRow);
+  if (!verification.ok) {
+    logger.warn(
+      {
+        paymentId: paymentRow.id,
+        providerPaymentId,
+        reason: verification.reason,
+      },
+      "Payment webhook provider verification failed",
+    );
+    res.status(200).json({ ok: true, verified: false });
+    return;
+  }
+
+  const nextStatus = providerPayment.status;
 
   await db
     .update(paymentsTable)
     .set({
       status: nextStatus,
-      metadata: notification.object as unknown as Record<string, unknown>,
+      metadata: providerPayment as unknown as Record<string, unknown>,
+      webhookVerified: true,
       updatedAt: new Date(),
     })
     .where(eq(paymentsTable.id, paymentRow.id));
