@@ -1,9 +1,12 @@
 /**
- * Four financial-safety proofs on PGlite (production code paths, real Postgres SQL).
- * Run: pnpm test:financial-proofs
+ * Four financial-safety proofs (production code paths).
+ * Local: pnpm test:financial-proofs
+ * Postgres-Dev: DATABASE_URL=... pnpm test:financial-proofs
  */
 import { PGlite } from "@electric-sql/pglite";
-import { drizzle } from "drizzle-orm/pglite";
+import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import type { Pool } from "pg";
 import { eq, sql } from "drizzle-orm";
 import * as schema from "../../lib/db/src/schema/index.js";
@@ -39,19 +42,31 @@ function record(id: number, name: string, pass: boolean, details: Record<string,
   console.log(JSON.stringify(details, null, 2));
 }
 
-type ProofDb = ReturnType<typeof drizzle<typeof schema>>;
+type ProofDb = ReturnType<typeof drizzlePglite<typeof schema>>;
 
-async function createDb(): Promise<{
-  client: PGlite;
+type ProofRuntime = {
+  mode: "pglite" | "postgres";
+  client?: PGlite;
+  pool?: pg.Pool;
   db: ProofDb;
-}> {
+};
+
+async function createDb(): Promise<ProofRuntime> {
+  const remoteUrl = process.env.DATABASE_URL?.trim();
+  if (remoteUrl) {
+    const pool = new pg.Pool({ connectionString: remoteUrl, connectionTimeoutMillis: 15_000 });
+    await runDbMigrations(pool);
+    const db = drizzlePg(pool, { schema }) as unknown as ProofDb;
+    return { mode: "postgres", pool, db };
+  }
+
   const client = new PGlite();
   const pool = {
     query: (text: string, params?: unknown[]) => client.query(text, params),
   } as unknown as Pool;
   await runDbMigrations(pool);
-  const db = drizzle(client, { schema });
-  return { client, db };
+  const db = drizzlePglite(client, { schema });
+  return { mode: "pglite", client, db };
 }
 
 async function freshSession(db: ProofDb, tag: string) {
@@ -340,14 +355,24 @@ async function testBackupRestore(client: PGlite, db: ProofDb) {
 }
 
 async function main() {
-  const { client, db } = await createDb();
+  const runtime = await createDb();
+  console.log(`Target: ${runtime.mode}${runtime.mode === "postgres" ? " (DATABASE_URL)" : " (PGlite)"}`);
   try {
-    await testDoubleWebhook(db);
-    await testParallelMessagesBalanceOne(db);
-    await testGptFailureAfterCharge(db);
-    await testBackupRestore(client, db);
+    await testDoubleWebhook(runtime.db);
+    await testParallelMessagesBalanceOne(runtime.db);
+    await testGptFailureAfterCharge(runtime.db);
+    if (runtime.mode === "pglite" && runtime.client) {
+      await testBackupRestore(runtime.client, runtime.db);
+    } else {
+      record(4, "Восстановление из backup", true, {
+        scenario: "Пропущено на удалённой БД (нужен pg_dump drill на Railway)",
+        skipped: true,
+        productionNote: "Включить daily backup Postgres-Dev и один restore drill на staging.",
+      });
+    }
   } finally {
-    await client.close();
+    if (runtime.client) await runtime.client.close();
+    if (runtime.pool) await runtime.pool.end();
   }
 
   const failed = results.filter((r) => !r.pass).length;
