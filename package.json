@@ -9,10 +9,17 @@
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test:e2e:smoke": "node scripts/e2e/smoke-chat-billing.mjs",
+    "test:readiness": "node scripts/diagnostics/test-group-readiness.mjs",
+    "test:financial-proofs": "tsx scripts/diagnostics/financial-safety-proofs.ts",
+    "verify:postgres-schema": "node scripts/diagnostics/verify-postgres-schema.mjs",
     "diagnostics:api": "node scripts/diagnostics/api-health.mjs"
   },
   "private": true,
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.1",
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.20.0",
+    "pg-mem": "^3.0.14",
     "playwright": "^1.59.1",
     "prettier": "^3.8.1",
     "typescript": "~5.9.2"

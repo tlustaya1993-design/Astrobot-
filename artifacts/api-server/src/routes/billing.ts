@@ -14,6 +14,10 @@ import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedEmail,
 } from "../lib/billing-policy.js";
+import {
+  settlePayment,
+  settlePaymentByInternalId,
+} from "../lib/settle-payment.js";
 
 const router: IRouter = Router();
 
@@ -304,38 +308,6 @@ async function ensurePaymentsTableReady(): Promise<void> {
   await paymentsTableChecked;
 }
 
-async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<number> {
-  return db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select()
-      .from(paymentsTable)
-      .where(eq(paymentsTable.id, paymentId))
-      .limit(1);
-
-    if (!locked) return 0;
-    if (locked.status !== "succeeded") return 0;
-    if (locked.creditsAppliedAt) return 0;
-
-    const updated = await tx
-      .update(usersTable)
-      .set({
-        requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.sessionId, locked.sessionId))
-      .returning({ id: usersTable.id });
-
-    if (updated.length === 0) return 0;
-
-    await tx
-      .update(paymentsTable)
-      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
-      .where(eq(paymentsTable.id, paymentId));
-
-    return locked.creditsGranted;
-  });
-}
-
 router.get("/credits", async (req, res) => {
   const sessionId = req.sessionId;
   if (!sessionId) {
@@ -572,25 +544,13 @@ router.post("/payments/reconcile", async (req, res) => {
   }
 
   let effectiveStatus = latest.status;
-  let applied = await applyCreditsIfNeededByPaymentId(latest.id);
+  let applied = 0;
 
-  // Fallback for cases when webhook was delayed/lost: reconcile directly with YooKassa.
-  if (applied === 0 && latest.providerPaymentId && effectiveStatus !== "succeeded") {
+  if (latest.providerPaymentId && effectiveStatus !== "succeeded") {
     try {
       const providerPayment = await getYookassaPayment(latest.providerPaymentId);
       if (providerPayment?.status) {
         effectiveStatus = providerPayment.status;
-        await db
-          .update(paymentsTable)
-          .set({
-            status: providerPayment.status,
-            metadata: providerPayment as unknown as Record<string, unknown>,
-            updatedAt: new Date(),
-          })
-          .where(eq(paymentsTable.id, latest.id));
-      }
-      if (effectiveStatus === "succeeded") {
-        applied = await applyCreditsIfNeededByPaymentId(latest.id);
       }
     } catch (err) {
       logger.warn(
@@ -603,6 +563,19 @@ router.post("/payments/reconcile", async (req, res) => {
         "Payment reconcile fallback via YooKassa failed",
       );
     }
+  }
+
+  if (latest.providerPaymentId) {
+    const result = await settlePayment(latest.providerPaymentId, {
+      status: effectiveStatus,
+      metadata: latest.metadata,
+    });
+    applied = result.applied;
+    effectiveStatus = result.status;
+  } else {
+    const result = await settlePaymentByInternalId(latest.id);
+    applied = result.applied;
+    effectiveStatus = result.status;
   }
 
   res.json({ ok: true, applied, status: effectiveStatus });
@@ -622,36 +595,32 @@ router.post("/payments/webhook", async (req, res) => {
   }
 
   const providerPaymentId = notification.object.id;
-  const [paymentRow] = await db
-    .select()
-    .from(paymentsTable)
-    .where(
-      and(
-        eq(paymentsTable.provider, "yookassa"),
-        eq(paymentsTable.providerPaymentId, providerPaymentId),
-      ),
-    )
-    .limit(1);
-
-  if (!paymentRow) {
-    logger.warn({ providerPaymentId }, "Unknown payment webhook");
-    res.status(200).json({ ok: true });
-    return;
-  }
-
   const nextStatus = notification.object.status;
 
-  await db
-    .update(paymentsTable)
-    .set({
+  try {
+    const result = await settlePayment(providerPaymentId, {
       status: nextStatus,
       metadata: notification.object as unknown as Record<string, unknown>,
-      updatedAt: new Date(),
-    })
-    .where(eq(paymentsTable.id, paymentRow.id));
+    });
 
-  if (nextStatus === "succeeded") {
-    await applyCreditsIfNeededByPaymentId(paymentRow.id);
+    if (result.status === "not_found") {
+      logger.warn({ providerPaymentId, event: "billing.webhook_unknown" }, "Unknown payment webhook");
+    } else {
+      logger.info(
+        {
+          event: "billing.webhook",
+          providerPaymentId,
+          status: result.status,
+          applied: result.applied,
+        },
+        "Payment webhook processed",
+      );
+    }
+  } catch (err) {
+    logger.error(
+      { err, providerPaymentId, event: "billing.webhook_error" },
+      "Payment webhook processing failed",
+    );
   }
 
   res.status(200).json({ ok: true });

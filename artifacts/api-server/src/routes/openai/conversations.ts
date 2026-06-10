@@ -28,9 +28,14 @@ import {
   isUnlimitedUser,
   getRemainingFreeRequests,
   canAffordRequest,
-  getBalanceAfterCharge,
   coerceNonNegInt,
 } from "../../lib/billing-policy.js";
+import {
+  commitMessageSend,
+  compensateMessageCharge,
+  InsufficientBalanceError,
+  type MessageChargeCommit,
+} from "../../lib/billing-ledger.js";
 import { parseAvatarJson } from "../../lib/avatar-config.js";
 
 const router: IRouter = Router();
@@ -137,27 +142,6 @@ function requireSessionId(
     return null;
   }
   return req.sessionId;
-}
-
-async function rollbackRequestCharge(
-  sessionId: string,
-  balanceBeforeCharge: number,
-  requestCost: number,
-  context: string,
-) {
-  if (requestCost <= 0) return;
-  try {
-    await db
-      .update(usersTable)
-      .set({
-        requestsUsed: sql`GREATEST(0, ${usersTable.requestsUsed} - ${requestCost})`,
-        requestsBalance: balanceBeforeCharge,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.sessionId, sessionId));
-  } catch (rollbackErr) {
-    logger.error({ err: rollbackErr }, context);
-  }
 }
 
 router.get("/conversations", async (req, res) => {
@@ -389,9 +373,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  let balanceBeforeCharge = 0;
-  let chargedRequestCost = 0;
-  let insertedUserId: number | undefined;
+  let messageCharge: MessageChargeCommit | null = null;
 
   try {
   const [conv] = await db
@@ -555,31 +537,31 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   markInFlight(sessionId);
 
-  const nextBalance = getBalanceAfterCharge(
-    usedBeforeCharge,
-    balanceBefore,
-    requestCost,
-    owner.email,
-  );
-
-  balanceBeforeCharge = balanceBefore;
-  chargedRequestCost = requestCost;
-
-  const [insertedUser] = await db
-    .insert(messages)
-    .values({ conversationId: id, role: "user", content: normalizedContent })
-    .returning({ id: messages.id });
-  insertedUserId = insertedUser?.id;
-
-  // Reserve quota atomically before streaming (free + paid units).
-  await db
-    .update(usersTable)
-    .set({
-      requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
-      requestsBalance: nextBalance,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.sessionId, sessionId));
+  try {
+    messageCharge = await commitMessageSend({
+      sessionId,
+      conversationId: id,
+      content: normalizedContent,
+      requestCost,
+    });
+  } catch (chargeErr) {
+    clearInFlight(sessionId);
+    if (chargeErr instanceof InsufficientBalanceError) {
+      logger.info(
+        { sessionId, usedBeforeCharge, balanceBefore, requestCost, remainingFree, freeLimit: FREE_REQUESTS_LIMIT },
+        "Request blocked: insufficient quota (locked)",
+      );
+      res.status(402).json({
+        error: `Лимит бесплатных запросов (${FREE_REQUESTS_LIMIT}) исчерпан. Пополните пакет, чтобы продолжить.`,
+        required: requestCost,
+        balance: balanceBefore,
+        freeRemaining: remainingFree,
+        isUnlimited,
+      });
+      return;
+    }
+    throw chargeErr;
+  }
 
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
     db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
@@ -740,10 +722,18 @@ router.post("/conversations/:id/messages", async (req, res) => {
       // Tag as 'astro' when the response was built with a full natal chart (date+time+coords),
       // meaning it likely contains house/planet assignments that become stale over deploys.
       const hasNatalHouses = !!(userProfile?.birthDate && userProfile?.birthTime && userProfile?.birthLat);
-      await Promise.all([
-        db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse, messageType: hasNatalHouses ? "astro" : "chat" }),
-        updateConversationDialogState(id, fullResponse, conv),
-      ]);
+      try {
+        await Promise.all([
+          db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse, messageType: hasNatalHouses ? "astro" : "chat" }),
+          updateConversationDialogState(id, fullResponse, conv),
+        ]);
+      } catch (persistErr) {
+        logger.error(
+          { err: persistErr, conversationId: id, sessionId, event: "ai.message_persist_failed" },
+          "Failed to persist assistant message",
+        );
+        throw persistErr;
+      }
 
       if (sessionId && fullResponse) {
         extractAndSaveMemories(sessionId, normalizedContent, fullResponse).catch(() => {});
@@ -768,12 +758,9 @@ router.post("/conversations/:id/messages", async (req, res) => {
           extra: exhaustedRetries ? `Попыток: ${aiAttempt + 1}` : undefined,
         },
       ).catch(() => {});
-      await rollbackRequestCharge(
-        sessionId,
-        balanceBeforeCharge,
-        chargedRequestCost,
-        "Failed to rollback request charge after stream error",
-      );
+      if (messageCharge) {
+        await compensateMessageCharge(messageCharge, sessionId, "generation_failed");
+      }
       safeWrite(`data: ${JSON.stringify({ error: userFacingMessage })}\n\n`);
       if (!res.writableEnded) {
         try { res.end(); } catch { /* ignore */ }
@@ -784,12 +771,9 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
   } catch (sseErr) {
     logger.error({ err: sseErr }, "Chat SSE setup or write failed");
-    await rollbackRequestCharge(
-      sessionId,
-      balanceBeforeCharge,
-      chargedRequestCost,
-      "Failed to rollback request charge after SSE failure",
-    );
+    if (messageCharge) {
+      await compensateMessageCharge(messageCharge, sessionId, "sse_failure");
+    }
     if (heartbeat) clearInterval(heartbeat);
     if (!res.headersSent) {
       res.status(500).json({
@@ -813,17 +797,9 @@ router.post("/conversations/:id/messages", async (req, res) => {
       endpoint: `POST /conversations/${id}/messages`,
       sessionId,
     }).catch(() => {});
-    if (insertedUserId != null) {
-      try {
-        await db.delete(messages).where(eq(messages.id, insertedUserId));
-      } catch { /* ignore */ }
+    if (messageCharge) {
+      await compensateMessageCharge(messageCharge, sessionId, "handler_error");
     }
-    await rollbackRequestCharge(
-      sessionId,
-      balanceBeforeCharge,
-      chargedRequestCost,
-      "Failed to rollback request charge after top-level handler error",
-    );
     if (!res.headersSent) {
       res.status(500).json({
         error:
