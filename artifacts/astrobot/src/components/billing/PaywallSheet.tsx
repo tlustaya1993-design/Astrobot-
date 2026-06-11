@@ -7,7 +7,7 @@ import AuthModal from '@/components/AuthModal';
 import { toast } from '@/hooks/use-toast';
 import { getAuthHeaders } from '@/lib/session';
 import { Input } from '@/components/ui/input';
-import { isPlausibleReceiptEmail } from '@/lib/receipt-email';
+import { isPlausibleReceiptEmail, resolveReceiptEmailForPayment } from '@/lib/receipt-email';
 
 const RECEIPT_EMAIL_STORAGE_KEY = 'astrobot_paywall_receipt_email';
 
@@ -53,14 +53,14 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
   const [guestReceiptEmail, setGuestReceiptEmail] = useState('');
 
   useEffect(() => {
-    if (!open || isLoggedIn) return;
+    if (!open) return;
     try {
       const saved = localStorage.getItem(RECEIPT_EMAIL_STORAGE_KEY);
       if (saved) setGuestReceiptEmail(saved);
     } catch {
       /* ignore */
     }
-  }, [open, isLoggedIn]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -80,22 +80,25 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
     [selectedCode],
   );
 
+  const receiptEmailForPay = useMemo(
+    () => resolveReceiptEmailForPayment(guestReceiptEmail, email),
+    [guestReceiptEmail, email],
+  );
+
+  const needsReceiptEmailInput = !isPlausibleReceiptEmail(receiptEmailForPay);
+
   const handlePay = async () => {
     if (!selected || loading) return;
     setError(null);
-    if (!isLoggedIn) {
-      if (!isPlausibleReceiptEmail(guestReceiptEmail)) {
-        setError('Введите email для чека (как в ЮKassa). Регистрация не нужна.');
-        return;
-      }
+    if (!isPlausibleReceiptEmail(receiptEmailForPay)) {
+      setError('Укажите email для чека');
+      return;
     }
     setLoading(true);
     try {
       const returnUrl = `${window.location.origin}/chat?payment=success`;
       try {
-        if (!isLoggedIn && guestReceiptEmail.trim()) {
-          localStorage.setItem(RECEIPT_EMAIL_STORAGE_KEY, guestReceiptEmail.trim().toLowerCase());
-        }
+        localStorage.setItem(RECEIPT_EMAIL_STORAGE_KEY, receiptEmailForPay);
       } catch {
         /* ignore */
       }
@@ -108,15 +111,25 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
         body: JSON.stringify({
           packageCode: selected.code,
           returnUrl,
-          ...(!isLoggedIn ? { receiptEmail: guestReceiptEmail.trim() } : {}),
+          receiptEmail: receiptEmailForPay,
         }),
       });
-      if (!res.ok) throw new Error('Не удалось создать платёж');
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          rejectCode?: string;
+        };
+        if (payload.rejectCode === 'missing_receipt_email') {
+          throw new Error('Укажите email для чека');
+        }
+        throw new Error(payload.error?.trim() || 'Не удалось создать платёж');
+      }
       const data = (await res.json()) as { confirmationUrl?: string | null };
       if (!data.confirmationUrl) throw new Error('Не пришла ссылка на оплату');
       window.location.href = data.confirmationUrl;
-    } catch {
-      setError('Не удалось открыть оплату. Попробуйте ещё раз.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Не удалось открыть оплату. Попробуйте ещё раз.';
+      setError(message);
       setLoading(false);
     }
   };
@@ -175,7 +188,7 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
                     <p className="text-sm text-muted-foreground mt-1">
                       Выберите пакет и оплатите через YooKassa. Вход не обязателен — запросы привязываются к этому устройству.
                     </p>
-                    {!isLoggedIn && (
+                    {needsReceiptEmailInput && (
                       <div className="mt-3 space-y-1.5">
                         <label className="text-xs text-muted-foreground" htmlFor="paywall-receipt-email">
                           Email для чека в ЮKassa
@@ -190,21 +203,26 @@ export default function PaywallSheet({ open, onClose, reason }: PaywallSheetProp
                           onChange={(e) => setGuestReceiptEmail(e.target.value)}
                           icon={<Mail className="size-5" />}
                         />
-                        <p className="text-[11px] text-muted-foreground leading-snug">
-                          Кстати: когда захотите, можно оформить аккаунт с этого же устройства — баланс и история останутся с вами. Не обязательно сразу.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setShowAuthModal(true)}
-                          className="text-xs text-primary hover:text-primary/80 underline underline-offset-2"
-                        >
-                          Уже есть аккаунт — войти или создать пароль
-                        </button>
+                        {!isLoggedIn && (
+                          <>
+                            <p className="text-[11px] text-muted-foreground leading-snug">
+                              Кстати: когда захотите, можно оформить аккаунт с этого же устройства — баланс и история останутся с вами. Не обязательно сразу.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setShowAuthModal(true)}
+                              className="text-xs text-primary hover:text-primary/80 underline underline-offset-2"
+                            >
+                              Уже есть аккаунт — войти или создать пароль
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
-                    {isLoggedIn && email && (
+                    {!needsReceiptEmailInput && (
                       <p className="text-xs text-muted-foreground mt-2">
-                        Чек будет отправлен на: <span className="text-foreground">{email}</span>
+                        Чек будет отправлен на:{' '}
+                        <span className="text-foreground">{receiptEmailForPay}</span>
                       </p>
                     )}
                   </div>

@@ -53,7 +53,14 @@ export async function createPayment(
   });
 
   if (!res.ok) {
-    throw new Error('Не удалось создать платёж');
+    const payload = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      rejectCode?: string;
+    };
+    if (payload.rejectCode === 'missing_receipt_email') {
+      throw new Error('Укажите email для чека');
+    }
+    throw new Error(payload.error?.trim() || 'Не удалось создать платёж');
   }
 
   const data = (await res.json()) as { confirmationUrl?: string | null };

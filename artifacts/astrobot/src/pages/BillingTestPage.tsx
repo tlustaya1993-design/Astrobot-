@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { BILLING_PACKAGES, createPayment, type BillingPackageCode } from '@/lib/billing';
 import { toast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
-import { isPlausibleReceiptEmail } from '@/lib/receipt-email';
+import { isPlausibleReceiptEmail, resolveReceiptEmailForPayment } from '@/lib/receipt-email';
 
 /**
  * Страница для ручной проверки оплаты YooKassa.
@@ -18,11 +18,13 @@ export default function BillingTestPage() {
   const [loading, setLoading] = useState<BillingPackageCode | null>(null);
   const [guestReceiptEmail, setGuestReceiptEmail] = useState('');
 
+  const receiptEmailForPay = resolveReceiptEmailForPayment(guestReceiptEmail, email);
+
   const handlePay = async (code: BillingPackageCode) => {
-    if (!isLoggedIn && !isPlausibleReceiptEmail(guestReceiptEmail)) {
+    if (!isPlausibleReceiptEmail(receiptEmailForPay)) {
       toast({
-        title: 'Нужен email для чека',
-        description: 'Введите email или войдите в аккаунт.',
+        title: 'Укажите email для чека',
+        description: 'Введите email для чека ЮKassa.',
         variant: 'destructive',
       });
       return;
@@ -30,7 +32,7 @@ export default function BillingTestPage() {
     setLoading(code);
     try {
       const { confirmationUrl } = await createPayment(code, {
-        receiptEmail: !isLoggedIn ? guestReceiptEmail.trim() : undefined,
+        receiptEmail: receiptEmailForPay,
       });
       window.location.href = confirmationUrl;
     } catch (e) {
@@ -51,10 +53,10 @@ export default function BillingTestPage() {
         и редирект на ЮKassa.
       </p>
 
-      {!isLoggedIn ? (
+      {!isPlausibleReceiptEmail(receiptEmailForPay) ? (
         <div className="rounded-xl border border-border/80 bg-card/50 p-4 text-sm mb-6 space-y-2">
           <p className="text-muted-foreground text-xs">
-            Без входа: укажите email для чека ЮKassa. Пакет привяжется к текущей сессии браузера.
+            Укажите email для чека ЮKassa. Пакет привяжется к текущей сессии браузера.
           </p>
           <Input
             type="email"
@@ -63,17 +65,19 @@ export default function BillingTestPage() {
             onChange={(e) => setGuestReceiptEmail(e.target.value)}
             icon={<Mail className="size-5" />}
           />
-          <p className="text-xs text-muted-foreground">
-            Или{' '}
-            <Link href="/chat" className="text-primary underline underline-offset-2">
-              войдите
-            </Link>
-            .
-          </p>
+          {!isLoggedIn && (
+            <p className="text-xs text-muted-foreground">
+              Или{' '}
+              <Link href="/chat" className="text-primary underline underline-offset-2">
+                войдите
+              </Link>
+              .
+            </p>
+          )}
         </div>
       ) : (
         <p className="text-xs text-muted-foreground mb-4">
-          Аккаунт: <span className="text-foreground">{email}</span>
+          Чек будет отправлен на: <span className="text-foreground">{receiptEmailForPay}</span>
         </p>
       )}
 
@@ -82,7 +86,7 @@ export default function BillingTestPage() {
           <button
             key={pkg.code}
             type="button"
-            disabled={loading !== null || (!isLoggedIn && !isPlausibleReceiptEmail(guestReceiptEmail))}
+            disabled={loading !== null || !isPlausibleReceiptEmail(receiptEmailForPay)}
             onClick={() => void handlePay(pkg.code)}
             className="w-full flex items-center justify-between gap-3 rounded-xl border border-border px-4 py-3 text-left hover:bg-secondary/30 disabled:opacity-50 transition"
           >
