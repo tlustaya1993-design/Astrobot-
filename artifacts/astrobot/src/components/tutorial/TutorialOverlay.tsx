@@ -182,6 +182,7 @@ export function TutorialOverlay() {
   const { step, isActive, next, skip } = useTutorial();
   const [spotRect, setSpotRect] = useState<SpotRect | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [missingTargetFallback, setMissingTargetFallback] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryRef = useRef(0);
 
@@ -190,6 +191,7 @@ export function TutorialOverlay() {
     if (!cfg || cfg.layout !== 'spotlight' || !cfg.targetId) {
       setSpotRect(null);
       setTooltipPos(null);
+      setMissingTargetFallback(false);
       return;
     }
     const el = document.querySelector<HTMLElement>(`[data-tutorial-id="${cfg.targetId}"]`);
@@ -211,15 +213,18 @@ export function TutorialOverlay() {
     };
     setSpotRect(spot);
     setTooltipPos(calcTooltipPos(spot));
+    setMissingTargetFallback(false);
   }, []);
 
   useEffect(() => {
     if (!isActive) {
       setSpotRect(null);
       setTooltipPos(null);
+      setMissingTargetFallback(false);
       return;
     }
     retryRef.current = 0;
+    setMissingTargetFallback(false);
     if (timerRef.current) clearTimeout(timerRef.current);
 
     const cfg = STEPS[step - 1];
@@ -245,11 +250,15 @@ export function TutorialOverlay() {
     const cfg = STEPS[step - 1];
     if (!cfg || cfg.layout !== 'spotlight' || spotRect !== null) return;
     if (!cfg.targetId) return;
-    if (retryRef.current >= 8) return;
+    if (missingTargetFallback) return;
+    if (retryRef.current >= 8) {
+      setMissingTargetFallback(true);
+      return;
+    }
     retryRef.current += 1;
     const t = setTimeout(() => measure(step), 200);
     return () => clearTimeout(t);
-  }, [step, isActive, spotRect, measure]);
+  }, [step, isActive, spotRect, missingTargetFallback, measure]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -270,6 +279,8 @@ export function TutorialOverlay() {
   const cfg = isActive ? STEPS[step - 1] : null;
   const isCentered = cfg?.layout === 'centered';
   const isSpotlight = cfg?.layout === 'spotlight';
+  const showCenteredCard = isCentered || (isSpotlight && missingTargetFallback);
+  const showSpotlight = isSpotlight && !missingTargetFallback;
   const isLast = step === TUTORIAL_TOTAL_STEPS;
 
   const content = (
@@ -284,7 +295,7 @@ export function TutorialOverlay() {
           className="fixed inset-0 z-[500]"
           style={{ isolation: 'isolate' }}
         >
-          {isCentered && (
+          {showCenteredCard && (
             <CenteredStepCard
               cfg={cfg}
               step={step}
@@ -294,7 +305,7 @@ export function TutorialOverlay() {
             />
           )}
 
-          {isSpotlight && (
+          {showSpotlight && (
             <>
               {spotRect ? (
                 <>
