@@ -1,13 +1,21 @@
 export type TopicAccompanimentMode = "fresh" | "ongoing" | "recheck";
 
+export interface TopicAccompanimentDialogState {
+  /** Astro signals already articulated in this conversation (proxy for central thesis). */
+  usedSignals: string[];
+  /** Completed assistant replies before the current user turn. */
+  assistantReplyCount: number;
+}
+
 export interface TopicAccompanimentAnalysis {
   mode: TopicAccompanimentMode;
   userTurn: number;
   /** Human-readable topic labels for the prompt (e.g. «деньги и ресурсы»). */
   sharedTopicLabels: string[];
   recentUserQuestions: string[];
-  hasDoubtSignals: boolean;
   isSameTopicThread: boolean;
+  centralThesisExists: boolean;
+  noNewStrongSignals: boolean;
 }
 
 const TOPIC_BUCKETS: { id: string; label: string; patterns: RegExp[] }[] = [
@@ -43,23 +51,6 @@ const TOPIC_BUCKETS: { id: string; label: string; patterns: RegExp[] }[] = [
   },
 ];
 
-const DOUBT_PATTERNS = [
-  /а\s+вдруг/i,
-  /а\s+если/i,
-  /а\s+что\s+если/i,
-  /не\s+уверен/i,
-  /сомнева/i,
-  /боюсь/i,
-  /страшно/i,
-  /тревож/i,
-  /правда\s+ли/i,
-  /точно\s+ли/i,
-  /не\s+ошиба/i,
-  /перепровер/i,
-  /ещё\s+раз\s+посмотр/i,
-  /снова\s+посмотр/i,
-];
-
 const MAX_RECENT_QUESTION_CHARS = 160;
 
 function truncateQuestion(text: string): string {
@@ -68,7 +59,7 @@ function truncateQuestion(text: string): string {
   return `${normalized.slice(0, MAX_RECENT_QUESTION_CHARS - 1).trimEnd()}…`;
 }
 
-/** Detect thematic buckets in user text (excluding pure fear markers). */
+/** Detect thematic buckets in user text. */
 export function detectTopicBuckets(text: string): string[] {
   const found: string[] = [];
   for (const bucket of TOPIC_BUCKETS) {
@@ -82,10 +73,6 @@ export function detectTopicBuckets(text: string): string[] {
 export function detectTopicLabels(text: string): string[] {
   const ids = detectTopicBuckets(text);
   return TOPIC_BUCKETS.filter((b) => ids.includes(b.id)).map((b) => b.label);
-}
-
-export function hasDoubtSignals(text: string): boolean {
-  return DOUBT_PATTERNS.some((re) => re.test(text));
 }
 
 function sharedBucketIds(bucketSets: string[][]): string[] {
@@ -102,49 +89,78 @@ function bucketsToLabels(ids: string[]): string[] {
   return TOPIC_BUCKETS.filter((b) => ids.includes(b.id)).map((b) => b.label);
 }
 
+/** A life-theme bucket appears in at least two user turns. */
+function hasThematicContinuity(bucketSets: string[][]): boolean {
+  const counts = new Map<string, number>();
+  for (const set of bucketSets) {
+    for (const id of set) {
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+  }
+  return [...counts.values()].some((c) => c >= 2);
+}
+
+/** Adjacent user turns share at least one thematic bucket. */
+function hasAdjacentThematicLink(bucketSets: string[][]): boolean {
+  for (let i = 1; i < bucketSets.length; i++) {
+    if (sharedBucketIds([bucketSets[i - 1]!, bucketSets[i]!]).length > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function detectSameTopicThread(bucketSets: string[][]): boolean {
+  if (bucketSets.length < 2) return false;
+  return hasThematicContinuity(bucketSets) || hasAdjacentThematicLink(bucketSets);
+}
+
 /**
- * Heuristic: several user turns around the same life theme (money, work, fears…).
- * No LLM, no DB — only recent user messages in the current conversation.
+ * Current user turn did not introduce a thematic bucket absent from prior turns.
+ * Proxy for «no new strong signals» in the user's framing.
  */
-export function analyzeTopicAccompaniment(userMessages: string[]): TopicAccompanimentAnalysis {
+function detectNoNewStrongSignals(bucketSets: string[][]): boolean {
+  if (bucketSets.length < 2) return false;
+  const prior = unionBucketIds(bucketSets.slice(0, -1));
+  const current = bucketSets.at(-1) ?? [];
+  if (current.length === 0) return true;
+  return current.every((id) => prior.includes(id));
+}
+
+function detectCentralThesisExists(dialogState: TopicAccompanimentDialogState): boolean {
+  return dialogState.assistantReplyCount >= 1;
+}
+
+/**
+ * Multi-turn topic accompaniment from user messages + lightweight dialog state.
+ * Recheck is dialog-state driven, not tied to doubt wording in user messages.
+ */
+export function analyzeTopicAccompaniment(
+  userMessages: string[],
+  dialogState: TopicAccompanimentDialogState = { usedSignals: [], assistantReplyCount: 0 },
+): TopicAccompanimentAnalysis {
   const userTurn = userMessages.length;
   const recentUserQuestions = userMessages.slice(-4).map(truncateQuestion);
-  const doubtFlags = userMessages.map(hasDoubtSignals);
-  const hasDoubtInThread = doubtFlags.some(Boolean);
   const bucketSets = userMessages.map(detectTopicBuckets);
 
-  if (userTurn < 2) {
-    return {
-      mode: "fresh",
-      userTurn,
-      sharedTopicLabels: [],
-      recentUserQuestions,
-      hasDoubtSignals: hasDoubtInThread,
-      isSameTopicThread: false,
-    };
-  }
+  const isSameTopicThread = detectSameTopicThread(bucketSets);
+  const centralThesisExists = detectCentralThesisExists(dialogState);
+  const noNewStrongSignals = detectNoNewStrongSignals(bucketSets);
 
-  const recentSets = bucketSets.slice(-3);
-  const sharedRecent = sharedBucketIds(recentSets);
-  const unionRecent = unionBucketIds(recentSets);
-  const doubtSpiral =
-    doubtFlags.slice(-3).filter(Boolean).length >= 2 &&
-    unionRecent.length > 0;
-
-  const isSameTopicThread =
-    sharedRecent.length > 0 ||
-    doubtSpiral ||
-    (hasDoubtInThread && unionBucketIds(bucketSets).length > 0);
-
-  const labelSource = sharedRecent.length > 0 ? sharedRecent : unionBucketIds(bucketSets);
+  const labelSource = isSameTopicThread
+    ? sharedBucketIds(bucketSets).length > 0
+      ? sharedBucketIds(bucketSets)
+      : unionBucketIds(bucketSets)
+    : [];
   const sharedTopicLabels = bucketsToLabels(labelSource);
-
-  const currentHasDoubt = doubtFlags.at(-1) ?? false;
-  const priorDoubt = doubtFlags.slice(0, -1).some(Boolean);
 
   let mode: TopicAccompanimentMode = "fresh";
   if (isSameTopicThread) {
-    mode = currentHasDoubt && (priorDoubt || userTurn >= 3) ? "recheck" : "ongoing";
+    if (centralThesisExists && noNewStrongSignals) {
+      mode = "recheck";
+    } else {
+      mode = "ongoing";
+    }
   }
 
   return {
@@ -152,8 +168,9 @@ export function analyzeTopicAccompaniment(userMessages: string[]): TopicAccompan
     userTurn,
     sharedTopicLabels,
     recentUserQuestions,
-    hasDoubtSignals: hasDoubtInThread,
     isSameTopicThread,
+    centralThesisExists,
+    noNewStrongSignals,
   };
 }
 
@@ -212,7 +229,7 @@ export function buildTopicAccompanimentPromptBlock(
     lines.push(
       "",
       "РЕЖИМ ПЕРЕПРОВЕРКИ",
-      "Пользователь снова сомневается в том же выводе.",
+      "Диалог продолжает ту же тему; центральный вывод уже сформирован; новый вопрос не принёс нового сильного сигнала.",
       "Посмотри карту другим углом (другой дом, управитель, слой, горизонт).",
       "Если картина не меняется — профессионально скажи, например:",
       "«Я ещё раз посмотрел карту другим способом. Основной вывод не изменился. Новых факторов, которые существенно меняют картину, сейчас не вижу.»",
