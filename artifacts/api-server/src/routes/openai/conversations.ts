@@ -599,10 +599,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   const topicAccompaniment = analyzeTopicAccompaniment(
     history.filter((m) => m.role === "user").map((m) => m.content),
-    {
-      usedSignals,
-      assistantReplyCount: history.filter((m) => m.role === "assistant").length,
-    },
+    { usedSignals },
   );
 
   const systemPrompt = safeBuildSystemPrompt(

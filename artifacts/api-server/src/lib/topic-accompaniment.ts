@@ -1,10 +1,8 @@
 export type TopicAccompanimentMode = "fresh" | "ongoing" | "recheck";
 
 export interface TopicAccompanimentDialogState {
-  /** Astro signals already articulated in this conversation (proxy for central thesis). */
+  /** Astro signals already articulated in this conversation (✦ / usedSignalsJson). */
   usedSignals: string[];
-  /** Completed assistant replies before the current user turn. */
-  assistantReplyCount: number;
 }
 
 export interface TopicAccompanimentAnalysis {
@@ -51,12 +49,39 @@ const TOPIC_BUCKETS: { id: string; label: string; patterns: RegExp[] }[] = [
   },
 ];
 
+const PLANET_PATTERNS: { id: string; re: RegExp }[] = [
+  { id: "sun", re: /солнц/i },
+  { id: "moon", re: /лун/i },
+  { id: "mercury", re: /меркури/i },
+  { id: "venus", re: /венер/i },
+  { id: "mars", re: /марс/i },
+  { id: "jupiter", re: /юпитер/i },
+  { id: "saturn", re: /сатурн/i },
+  { id: "uranus", re: /уран/i },
+  { id: "neptune", re: /нептун/i },
+  { id: "pluto", re: /плутон/i },
+  { id: "chiron", re: /хирон/i },
+  { id: "lilith", re: /лилит/i },
+  { id: "nodes", re: /узл/i },
+  { id: "asc", re: /асцендент|асц/i },
+  { id: "mc", re: /\bмс\b|mc\b|середина\s+неба/i },
+];
+
+const HOUSE_PATTERN = /(?:^|[\s,.;(])(\d{1,2})\s*[-]?\s*(?:й\s+)?дом(?:е|а|у|ом|ов)?/gi;
+
+/** Short follow-up without a new life-theme keyword — implicit same thread. */
+const IMPLICIT_CONTINUATION_MAX_CHARS = 80;
+
 const MAX_RECENT_QUESTION_CHARS = 160;
 
 function truncateQuestion(text: string): string {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= MAX_RECENT_QUESTION_CHARS) return normalized;
   return `${normalized.slice(0, MAX_RECENT_QUESTION_CHARS - 1).trimEnd()}…`;
+}
+
+function normalizeUserText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }
 
 /** Detect thematic buckets in user text. */
@@ -75,6 +100,23 @@ export function detectTopicLabels(text: string): string[] {
   return TOPIC_BUCKETS.filter((b) => ids.includes(b.id)).map((b) => b.label);
 }
 
+/** Explicit planets / houses in user text (for no_new_strong_signals). */
+export function extractStrongAstroTokens(text: string): string[] {
+  const tokens = new Set<string>();
+  const normalized = normalizeUserText(text);
+
+  for (const { id, re } of PLANET_PATTERNS) {
+    if (re.test(normalized)) tokens.add(`planet:${id}`);
+  }
+
+  for (const match of normalized.matchAll(HOUSE_PATTERN)) {
+    const n = Number.parseInt(match[1] ?? "", 10);
+    if (n >= 1 && n <= 12) tokens.add(`house:${n}`);
+  }
+
+  return [...tokens];
+}
+
 function sharedBucketIds(bucketSets: string[][]): string[] {
   if (bucketSets.length === 0) return [];
   const [first, ...rest] = bucketSets;
@@ -89,7 +131,6 @@ function bucketsToLabels(ids: string[]): string[] {
   return TOPIC_BUCKETS.filter((b) => ids.includes(b.id)).map((b) => b.label);
 }
 
-/** A life-theme bucket appears in at least two user turns. */
 function hasThematicContinuity(bucketSets: string[][]): boolean {
   const counts = new Map<string, number>();
   for (const set of bucketSets) {
@@ -100,7 +141,6 @@ function hasThematicContinuity(bucketSets: string[][]): boolean {
   return [...counts.values()].some((c) => c >= 2);
 }
 
-/** Adjacent user turns share at least one thematic bucket. */
 function hasAdjacentThematicLink(bucketSets: string[][]): boolean {
   for (let i = 1; i < bucketSets.length; i++) {
     if (sharedBucketIds([bucketSets[i - 1]!, bucketSets[i]!]).length > 0) {
@@ -110,47 +150,88 @@ function hasAdjacentThematicLink(bucketSets: string[][]): boolean {
   return false;
 }
 
-function detectSameTopicThread(bucketSets: string[][]): boolean {
-  if (bucketSets.length < 2) return false;
-  return hasThematicContinuity(bucketSets) || hasAdjacentThematicLink(bucketSets);
+function hasNewAstroTokens(currentText: string, priorMessages: string[]): boolean {
+  const priorTokens = new Set<string>();
+  for (const msg of priorMessages) {
+    for (const token of extractStrongAstroTokens(msg)) {
+      priorTokens.add(token);
+    }
+  }
+  for (const token of extractStrongAstroTokens(currentText)) {
+    if (!priorTokens.has(token)) return true;
+  }
+  return false;
 }
 
-/**
- * Current user turn did not introduce a thematic bucket absent from prior turns.
- * Proxy for «no new strong signals» in the user's framing.
- */
-function detectNoNewStrongSignals(bucketSets: string[][]): boolean {
+function hasNewThematicBucket(bucketSets: string[][]): boolean {
   if (bucketSets.length < 2) return false;
   const prior = unionBucketIds(bucketSets.slice(0, -1));
   const current = bucketSets.at(-1) ?? [];
-  if (current.length === 0) return true;
-  return current.every((id) => prior.includes(id));
-}
-
-function detectCentralThesisExists(dialogState: TopicAccompanimentDialogState): boolean {
-  return dialogState.assistantReplyCount >= 1;
+  if (current.length === 0) return false;
+  return current.some((id) => !prior.includes(id));
 }
 
 /**
- * Multi-turn topic accompaniment from user messages + lightweight dialog state.
- * Recheck is dialog-state driven, not tied to doubt wording in user messages.
+ * Short reply with no new bucket while the thread already has a life-theme anchor.
+ */
+function isImplicitContinuation(
+  userMessages: string[],
+  bucketSets: string[][],
+): boolean {
+  if (userMessages.length < 2) return false;
+
+  const currentText = normalizeUserText(userMessages.at(-1) ?? "");
+  if (!currentText || currentText.length > IMPLICIT_CONTINUATION_MAX_CHARS) return false;
+
+  const priorBuckets = unionBucketIds(bucketSets.slice(0, -1));
+  if (priorBuckets.length === 0) return false;
+
+  const currentBuckets = bucketSets.at(-1) ?? [];
+  if (currentBuckets.some((id) => !priorBuckets.includes(id))) return false;
+
+  return true;
+}
+
+function detectSameTopicThread(userMessages: string[], bucketSets: string[][]): boolean {
+  if (bucketSets.length < 2) return false;
+  return (
+    hasThematicContinuity(bucketSets) ||
+    hasAdjacentThematicLink(bucketSets) ||
+    isImplicitContinuation(userMessages, bucketSets)
+  );
+}
+
+function detectNoNewStrongSignals(userMessages: string[], bucketSets: string[][]): boolean {
+  if (bucketSets.length < 2) return false;
+  const current = userMessages.at(-1) ?? "";
+  const prior = userMessages.slice(0, -1);
+  return !hasNewThematicBucket(bucketSets) && !hasNewAstroTokens(current, prior);
+}
+
+function detectCentralThesisExists(dialogState: TopicAccompanimentDialogState): boolean {
+  return dialogState.usedSignals.length > 0;
+}
+
+/**
+ * Multi-turn topic accompaniment from user messages + usedSignals (no LLM, no DB writes).
+ * Recheck: same topic + thesis in usedSignals + no new bucket/astro markers in current turn.
  */
 export function analyzeTopicAccompaniment(
   userMessages: string[],
-  dialogState: TopicAccompanimentDialogState = { usedSignals: [], assistantReplyCount: 0 },
+  dialogState: TopicAccompanimentDialogState = { usedSignals: [] },
 ): TopicAccompanimentAnalysis {
   const userTurn = userMessages.length;
   const recentUserQuestions = userMessages.slice(-4).map(truncateQuestion);
   const bucketSets = userMessages.map(detectTopicBuckets);
 
-  const isSameTopicThread = detectSameTopicThread(bucketSets);
+  const isSameTopicThread = detectSameTopicThread(userMessages, bucketSets);
   const centralThesisExists = detectCentralThesisExists(dialogState);
-  const noNewStrongSignals = detectNoNewStrongSignals(bucketSets);
+  const noNewStrongSignals = detectNoNewStrongSignals(userMessages, bucketSets);
 
   const labelSource = isSameTopicThread
     ? sharedBucketIds(bucketSets).length > 0
       ? sharedBucketIds(bucketSets)
-      : unionBucketIds(bucketSets)
+      : unionBucketIds(bucketSets.slice(0, -1))
     : [];
   const sharedTopicLabels = bucketsToLabels(labelSource);
 
@@ -174,7 +255,7 @@ export function analyzeTopicAccompaniment(
   };
 }
 
-/** Prompt block for multi-turn topic research. Returns null when not active. */
+/** Prompt block — only topic-specific deltas; общие правила в РЕЖИМ ПОДДЕРЖАНИЯ БЕСЕДЫ выше. */
 export function buildTopicAccompanimentPromptBlock(
   analysis: TopicAccompanimentAnalysis,
 ): string | null {
@@ -190,6 +271,7 @@ export function buildTopicAccompanimentPromptBlock(
     "",
     `Пользователь ${analysis.userTurn} сообщений подряд исследует одну тему: ${topicLine}.`,
     "Это продолжение исследования, а не новый запрос с нуля.",
+    "Общие правила порядка (сначала карта, потом сверка), списка уже разобранного и углубления — в блоке «РЕЖИМ ПОДДЕРЖАНИЯ БЕСЕДЫ» выше.",
   ];
 
   if (analysis.recentUserQuestions.length > 0) {
@@ -199,37 +281,19 @@ export function buildTopicAccompanimentPromptBlock(
     }
   }
 
-  lines.push(
-    "",
-    "Центральный вывод",
-    "После первого содержательного ответа по этой теме сформируй для себя рабочий центральный вывод (например: «перестройка модели дохода, а не финансовый крах»).",
-    "Это не истина и не догма — текущая рабочая картина из карты и диалога.",
-    "Не цитируй её как мантру; озвучивай только если помогает углубить ответ.",
-    "",
-    "Порядок работы (обязателен)",
-    "1. СНАЧАЛА заново посмотри в карту (профиль выше) под текущий вопрос.",
-    "2. ТОЛЬКО ПОТОМ сверь с прошлым выводом в этом диалоге (включая твой последний ответ в истории).",
-    "3. Никогда наоборот: не защищай старый вывод и не подгоняй карту под него.",
-    "4. Если новый анализ меняет картину — обнови вывод открыто.",
-    "5. Если не меняет — скажи честно; не переупаковывай теми же словами.",
-    "",
-    "Углубление (без лестницы методов)",
-    "Перед ответом спроси себя: есть ли астрологический слой (другой дом, управитель, прогрессии, соляр, другой горизонт), который реально добавит новую информацию по ЭТОЙ теме?",
-    "— Если да — используй его.",
-    "— Если нет — не выдумывай и не переключайся на прогрессии/соляр только потому что это уже N-й вопрос.",
-    "Астрология нелинейна: запрещена схема «1-й вопрос → транзиты, 2-й → натал, 3-й → прогрессии, 4-й → соляр».",
-    "",
-    "Повторы",
-    "Важные факторы можно напомнить коротко («как уже смотрели» — одна фраза).",
-    "Запрещено десять раз переупаковывать один и тот же вывод разными словами.",
-    "Цель: картина становится глубже, а не «10 раз про один и тот же Юпитер».",
-  );
+  if (analysis.mode === "ongoing") {
+    lines.push(
+      "",
+      "Сейчас активен режим углубления: в текущем вопросе появился новый жизненный или астрологический акцент.",
+      "Ищи новый слой в карте только если он реально меняет или уточняет картину по этой теме.",
+    );
+  }
 
   if (analysis.mode === "recheck") {
     lines.push(
       "",
       "РЕЖИМ ПЕРЕПРОВЕРКИ",
-      "Диалог продолжает ту же тему; центральный вывод уже сформирован; новый вопрос не принёс нового сильного сигнала.",
+      "Тема та же; в usedSignals уже есть опора из ✦; текущий вопрос не добавил нового жизненного bucket и не ввёл новых планет/домов.",
       "Посмотри карту другим углом (другой дом, управитель, слой, горизонт).",
       "Если картина не меняется — профессионально скажи, например:",
       "«Я ещё раз посмотрел карту другим способом. Основной вывод не изменился. Новых факторов, которые существенно меняют картину, сейчас не вижу.»",

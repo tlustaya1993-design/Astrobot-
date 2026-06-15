@@ -3,12 +3,14 @@ import {
   analyzeTopicAccompaniment,
   buildTopicAccompanimentPromptBlock,
   detectTopicBuckets,
+  extractStrongAstroTokens,
 } from "../topic-accompaniment.js";
 
 const WITH_THESIS = {
   usedSignals: ["Транзитный Юпитер △ натальное Солнце"],
-  assistantReplyCount: 1,
 };
+
+const NO_THESIS = { usedSignals: [] as string[] };
 
 describe("detectTopicBuckets", () => {
   it("detects money and work themes", () => {
@@ -17,14 +19,15 @@ describe("detectTopicBuckets", () => {
   });
 });
 
-describe("analyzeTopicAccompaniment", () => {
-  const moneySpiral = [
-    "Боюсь остаться без денег",
-    "А вдруг я останусь без денег?",
-    "А если меня никто не наймёт?",
-    "А если AstroBot не взлетит?",
-  ];
+describe("extractStrongAstroTokens", () => {
+  it("detects planets and houses", () => {
+    const tokens = extractStrongAstroTokens("Расскажи про Марс в 10 доме");
+    expect(tokens).toContain("planet:mars");
+    expect(tokens).toContain("house:10");
+  });
+});
 
+describe("analyzeTopicAccompaniment", () => {
   it("stays fresh on the first user turn", () => {
     const a = analyzeTopicAccompaniment(["Боюсь остаться без денег"], WITH_THESIS);
     expect(a.mode).toBe("fresh");
@@ -46,12 +49,9 @@ describe("analyzeTopicAccompaniment", () => {
     expect(a.centralThesisExists).toBe(true);
   });
 
-  it("enters recheck from dialog state, not doubt wording", () => {
+  it("enters recheck only with usedSignals and no new strong signals", () => {
     const a = analyzeTopicAccompaniment(
-      [
-        "Боюсь остаться без денег",
-        "А вдруг я останусь без денег?",
-      ],
+      ["Боюсь остаться без денег", "А вдруг я останусь без денег?"],
       WITH_THESIS,
     );
     expect(a.isSameTopicThread).toBe(true);
@@ -60,13 +60,37 @@ describe("analyzeTopicAccompaniment", () => {
     expect(a.mode).toBe("recheck");
   });
 
-  it("stays ongoing without a formed central thesis", () => {
+  it("stays ongoing without usedSignals even on same topic", () => {
     const a = analyzeTopicAccompaniment(
       ["Боюсь остаться без денег", "А вдруг я останусь без денег?"],
-      { usedSignals: [], assistantReplyCount: 0 },
+      NO_THESIS,
     );
     expect(a.isSameTopicThread).toBe(true);
     expect(a.centralThesisExists).toBe(false);
+    expect(a.mode).toBe("ongoing");
+  });
+
+  it("implicit continuation: short doubt without bucket stays same thread", () => {
+    const a = analyzeTopicAccompaniment(
+      ["Боюсь остаться без денег", "А вдруг я ошибаюсь?"],
+      WITH_THESIS,
+    );
+    expect(a.isSameTopicThread).toBe(true);
+    expect(a.noNewStrongSignals).toBe(true);
+    expect(a.mode).toBe("recheck");
+  });
+
+  it("new astro terms in current turn prevent recheck", () => {
+    const a = analyzeTopicAccompaniment(
+      [
+        "Боюсь остаться без денег",
+        "А вдруг я останусь без денег?",
+        "А что скажешь про Сатурн в 2 доме?",
+      ],
+      WITH_THESIS,
+    );
+    expect(a.isSameTopicThread).toBe(true);
+    expect(a.noNewStrongSignals).toBe(false);
     expect(a.mode).toBe("ongoing");
   });
 
@@ -97,7 +121,7 @@ describe("buildTopicAccompanimentPromptBlock", () => {
       ),
     );
     expect(recheck).toContain("РЕЖИМ ПЕРЕПРОВЕРКИ");
-    expect(recheck).toContain("не принёс нового сильного сигнала");
+    expect(recheck).not.toContain("СНАЧАЛА заново посмотри");
 
     const ongoing = buildTopicAccompanimentPromptBlock(
       analyzeTopicAccompaniment(
@@ -110,6 +134,7 @@ describe("buildTopicAccompanimentPromptBlock", () => {
       ),
     );
     expect(ongoing).toContain("РЕЖИМ СОПРОВОЖДЕНИЯ ОДНОЙ ТЕМЫ");
+    expect(ongoing).toContain("режим углубления");
     expect(ongoing).not.toContain("РЕЖИМ ПЕРЕПРОВЕРКИ");
   });
 });
