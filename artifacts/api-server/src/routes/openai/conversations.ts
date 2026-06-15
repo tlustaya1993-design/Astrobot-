@@ -24,6 +24,11 @@ import {
   dedupeSignals,
 } from "../../lib/dialogState.js";
 import {
+  analyzeTopicAccompaniment,
+  buildTopicAccompanimentPromptBlock,
+  type TopicAccompanimentAnalysis,
+} from "../../lib/topic-accompaniment.js";
+import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedUser,
   getRemainingFreeRequests,
@@ -609,6 +614,12 @@ router.post("/conversations/:id/messages", async (req, res) => {
     !hookAffirmation &&
     isShortContinuationPhrase(normalizedContent) &&
     usedSignals.length > 0;
+
+  const topicAccompaniment = analyzeTopicAccompaniment(
+    history.filter((m) => m.role === "user").map((m) => m.content),
+    { usedSignals },
+  );
+
   const systemPrompt = safeBuildSystemPrompt(
     userProfile,
     contactProfile,
@@ -618,6 +629,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     lastHookTopic,
     hookAffirmation,
     isShortContinuation,
+    topicAccompaniment,
   );
 
   // Astro assistant messages are mostly stripped from LLM history: their house/planet
@@ -994,7 +1006,10 @@ function buildDialogStatePromptBlock(opts: {
 Если пользователь коротко согласился («да», «давай», «ок», «продолжай», «ещё») — и до этого была предложена конкретная тема — разверни именно эту тему. Полный текст предложенной темы передаётся ниже как lastHookTopic. Начинай ответ с неё, не с общего разбора транзитов.
 
 3. Продолжение темы.
-Если пользователь просит продолжить без конкретного крючка — не повторяй базовый вывод прошлого ответа. Дай новый слой анализа.
+Если пользователь просит продолжить без конкретного крючка — не повторяй базовый вывод прошлого ответа. Дай новый слой анализа, если он реально есть в карте; иначе честно скажи, что новый астрологический слой сейчас не добавляет картины.
+
+3a. Сопровождение одной темы.
+Если активен блок «РЕЖИМ СОПРОВОЖДЕНИЯ ОДНОЙ ТЕМЫ» ниже — он имеет приоритет над общим разбором. Сначала карта, потом сверка с прошлым выводом; не защищай старый вывод.
 
 4. Сохраняй контекст темы.
 Когда разворачиваешь новый слой анализа (соляр, прогрессии, натальная механика, синастрия и т.д.), сохраняй тему текущего разговора.
@@ -1045,6 +1060,7 @@ function safeBuildSystemPrompt(
   lastHookTopic: string | null = null,
   hookAffirmation = false,
   isShortContinuation = false,
+  topicAccompaniment: TopicAccompanimentAnalysis | null = null,
 ): string {
   try {
     return buildSystemPrompt(
@@ -1056,6 +1072,7 @@ function safeBuildSystemPrompt(
       lastHookTopic,
       hookAffirmation,
       isShortContinuation,
+      topicAccompaniment,
     );
   } catch (err) {
     logger.error({ err }, "buildSystemPrompt failed; using fallback system prompt");
@@ -1267,6 +1284,7 @@ function buildSystemPrompt(
   lastHookTopic: string | null = null,
   hookAffirmation = false,
   isShortContinuation = false,
+  topicAccompaniment: TopicAccompanimentAnalysis | null = null,
 ): string {
   const { natalChart, natalSection, ephemerisSection, solarRetSection, progressSection, lunarRetSection, solarArcSection, transitPerfSection, validation: userValidation } = calcUserData(user);
 
@@ -1314,14 +1332,27 @@ function buildSystemPrompt(
   }
   const warningBlock = warningLines.length > 0 ? `\n${warningLines.join("\n")}\n` : "";
 
+  const topicAccompanimentBlock = topicAccompaniment
+    ? buildTopicAccompanimentPromptBlock(topicAccompaniment)
+    : null;
+
   const usedSignalsBlock =
-    usedSignals.length > 0 || lastHookTopic || hookAffirmation || isShortContinuation
-      ? buildDialogStatePromptBlock({
-          hookAffirmation,
-          isShortContinuation,
-          lastHookTopic,
-          usedSignals,
-        })
+    usedSignals.length > 0 ||
+    lastHookTopic ||
+    hookAffirmation ||
+    isShortContinuation ||
+    topicAccompanimentBlock
+      ? [
+          buildDialogStatePromptBlock({
+            hookAffirmation,
+            isShortContinuation,
+            lastHookTopic,
+            usedSignals,
+          }),
+          topicAccompanimentBlock ?? "",
+        ]
+          .filter(Boolean)
+          .join("\n")
       : "";
 
   const memoriesSection = memories.length > 0
