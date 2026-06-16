@@ -45,6 +45,7 @@ const REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN?.trim() || "";
 
 type ReconcilePaymentRow = Pick<Payment, "id" | "status" | "providerPaymentId">;
 type ReconcileProviderPayment = { status?: string } & Record<string, unknown>;
+type ReconcileWarn = (details: Record<string, unknown>, message: string) => void;
 
 export async function reconcileYookassaPaymentRows(
   payments: ReconcilePaymentRow[],
@@ -56,7 +57,7 @@ export async function reconcileYookassaPaymentRows(
       paymentId: number,
       providerPayment: ReconcileProviderPayment & { status: string },
     ) => Promise<void>;
-    warn: typeof logger.warn;
+    warn: ReconcileWarn;
   },
 ): Promise<{ applied: number; status: string }> {
   let applied = 0;
