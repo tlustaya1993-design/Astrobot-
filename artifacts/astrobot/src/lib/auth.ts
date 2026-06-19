@@ -11,7 +11,7 @@ export interface AuthResponse {
 export async function apiRegister(email: string, password: string, sessionId?: string): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ email, password, sessionId }),
   });
   const data = await res.json();
