@@ -1,20 +1,20 @@
-import type { Payment } from "@workspace/db";
 import type { YooKassaPaymentObject } from "./yookassa.js";
 
-type PaymentForSettlement = Pick<
-  Payment,
-  | "providerPaymentId"
-  | "appPaymentId"
-  | "sessionId"
-  | "packageCode"
-  | "creditsGranted"
-  | "amountRub"
-  | "currency"
->;
+type PaymentForSettlement = {
+  providerPaymentId: string;
+  appPaymentId: string;
+  sessionId: string;
+  packageCode: string;
+  creditsGranted: number;
+  amountRub: string;
+  currency: string;
+};
 
-type SettlementVerification =
-  | { ok: true; payment: YooKassaPaymentObject }
-  | { ok: false; reason: string; payment: YooKassaPaymentObject };
+type SettlementVerification = {
+  ok: boolean;
+  reason?: string;
+  payment: YooKassaPaymentObject;
+};
 
 function amountToMinorUnits(value: string | null | undefined): number | null {
   if (!value) return null;
