@@ -8,7 +8,16 @@ import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "astrobot-dev-secret-change-in-production";
+function resolveJwtSecret(): string {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET is required in production");
+  }
+  return "astrobot-dev-secret-change-in-production";
+}
+
+const JWT_SECRET = resolveJwtSecret();
 const SALT_ROUNDS = 10;
 const TOKEN_TTL = "365d";
 const OAUTH_STATE_TTL = "10m";
@@ -203,6 +212,11 @@ router.post("/register", async (req, res) => {
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
   if (existingSessionId) {
+    if (req.sessionId !== existingSessionId) {
+      res.status(403).json({ error: "Нельзя привязать чужую сессию" });
+      return;
+    }
+
     // Migrate anonymous session → registered account
     const [anon] = await db
       .select({ id: usersTable.id })
