@@ -8,13 +8,14 @@ import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
+const DEV_JWT_SECRET = "astrobot-dev-secret-change-in-production";
 function resolveJwtSecret(): string {
-  const secret = process.env.JWT_SECRET?.trim();
-  if (secret) return secret;
+  const configured = process.env.JWT_SECRET?.trim();
+  if (configured) return configured;
   if (process.env.NODE_ENV === "production") {
     throw new Error("JWT_SECRET is required in production");
   }
-  return "astrobot-dev-secret-change-in-production";
+  return DEV_JWT_SECRET;
 }
 
 const JWT_SECRET = resolveJwtSecret();
@@ -289,8 +290,7 @@ router.get("/yandex/start", async (req, res) => {
     return;
   }
 
-  const sessionIdFromQuery = typeof req.query.sessionId === "string" ? req.query.sessionId : null;
-  const sessionId = sessionIdFromQuery || req.sessionId || null;
+  const sessionId = req.sessionId ?? null;
   const returnTo = sanitizeReturnTo(req.query.returnTo);
   const statePayload: YandexOAuthState = {
     type: "yandex_oauth_state",

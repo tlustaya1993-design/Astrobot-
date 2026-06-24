@@ -146,8 +146,8 @@ function requireSessionId(
 
 async function rollbackRequestCharge(
   sessionId: string,
+  paidDebited: number,
   requestCost: number,
-  paidBalanceDebit: number,
   context: string,
 ) {
   if (requestCost <= 0) return;
@@ -156,13 +156,62 @@ async function rollbackRequestCharge(
       .update(usersTable)
       .set({
         requestsUsed: sql`GREATEST(0, ${usersTable.requestsUsed} - ${requestCost})`,
-        requestsBalance: sql`${usersTable.requestsBalance} + ${paidBalanceDebit}`,
+        requestsBalance: sql`${usersTable.requestsBalance} + ${Math.max(0, paidDebited)}`,
         updatedAt: new Date(),
       })
       .where(eq(usersTable.sessionId, sessionId));
   } catch (rollbackErr) {
     logger.error({ err: rollbackErr }, context);
   }
+}
+
+async function reserveRequestCharge(
+  sessionId: string,
+  requestCost: number,
+): Promise<
+  | { ok: true; usedBeforeCharge: number; balanceBeforeCharge: number; paidDebited: number }
+  | { ok: false; usedBeforeCharge: number; balanceBeforeCharge: number; freeRemaining: number; isUnlimited: boolean }
+> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT 1 FROM ${usersTable} WHERE ${usersTable.sessionId} = ${sessionId} FOR UPDATE`);
+    const [current] = await tx
+      .select({
+        email: usersTable.email,
+        requestsUsed: usersTable.requestsUsed,
+        requestsBalance: usersTable.requestsBalance,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.sessionId, sessionId))
+      .limit(1);
+
+    const usedBeforeCharge = coerceNonNegInt(current?.requestsUsed);
+    const balanceBeforeCharge = coerceNonNegInt(current?.requestsBalance);
+    const freeRemaining = getRemainingFreeRequests(usedBeforeCharge);
+    const isUnlimited = isUnlimitedUser(current?.email);
+
+    if (!current || !canAffordRequest(usedBeforeCharge, balanceBeforeCharge, requestCost, current.email)) {
+      return { ok: false, usedBeforeCharge, balanceBeforeCharge, freeRemaining, isUnlimited };
+    }
+
+    const nextBalance = getBalanceAfterCharge(
+      usedBeforeCharge,
+      balanceBeforeCharge,
+      requestCost,
+      current.email,
+    );
+    const paidDebited = Math.max(0, balanceBeforeCharge - nextBalance);
+
+    await tx
+      .update(usersTable)
+      .set({
+        requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
+        requestsBalance: nextBalance,
+        updatedAt: new Date(),
+      })
+      .where(eq(usersTable.sessionId, sessionId));
+
+    return { ok: true, usedBeforeCharge, balanceBeforeCharge, paidDebited };
+  });
 }
 
 router.get("/conversations", async (req, res) => {
@@ -394,8 +443,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
+  let paidDebitedForCharge = 0;
   let chargedRequestCost = 0;
-  let chargedPaidBalanceDebit = 0;
   let insertedUserId: number | undefined;
 
   try {
@@ -560,32 +609,27 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   markInFlight(sessionId);
 
-  const nextBalance = getBalanceAfterCharge(
-    usedBeforeCharge,
-    balanceBefore,
-    requestCost,
-    owner.email,
-  );
-  const paidBalanceDebit = Math.max(0, balanceBefore - nextBalance);
+  const charge = await reserveRequestCharge(sessionId, requestCost);
+  if (!charge.ok) {
+    clearInFlight(sessionId);
+    res.status(402).json({
+      error: `Лимит бесплатных запросов (${FREE_REQUESTS_LIMIT}) исчерпан. Пополните пакет, чтобы продолжить.`,
+      required: requestCost,
+      balance: charge.balanceBeforeCharge,
+      freeRemaining: charge.freeRemaining,
+      isUnlimited: charge.isUnlimited,
+    });
+    return;
+  }
 
+  paidDebitedForCharge = charge.paidDebited;
   chargedRequestCost = requestCost;
-  chargedPaidBalanceDebit = paidBalanceDebit;
 
   const [insertedUser] = await db
     .insert(messages)
     .values({ conversationId: id, role: "user", content: normalizedContent })
     .returning({ id: messages.id });
   insertedUserId = insertedUser?.id;
-
-  // Reserve quota atomically before streaming (free + paid units).
-  await db
-    .update(usersTable)
-    .set({
-      requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
-      requestsBalance: sql`GREATEST(0, ${usersTable.requestsBalance} - ${paidBalanceDebit})`,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.sessionId, sessionId));
 
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
     db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
@@ -781,10 +825,16 @@ router.post("/conversations/:id/messages", async (req, res) => {
           extra: exhaustedRetries ? `Попыток: ${aiAttempt + 1}` : undefined,
         },
       ).catch(() => {});
+      if (insertedUserId != null) {
+        try {
+          await db.delete(messages).where(eq(messages.id, insertedUserId));
+          insertedUserId = undefined;
+        } catch { /* ignore */ }
+      }
       await rollbackRequestCharge(
         sessionId,
+        paidDebitedForCharge,
         chargedRequestCost,
-        chargedPaidBalanceDebit,
         "Failed to rollback request charge after stream error",
       );
       safeWrite(`data: ${JSON.stringify({ error: userFacingMessage })}\n\n`);
@@ -797,10 +847,16 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
   } catch (sseErr) {
     logger.error({ err: sseErr }, "Chat SSE setup or write failed");
+    if (insertedUserId != null) {
+      try {
+        await db.delete(messages).where(eq(messages.id, insertedUserId));
+        insertedUserId = undefined;
+      } catch { /* ignore */ }
+    }
     await rollbackRequestCharge(
       sessionId,
+      paidDebitedForCharge,
       chargedRequestCost,
-      chargedPaidBalanceDebit,
       "Failed to rollback request charge after SSE failure",
     );
     if (heartbeat) clearInterval(heartbeat);
@@ -833,8 +889,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
     await rollbackRequestCharge(
       sessionId,
+      paidDebitedForCharge,
       chargedRequestCost,
-      chargedPaidBalanceDebit,
       "Failed to rollback request charge after top-level handler error",
     );
     if (!res.headersSent) {
