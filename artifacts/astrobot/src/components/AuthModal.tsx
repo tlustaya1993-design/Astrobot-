@@ -24,10 +24,8 @@ export default function AuthModal({ open, onClose, initialTab = 'login' }: AuthM
 
   const handleYandexLogin = () => {
     try {
-      const sessionId = getSessionId();
       const returnTo = window.location.pathname + window.location.search;
       const authUrl = new URL(`${window.location.origin}/api/auth/yandex/start`);
-      authUrl.searchParams.set('sessionId', sessionId);
       authUrl.searchParams.set('returnTo', returnTo || '/');
       window.location.href = authUrl.toString();
     } catch {
