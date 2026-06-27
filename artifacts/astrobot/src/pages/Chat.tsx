@@ -1465,6 +1465,7 @@ export default function Chat() {
         variant="sheet"
         open={showProfile}
         onClose={() => setShowProfile(false)}
+        conversationId={conversationId}
       />
 
       <HistoryDrawer

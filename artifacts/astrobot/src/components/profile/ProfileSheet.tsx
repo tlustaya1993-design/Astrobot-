@@ -12,6 +12,7 @@ import {
   Save,
   Users,
   GraduationCap,
+  LifeBuoy,
 } from "lucide-react";
 import { useTutorial } from "@/context/TutorialContext";
 import { type AvatarConfig, DEFAULT_AVATAR } from "@/components/ui/AstroAvatar";
@@ -20,7 +21,8 @@ import IllustratedAvatar, {
   avatarPortraitKey,
 } from "@/components/ui/IllustratedAvatar";
 import AvatarEditor from "@/components/ui/AvatarEditor";
-import { getAuthHeaders } from "@/lib/session";
+import { getAuthHeaders, getSessionId } from "@/lib/session";
+import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useAvatarSync } from "@/context/AvatarSyncContext";
 import AuthModal from "@/components/AuthModal";
@@ -112,6 +114,7 @@ interface Props {
   onChartMetaChanged?: () => void;
   /** Полноэкранная страница вместо нижнего шита */
   variant?: "sheet" | "page";
+  conversationId?: number;
 }
 
 export default function ProfileSheet({
@@ -119,13 +122,40 @@ export default function ProfileSheet({
   onClose,
   onChartMetaChanged,
   variant = "sheet",
+  conversationId,
 }: Props) {
   const { isLoggedIn, email, logout } = useAuth();
   const { start: startTutorial } = useTutorial();
   const { avatarConfig, setAvatarConfigLocal } = useAvatarSync();
+  const { toast } = useToast();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [section, setSection] = useState<Section>("view");
   const [localAvatar, setLocalAvatar] = useState<AvatarConfig>(avatarConfig);
+  const [supportLoading, setSupportLoading] = useState(false);
+
+  async function handleSupportRequest() {
+    setSupportLoading(true);
+    try {
+      const res = await fetch("/api/support/urgent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ sessionId: getSessionId(), conversationId }),
+      });
+      if (!res.ok) throw new Error("request failed");
+      toast({
+        title: "Запрос отправлен",
+        description: "Служба поддержки уже уведомлена и занимается решением вашей проблемы.",
+      });
+    } catch {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось отправить запрос. Попробуйте позже.",
+        variant: "destructive",
+      });
+    } finally {
+      setSupportLoading(false);
+    }
+  }
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
@@ -566,6 +596,22 @@ export default function ProfileSheet({
                       <p className="text-xs text-muted-foreground">Что AstroBot помнит о тебе</p>
                     </div>
                     <span className="text-xs text-muted-foreground">→</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSupportRequest}
+                    disabled={supportLoading}
+                    className="w-full flex items-center gap-3 py-3 px-4 rounded-2xl border border-border/40 hover:border-primary/30 hover:bg-white/5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {supportLoading
+                      ? <Loader2 className="w-4 h-4 text-primary shrink-0 animate-spin" />
+                      : <LifeBuoy className="w-4 h-4 text-primary shrink-0" />
+                    }
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-medium">Служба поддержки</p>
+                      <p className="text-xs text-muted-foreground">Связаться с командой AstroBot</p>
+                    </div>
                   </button>
 
                   {isLoggedIn && (
