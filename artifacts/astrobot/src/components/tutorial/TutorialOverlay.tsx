@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
 import { useTutorial, TUTORIAL_TOTAL_STEPS } from '@/context/TutorialContext';
 
 interface SpotRect {
@@ -150,17 +149,7 @@ function CenteredStepCard({ cfg, step, isLast, onNext, onSkip }: CenteredCardPro
         className="w-full max-w-sm rounded-3xl border border-primary/25 bg-card/98 p-5 flex flex-col gap-4 shadow-[0_28px_80px_rgba(0,0,0,0.65),0_0_0_1px_rgba(212,175,55,0.12)]"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-2">
-          <h2 className="text-base font-display font-bold leading-snug pr-2">{cfg.title}</h2>
-          <button
-            type="button"
-            onClick={onSkip}
-            aria-label="Закрыть обучение"
-            className="shrink-0 p-1.5 -mr-1 rounded-full hover:bg-white/10 text-muted-foreground transition touch-manipulation"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        <h2 className="text-base font-display font-bold leading-snug">{cfg.title}</h2>
         <div className="text-sm text-foreground/82 leading-relaxed">{cfg.text}</div>
         <div className="flex items-center justify-between gap-3">
           <ProgressDots current={step} compact />
@@ -309,18 +298,13 @@ export function TutorialOverlay() {
             <>
               {spotRect ? (
                 <>
-                  <div className="absolute left-0 right-0 cursor-default" style={{ top: 0, height: Math.max(0, spotRect.top) }} onClick={skip} />
-                  <div className="absolute left-0 right-0 cursor-default" style={{ top: spotRect.top + spotRect.height, bottom: 0 }} onClick={skip} />
-                  <div className="absolute cursor-default" style={{ top: spotRect.top, height: spotRect.height, left: 0, width: Math.max(0, spotRect.left) }} onClick={skip} />
-                  <div className="absolute cursor-default" style={{ top: spotRect.top, height: spotRect.height, left: spotRect.left + spotRect.width, right: 0 }} onClick={skip} />
+                  <div className="absolute left-0 right-0 pointer-events-auto" style={{ top: 0, height: Math.max(0, spotRect.top) }} aria-hidden />
+                  <div className="absolute left-0 right-0 pointer-events-auto" style={{ top: spotRect.top + spotRect.height, bottom: 0 }} aria-hidden />
+                  <div className="absolute pointer-events-auto" style={{ top: spotRect.top, height: spotRect.height, left: 0, width: Math.max(0, spotRect.left) }} aria-hidden />
+                  <div className="absolute pointer-events-auto" style={{ top: spotRect.top, height: spotRect.height, left: spotRect.left + spotRect.width, right: 0 }} aria-hidden />
                 </>
               ) : (
-                <button
-                  className="absolute inset-0 cursor-default"
-                  aria-label="Пропустить обучение"
-                  tabIndex={-1}
-                  onClick={skip}
-                />
+                <div className="absolute inset-0 pointer-events-auto" aria-hidden />
               )}
 
               <AnimatePresence mode="wait">
@@ -361,19 +345,9 @@ export function TutorialOverlay() {
                     style={{ top: tooltipPos.top, left: tooltipPos.left, width: tooltipPos.width }}
                     onClick={e => e.stopPropagation()}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold font-display text-foreground leading-snug">
-                        {cfg.title}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={skip}
-                        aria-label="Закрыть обучение"
-                        className="shrink-0 p-1.5 -mr-1 -mt-0.5 rounded-full hover:bg-white/10 text-muted-foreground transition touch-manipulation"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    <p className="text-sm font-semibold font-display text-foreground leading-snug">
+                      {cfg.title}
+                    </p>
                     <div className="text-sm text-foreground/82 leading-relaxed">{cfg.text}</div>
                     <div className="flex items-center justify-between gap-3 pt-0.5">
                       <ProgressDots current={step} compact />
@@ -390,6 +364,13 @@ export function TutorialOverlay() {
                         </button>
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={skip}
+                      className="text-xs text-muted-foreground hover:text-foreground/60 transition text-center touch-manipulation -mt-1"
+                    >
+                      Пропустить обучение
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>

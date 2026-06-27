@@ -3,7 +3,7 @@ import { db, conversations, messages, usersTable, contactsTable, memoriesTable }
 import { eq, desc, and, sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
-import { sendTelegramAlert } from "../../lib/telegram-alert.js";
+import { sendTelegramAlert, sendN8nAlert } from "../../lib/telegram-alert.js";
 import { detectTier, checkAiThrottle, markInFlight, clearInFlight } from "../../lib/ai-rate-limit.js";
 import {
   calcNatalChart, calcEphemeris, calcSolarReturn, calcProgressions,
@@ -759,17 +759,19 @@ router.post("/conversations/:id/messages", async (req, res) => {
       // Sanitize before sending to the client — never expose raw provider API errors
       const userFacingMessage = sanitizeStreamError(rawErrMessage);
       logger.error({ err, aiAttempt }, "Chat streaming error");
+      const streamErrCtx = {
+        endpoint: `POST /conversations/${id}/messages`,
+        sessionId,
+        conversationId: id,
+        userSaw: userFacingMessage,
+        extra: exhaustedRetries ? `Попыток: ${aiAttempt + 1}` : undefined,
+      };
       sendTelegramAlert(
         exhaustedRetries ? "🚨 СРОЧНО: rate limit исчерпан после всех попыток" : "AI streaming error",
         rawErrMessage,
-        {
-          endpoint: `POST /conversations/${id}/messages`,
-          sessionId,
-          conversationId: id,
-          userSaw: userFacingMessage,
-          extra: exhaustedRetries ? `Попыток: ${aiAttempt + 1}` : undefined,
-        },
+        streamErrCtx,
       ).catch(() => {});
+      sendN8nAlert("AI streaming error", err, streamErrCtx).catch(() => {});
       if (messageCharge) {
         await compensateMessageCharge(messageCharge, sessionId, "generation_failed");
       }
@@ -805,10 +807,12 @@ router.post("/conversations/:id/messages", async (req, res) => {
     clearInFlight(sessionId); // safety: in case inner try was never entered
     logger.error({ err: handlerErr }, "POST /conversations/:id/messages failed before or during setup");
     const handlerErrMsg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr);
-    sendTelegramAlert("Handler error", handlerErrMsg, {
+    const handlerErrCtx = {
       endpoint: `POST /conversations/${id}/messages`,
       sessionId,
-    }).catch(() => {});
+    };
+    sendTelegramAlert("Handler error", handlerErrMsg, handlerErrCtx).catch(() => {});
+    sendN8nAlert("Handler error", handlerErr, handlerErrCtx).catch(() => {});
     if (messageCharge) {
       await compensateMessageCharge(messageCharge, sessionId, "handler_error");
     }

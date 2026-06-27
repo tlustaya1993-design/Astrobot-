@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { Router, type IRouter } from "express";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { db, paymentsTable, usersTable } from "@workspace/db";
 import {
   createYookassaPayment,
@@ -191,6 +191,72 @@ async function createPaymentWithRetry(
   }
 }
 
+type YooKassaApiErrorBody = {
+  type?: string;
+  id?: string;
+  code?: string;
+  description?: string;
+  parameter?: string;
+};
+
+function parseYooKassaErrorBody(body?: string): {
+  raw: string | null;
+  parsed: YooKassaApiErrorBody | null;
+} {
+  if (!body) return { raw: null, parsed: null };
+  try {
+    return { raw: body, parsed: JSON.parse(body) as YooKassaApiErrorBody };
+  } catch {
+    return { raw: body, parsed: null };
+  }
+}
+
+function logPaymentCreateRejected(params: {
+  httpStatus: number;
+  reason: "validation" | "yookassa" | "unknown";
+  rejectCode: string;
+  message: string;
+  packageCode?: PackageCode;
+  requestedPackageCode?: string;
+  amount?: string;
+  userId?: number | null;
+  sessionId?: string;
+  idempotenceKey?: string;
+  appPaymentId?: string;
+  err?: unknown;
+  yookassa?: {
+    kind?: string;
+    operation?: string;
+    status?: number;
+    requestId?: string;
+    bodyRaw?: string | null;
+    bodyParsed?: YooKassaApiErrorBody | null;
+    errorCode?: string;
+    errorDescription?: string;
+    errorParameter?: string;
+  };
+}): void {
+  logger.warn(
+    {
+      event: "billing.payment_create_rejected",
+      httpStatus: params.httpStatus,
+      reason: params.reason,
+      rejectCode: params.rejectCode,
+      message: params.message,
+      packageCode: params.packageCode,
+      requestedPackageCode: params.requestedPackageCode,
+      amount: params.amount,
+      userId: params.userId ?? null,
+      sessionId: params.sessionId,
+      idempotenceKey: params.idempotenceKey,
+      appPaymentId: params.appPaymentId,
+      err: params.err,
+      yookassa: params.yookassa,
+    },
+    "Payment create rejected",
+  );
+}
+
 function inferPaymentFailureResponse(err: unknown): { status: number; error: string } {
   if (err instanceof YooKassaError) {
     if (err.kind === "timeout") {
@@ -285,6 +351,18 @@ function isValidReceiptEmailForGuest(value: unknown): value is string {
   return normalizeReceiptEmail(email) !== DEFAULT_RECEIPT_EMAIL;
 }
 
+async function persistReceiptEmailIfMissing(sessionId: string, email: string): Promise<void> {
+  await db
+    .update(usersTable)
+    .set({ email, updatedAt: new Date() })
+    .where(
+      and(
+        eq(usersTable.sessionId, sessionId),
+        or(sql`${usersTable.email} IS NULL`, eq(usersTable.email, "")),
+      ),
+    );
+}
+
 function appendReturnFlag(returnUrl: string): string {
   try {
     const url = new URL(returnUrl);
@@ -356,11 +434,27 @@ router.post("/payments/create", async (req, res) => {
   };
 
   if (!isPackageCode(packageCode)) {
+    logPaymentCreateRejected({
+      httpStatus: 400,
+      reason: "validation",
+      rejectCode: "invalid_package",
+      message: "Invalid packageCode",
+      sessionId,
+      requestedPackageCode: typeof packageCode === "string" ? packageCode : undefined,
+    });
     res.status(400).json({ error: "Неверный пакет" });
     return;
   }
 
   if (!returnUrl || typeof returnUrl !== "string") {
+    logPaymentCreateRejected({
+      httpStatus: 400,
+      reason: "validation",
+      rejectCode: "missing_return_url",
+      message: "returnUrl is required",
+      sessionId,
+      packageCode,
+    });
     res.status(400).json({ error: "returnUrl обязателен" });
     return;
   }
@@ -397,21 +491,48 @@ router.post("/payments/create", async (req, res) => {
   await ensureUserSession(sessionId);
   await ensurePaymentsTableReady();
   const [user] = await db
-    .select({ email: usersTable.email })
+    .select({ id: usersTable.id, email: usersTable.email })
     .from(usersTable)
     .where(eq(usersTable.sessionId, sessionId))
     .limit(1);
 
-  let receiptForYoo: string;
-  if (user?.email && user.email.trim()) {
+  const userId = user?.id ?? null;
+
+  let receiptForYoo: string | null = null;
+  let receiptPersist = false;
+
+  if (user?.email?.trim() && isValidReceiptEmailForGuest(user.email)) {
     receiptForYoo = normalizeReceiptEmail(user.email);
+  } else if (req.authEmail?.trim() && isValidReceiptEmailForGuest(req.authEmail)) {
+    receiptForYoo = normalizeReceiptEmail(req.authEmail);
+    receiptPersist = true;
   } else if (isValidReceiptEmailForGuest(receiptEmail)) {
     receiptForYoo = normalizeReceiptEmail(receiptEmail);
-  } else {
+    receiptPersist = true;
+  }
+
+  if (!receiptForYoo) {
+    logPaymentCreateRejected({
+      httpStatus: 400,
+      reason: "validation",
+      rejectCode: "missing_receipt_email",
+      message: "Receipt email required for guest checkout",
+      sessionId,
+      userId,
+      packageCode,
+      amount: pkg.amountRub,
+      idempotenceKey: appPaymentId,
+      appPaymentId,
+    });
     res.status(400).json({
-      error: "Укажите email для чека — он нужен для ЮKassa. Регистрация не обязательна.",
+      error: "Укажите email для чека",
+      rejectCode: "missing_receipt_email",
     });
     return;
+  }
+
+  if (receiptPersist) {
+    await persistReceiptEmailIfMissing(sessionId, receiptForYoo);
   }
 
   try {
@@ -482,34 +603,45 @@ router.post("/payments/create", async (req, res) => {
   } catch (err) {
     const failure = inferPaymentFailureResponse(err);
     if (err instanceof YooKassaError) {
-      logger.error(
-        {
-          err,
-          appPaymentId,
-          sessionId,
-          packageCode,
-          provider: "yookassa",
-          yookassa: {
-            kind: err.kind,
-            operation: err.operation,
-            status: err.status,
-            requestId: err.requestId,
-            body: err.body,
-          },
+      const { raw: bodyRaw, parsed: bodyParsed } = parseYooKassaErrorBody(err.body);
+      logPaymentCreateRejected({
+        httpStatus: failure.status,
+        reason: "yookassa",
+        rejectCode: bodyParsed?.code ?? err.kind,
+        message: bodyParsed?.description ?? err.message,
+        packageCode,
+        amount: pkg.amountRub,
+        userId,
+        sessionId,
+        idempotenceKey: appPaymentId,
+        appPaymentId,
+        err,
+        yookassa: {
+          kind: err.kind,
+          operation: err.operation,
+          status: err.status,
+          requestId: err.requestId,
+          bodyRaw,
+          bodyParsed,
+          errorCode: bodyParsed?.code,
+          errorDescription: bodyParsed?.description,
+          errorParameter: bodyParsed?.parameter,
         },
-        "Failed to create yookassa payment",
-      );
+      });
     } else {
-      logger.error(
-        {
-          err,
-          appPaymentId,
-          sessionId,
-          packageCode,
-          provider: "yookassa",
-        },
-        "Failed to create yookassa payment",
-      );
+      logPaymentCreateRejected({
+        httpStatus: failure.status,
+        reason: "unknown",
+        rejectCode: "unknown_error",
+        message: err instanceof Error ? err.message : "Unknown payment create error",
+        packageCode,
+        amount: pkg.amountRub,
+        userId,
+        sessionId,
+        idempotenceKey: appPaymentId,
+        appPaymentId,
+        err,
+      });
     }
     if (failure.status === 503 || failure.status === 504 || failure.status === 429) {
       res.setHeader("Retry-After", "2");
