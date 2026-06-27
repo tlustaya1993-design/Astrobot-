@@ -85,6 +85,31 @@ async function sendToTelegram(text: string): Promise<void> {
   }
 }
 
+const N8N_WEBHOOK_URL = "https://primary-production-58c2d.up.railway.app/webhook-test/astro-bot-errors";
+
+export async function sendN8nAlert(
+  errorType: string,
+  rawError: unknown,
+  context: AlertContext = {},
+): Promise<void> {
+  try {
+    const err = rawError instanceof Error ? rawError : null;
+    await fetch(N8N_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        endpoint: context.endpoint ?? null,
+        sessionId: context.sessionId ?? null,
+        conversationId: context.conversationId ?? null,
+        errorText: err?.message ?? String(rawError),
+        stackTrace: err?.stack ?? null,
+      }),
+    });
+  } catch {
+    // Never crash the main request due to webhook failure
+  }
+}
+
 export async function sendTelegramAlert(
   errorType: string,
   rawError: string,
