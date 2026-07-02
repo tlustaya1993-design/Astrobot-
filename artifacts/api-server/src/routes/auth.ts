@@ -61,6 +61,16 @@ function buildFrontendCallbackUrl(req: Request): URL {
   return new URL("/auth/callback", getPublicBaseUrl(req));
 }
 
+function getTrustedOAuthSessionId(req: Pick<Request, "sessionId">): string | null {
+  const sessionId = req.sessionId?.trim();
+  return sessionId || null;
+}
+
+function clientWantsJson(req: Request): boolean {
+  const accept = req.headers.accept;
+  return typeof accept === "string" && accept.includes("application/json");
+}
+
 async function exchangeYandexCode(code: string, redirectUri: string): Promise<string> {
   const clientId = process.env.YANDEX_CLIENT_ID?.trim();
   const clientSecret = process.env.YANDEX_CLIENT_SECRET?.trim();
@@ -293,8 +303,7 @@ router.get("/yandex/start", async (req, res) => {
     return;
   }
 
-  const sessionIdFromQuery = typeof req.query.sessionId === "string" ? req.query.sessionId : null;
-  const sessionId = sessionIdFromQuery || req.sessionId || null;
+  const sessionId = getTrustedOAuthSessionId(req);
   const returnTo = sanitizeReturnTo(req.query.returnTo);
   const statePayload: YandexOAuthState = {
     type: "yandex_oauth_state",
@@ -308,6 +317,11 @@ router.get("/yandex/start", async (req, res) => {
   authorizeUrl.searchParams.set("client_id", clientId);
   authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("state", state);
+
+  if (clientWantsJson(req)) {
+    res.json({ authorizeUrl: authorizeUrl.toString() });
+    return;
+  }
 
   res.redirect(authorizeUrl.toString());
 });
@@ -404,5 +418,5 @@ router.post("/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-export { JWT_SECRET };
+export { JWT_SECRET, getTrustedOAuthSessionId };
 export default router;
