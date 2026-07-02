@@ -1,4 +1,4 @@
-import { getAuthHeaders, getSessionId, getStoredEmail, getToken } from './session';
+import { getAuthHeaders, getStoredEmail, getToken } from './session';
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -52,7 +52,6 @@ export function getYandexOAuthStartUrl(returnTo = '/chat'): string {
   const normalizedReturnTo =
     returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/chat';
   const params = new URLSearchParams({
-    sessionId: getSessionId(),
     returnTo: normalizedReturnTo,
   });
   return `${API_BASE}/api/auth/yandex/start?${params.toString()}`;
