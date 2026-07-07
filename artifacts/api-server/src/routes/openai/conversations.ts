@@ -567,8 +567,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     owner.email,
   );
 
-  paidBalanceDebited = Math.max(0, balanceBefore - nextBalance);
-  chargedRequestCost = requestCost;
+  const paidDebitForThisRequest = Math.max(0, balanceBefore - nextBalance);
 
   const [insertedUser] = await db
     .insert(messages)
@@ -582,12 +581,14 @@ router.post("/conversations/:id/messages", async (req, res) => {
     .set({
       requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
       requestsBalance:
-        paidBalanceDebited > 0
-          ? sql`GREATEST(0, ${usersTable.requestsBalance} - ${paidBalanceDebited})`
+        paidDebitForThisRequest > 0
+          ? sql`GREATEST(0, ${usersTable.requestsBalance} - ${paidDebitForThisRequest})`
           : sql`${usersTable.requestsBalance}`,
       updatedAt: new Date(),
     })
     .where(eq(usersTable.sessionId, sessionId));
+  paidBalanceDebited = paidDebitForThisRequest;
+  chargedRequestCost = requestCost;
 
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
     db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
