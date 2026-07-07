@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/AuthContext';
 import { apiLogin, apiRegister } from '@/lib/auth';
-import { getSessionId } from '@/lib/session';
+import { getAuthHeaders, getSessionId } from '@/lib/session';
 import { toast } from '@/hooks/use-toast';
 
 interface AuthModalProps {
@@ -22,14 +22,22 @@ export default function AuthModal({ open, onClose, initialTab = 'login' }: AuthM
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleYandexLogin = () => {
+  const handleYandexLogin = async () => {
     try {
-      const sessionId = getSessionId();
       const returnTo = window.location.pathname + window.location.search;
       const authUrl = new URL(`${window.location.origin}/api/auth/yandex/start`);
-      authUrl.searchParams.set('sessionId', sessionId);
       authUrl.searchParams.set('returnTo', returnTo || '/');
-      window.location.href = authUrl.toString();
+      const res = await fetch(authUrl.toString(), {
+        headers: {
+          Accept: 'application/json',
+          ...getAuthHeaders(),
+        },
+      });
+      const payload = (await res.json().catch(() => ({}))) as { authorizationUrl?: string; error?: string };
+      if (!res.ok || !payload.authorizationUrl) {
+        throw new Error(payload.error || 'Не удалось начать вход через Яндекс');
+      }
+      window.location.href = payload.authorizationUrl;
     } catch {
       toast({
         title: 'Не удалось начать вход через Яндекс',

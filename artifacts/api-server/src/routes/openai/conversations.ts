@@ -146,7 +146,7 @@ function requireSessionId(
 
 async function rollbackRequestCharge(
   sessionId: string,
-  balanceBeforeCharge: number,
+  paidBalanceDebited: number,
   requestCost: number,
   context: string,
 ) {
@@ -156,7 +156,7 @@ async function rollbackRequestCharge(
       .update(usersTable)
       .set({
         requestsUsed: sql`GREATEST(0, ${usersTable.requestsUsed} - ${requestCost})`,
-        requestsBalance: balanceBeforeCharge,
+        requestsBalance: sql`${usersTable.requestsBalance} + ${Math.max(0, paidBalanceDebited)}`,
         updatedAt: new Date(),
       })
       .where(eq(usersTable.sessionId, sessionId));
@@ -394,7 +394,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  let balanceBeforeCharge = 0;
+  let paidBalanceDebited = 0;
   let chargedRequestCost = 0;
   let insertedUserId: number | undefined;
 
@@ -567,7 +567,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     owner.email,
   );
 
-  balanceBeforeCharge = balanceBefore;
+  paidBalanceDebited = Math.max(0, balanceBefore - nextBalance);
   chargedRequestCost = requestCost;
 
   const [insertedUser] = await db
@@ -581,7 +581,10 @@ router.post("/conversations/:id/messages", async (req, res) => {
     .update(usersTable)
     .set({
       requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
-      requestsBalance: nextBalance,
+      requestsBalance:
+        paidBalanceDebited > 0
+          ? sql`GREATEST(0, ${usersTable.requestsBalance} - ${paidBalanceDebited})`
+          : sql`${usersTable.requestsBalance}`,
       updatedAt: new Date(),
     })
     .where(eq(usersTable.sessionId, sessionId));
@@ -782,7 +785,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
       ).catch(() => {});
       await rollbackRequestCharge(
         sessionId,
-        balanceBeforeCharge,
+        paidBalanceDebited,
         chargedRequestCost,
         "Failed to rollback request charge after stream error",
       );
@@ -798,7 +801,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     logger.error({ err: sseErr }, "Chat SSE setup or write failed");
     await rollbackRequestCharge(
       sessionId,
-      balanceBeforeCharge,
+      paidBalanceDebited,
       chargedRequestCost,
       "Failed to rollback request charge after SSE failure",
     );
@@ -832,7 +835,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
     await rollbackRequestCharge(
       sessionId,
-      balanceBeforeCharge,
+      paidBalanceDebited,
       chargedRequestCost,
       "Failed to rollback request charge after top-level handler error",
     );
