@@ -21,8 +21,7 @@ import IllustratedAvatar, {
   avatarPortraitKey,
 } from "@/components/ui/IllustratedAvatar";
 import AvatarEditor from "@/components/ui/AvatarEditor";
-import { getAuthHeaders, getSessionId } from "@/lib/session";
-import { useToast } from "@/hooks/use-toast";
+import { getAuthHeaders } from "@/lib/session";
 import { useAuth } from "@/context/AuthContext";
 import { useAvatarSync } from "@/context/AvatarSyncContext";
 import AuthModal from "@/components/AuthModal";
@@ -30,6 +29,7 @@ import AddContactModal from "@/components/chat/AddContactModal";
 import type { Contact } from "@/components/chat/PeoplePanel";
 import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
 import PaywallSheet from "@/components/billing/PaywallSheet";
+import SupportModal from "@/components/support/SupportModal";
 
 interface UserProfile {
   name?: string | null;
@@ -127,35 +127,9 @@ export default function ProfileSheet({
   const { isLoggedIn, email, logout } = useAuth();
   const { start: startTutorial } = useTutorial();
   const { avatarConfig, setAvatarConfigLocal } = useAvatarSync();
-  const { toast } = useToast();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [section, setSection] = useState<Section>("view");
   const [localAvatar, setLocalAvatar] = useState<AvatarConfig>(avatarConfig);
-  const [supportLoading, setSupportLoading] = useState(false);
-
-  async function handleSupportRequest() {
-    setSupportLoading(true);
-    try {
-      const res = await fetch("/api/support/urgent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ sessionId: getSessionId(), conversationId }),
-      });
-      if (!res.ok) throw new Error("request failed");
-      toast({
-        title: "Запрос отправлен",
-        description: "Служба поддержки уже уведомлена и занимается решением вашей проблемы.",
-      });
-    } catch {
-      toast({
-        title: "Ошибка",
-        description: "Не удалось отправить запрос. Попробуйте позже.",
-        variant: "destructive",
-      });
-    } finally {
-      setSupportLoading(false);
-    }
-  }
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
@@ -167,6 +141,7 @@ export default function ProfileSheet({
   const [showAddContact, setShowAddContact] = useState(false);
   const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
 
   const [editName, setEditName] = useState("");
   const [editBirthDate, setEditBirthDate] = useState("");
@@ -600,18 +575,15 @@ export default function ProfileSheet({
 
                   <button
                     type="button"
-                    onClick={handleSupportRequest}
-                    disabled={supportLoading}
-                    className="w-full flex items-center gap-3 py-3 px-4 rounded-2xl border border-border/40 hover:border-primary/30 hover:bg-white/5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                    onClick={() => setShowSupport(true)}
+                    className="w-full flex items-center gap-3 py-3 px-4 rounded-2xl border border-border/40 hover:border-primary/30 hover:bg-white/5 transition"
                   >
-                    {supportLoading
-                      ? <Loader2 className="w-4 h-4 text-primary shrink-0 animate-spin" />
-                      : <LifeBuoy className="w-4 h-4 text-primary shrink-0" />
-                    }
+                    <LifeBuoy className="w-4 h-4 text-primary shrink-0" />
                     <div className="flex-1 text-left">
                       <p className="text-sm font-medium">Служба поддержки</p>
-                      <p className="text-xs text-muted-foreground">Связаться с командой AstroBot</p>
+                      <p className="text-xs text-muted-foreground">Сообщить о проблеме или задать вопрос</p>
                     </div>
+                    <span className="text-xs text-muted-foreground">→</span>
                   </button>
 
                   {isLoggedIn && (
@@ -635,6 +607,11 @@ export default function ProfileSheet({
 
               <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} initialTab="login" />
               <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
+              <SupportModal
+                open={showSupport}
+                onClose={() => setShowSupport(false)}
+                conversationId={conversationId}
+              />
 
               {section === "memories" && (
                 <div

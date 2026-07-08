@@ -1,4 +1,5 @@
 import { getAnthropic } from "@workspace/integrations-anthropic-ai";
+import { logger } from "./logger.js";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_ADMIN_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
@@ -85,24 +86,36 @@ async function sendToTelegram(text: string): Promise<void> {
   }
 }
 
-const N8N_WEBHOOK_URL = "https://primary-production-58c2d.up.railway.app/webhook-test/astro-bot-errors";
-
+/**
+ * Репорт технической ошибки в n8n (stack trace и контекст).
+ * URL берётся строго из переменной окружения N8N_WEBHOOK_URL (без хардкода).
+ * Никогда не бросает — сбой вебхука не должен ронять основной запрос.
+ */
 export async function sendN8nAlert(
   errorType: string,
   rawError: unknown,
   context: AlertContext = {},
 ): Promise<void> {
+  const webhookUrl = process.env.N8N_WEBHOOK_URL?.trim();
+  if (!webhookUrl) {
+    logger.warn("N8N_WEBHOOK_URL is not set — skipping n8n error alert");
+    return;
+  }
   try {
     const err = rawError instanceof Error ? rawError : null;
-    await fetch(N8N_WEBHOOK_URL, {
+    await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        errorType,
         endpoint: context.endpoint ?? null,
         sessionId: context.sessionId ?? null,
         conversationId: context.conversationId ?? null,
+        email: context.email ?? null,
         errorText: err?.message ?? String(rawError),
         stackTrace: err?.stack ?? null,
+        source: "astrobot-error",
+        createdAt: new Date().toISOString(),
       }),
     });
   } catch {
@@ -143,5 +156,48 @@ export async function sendTelegramAlert(
     await sendToTelegram(lines.join("\n").replace(/\n{3,}/g, "\n\n"));
   } catch {
     // Never crash the main request due to alert failure
+  }
+}
+
+export type N8nSupportPayload = {
+  text: string;
+  screenshotUrl?: string | null;
+  sessionId?: string;
+  conversationId?: number;
+  email?: string;
+};
+
+/**
+ * Отправляет обращение из формы поддержки на вебхук n8n (текст + ссылка на скриншот).
+ * URL берётся строго из переменной окружения N8N_WEBHOOK_URL (без хардкода).
+ * Никогда не бросает — сбой уведомления не должен ронять основной запрос.
+ */
+export async function sendN8nSupportRequest(payload: N8nSupportPayload): Promise<void> {
+  const webhookUrl = process.env.N8N_WEBHOOK_URL?.trim();
+  if (!webhookUrl) {
+    logger.warn("N8N_WEBHOOK_URL is not set — skipping n8n support alert");
+    return;
+  }
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: payload.text,
+        screenshotUrl: payload.screenshotUrl ?? null,
+        sessionId: payload.sessionId ?? null,
+        conversationId: payload.conversationId ?? null,
+        email: payload.email ?? null,
+        source: "astrobot-support",
+        createdAt: new Date().toISOString(),
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`n8n webhook error ${res.status}: ${errText}`);
+    }
+  } catch (err) {
+    logger.warn({ err }, "Failed to send n8n support alert");
   }
 }
