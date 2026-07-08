@@ -12,6 +12,7 @@ import {
   Save,
   Users,
   GraduationCap,
+  LifeBuoy,
 } from "lucide-react";
 import { useTutorial } from "@/context/TutorialContext";
 import { type AvatarConfig, DEFAULT_AVATAR } from "@/components/ui/AstroAvatar";
@@ -28,6 +29,7 @@ import AddContactModal from "@/components/chat/AddContactModal";
 import type { Contact } from "@/components/chat/PeoplePanel";
 import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
 import PaywallSheet from "@/components/billing/PaywallSheet";
+import SupportModal from "@/components/support/SupportModal";
 
 interface UserProfile {
   name?: string | null;
@@ -137,6 +139,7 @@ export default function ProfileSheet({
   const [showAddContact, setShowAddContact] = useState(false);
   const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
 
   const [editName, setEditName] = useState("");
   const [editBirthDate, setEditBirthDate] = useState("");
@@ -568,6 +571,19 @@ export default function ProfileSheet({
                     <span className="text-xs text-muted-foreground">→</span>
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => setShowSupport(true)}
+                    className="w-full flex items-center gap-3 py-3 px-4 rounded-2xl border border-border/40 hover:border-primary/30 hover:bg-white/5 transition"
+                  >
+                    <LifeBuoy className="w-4 h-4 text-primary shrink-0" />
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-medium">Служба поддержки</p>
+                      <p className="text-xs text-muted-foreground">Сообщить о проблеме или задать вопрос</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">→</span>
+                  </button>
+
                   {isLoggedIn && (
                     <div className="space-y-2 border-t border-border/40 pt-3">
                       {email && <p className="truncate text-xs text-muted-foreground">{email}</p>}
@@ -589,6 +605,7 @@ export default function ProfileSheet({
 
               <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} initialTab="login" />
               <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
+              <SupportModal open={showSupport} onClose={() => setShowSupport(false)} />
 
               {section === "memories" && (
                 <div

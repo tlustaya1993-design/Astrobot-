@@ -1,4 +1,5 @@
 import { getAnthropic } from "@workspace/integrations-anthropic-ai";
+import { logger } from "./logger.js";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_ADMIN_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
@@ -118,5 +119,48 @@ export async function sendTelegramAlert(
     await sendToTelegram(lines.join("\n").replace(/\n{3,}/g, "\n\n"));
   } catch {
     // Never crash the main request due to alert failure
+  }
+}
+
+export type N8nSupportPayload = {
+  text: string;
+  screenshotUrl?: string | null;
+  sessionId?: string;
+  conversationId?: number;
+  email?: string;
+};
+
+/**
+ * Отправляет обращение в поддержку на вебхук n8n.
+ * URL берётся строго из переменной окружения N8N_WEBHOOK_URL (без хардкода).
+ * Никогда не бросает — сбой уведомления не должен ронять основной запрос.
+ */
+export async function sendN8nAlert(payload: N8nSupportPayload): Promise<void> {
+  const webhookUrl = process.env.N8N_WEBHOOK_URL?.trim();
+  if (!webhookUrl) {
+    logger.warn("N8N_WEBHOOK_URL is not set — skipping n8n support alert");
+    return;
+  }
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: payload.text,
+        screenshotUrl: payload.screenshotUrl ?? null,
+        sessionId: payload.sessionId ?? null,
+        conversationId: payload.conversationId ?? null,
+        email: payload.email ?? null,
+        source: "astrobot-support",
+        createdAt: new Date().toISOString(),
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`n8n webhook error ${res.status}: ${errText}`);
+    }
+  } catch (err) {
+    logger.warn({ err }, "Failed to send n8n support alert");
   }
 }
