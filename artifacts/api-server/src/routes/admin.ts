@@ -116,6 +116,32 @@ router.get("/status", async (req, res) => {
     message: hasTelegram ? "Уведомления о сбоях приходят" : "Не настроены — сбои приходят молча",
   });
 
+  // 6. Cloudflare R2 (скриншоты поддержки). Диагностика по каждой переменной
+  // без раскрытия секретов: только set/MISSING и длина значения.
+  const r2Vars: Record<string, string | undefined> = {
+    CLOUDFLARE_ACCESS_KEY_ID: process.env.CLOUDFLARE_ACCESS_KEY_ID,
+    CLOUDFLARE_SECRET_ACCESS_KEY: process.env.CLOUDFLARE_SECRET_ACCESS_KEY,
+    CLOUDFLARE_ENDPOINT: process.env.CLOUDFLARE_ENDPOINT,
+    CLOUDFLARE_BUCKET_NAME: process.env.CLOUDFLARE_BUCKET_NAME,
+  };
+  const r2Detail = Object.entries(r2Vars)
+    .map(([name, raw]) => {
+      const trimmed = raw?.trim() ?? "";
+      const short = name.replace("CLOUDFLARE_", "");
+      return trimmed ? `${short}=set(${trimmed.length})` : `${short}=MISSING`;
+    })
+    .join(", ");
+  const r2Missing = Object.values(r2Vars).filter((v) => !v?.trim()).length;
+  const hasR2 = r2Missing === 0;
+  checks.push({
+    id: "r2",
+    name: "Cloudflare R2 (скриншоты)",
+    status: hasR2 ? "ok" : "degraded",
+    message: hasR2
+      ? `Все переменные заданы: ${r2Detail}`
+      : `Не хватает ${r2Missing} из 4 переменных: ${r2Detail}`,
+  });
+
   const hasError = checks.some((c) => c.status === "error");
   const hasDegraded = checks.some((c) => c.status === "degraded");
   const overall: ServiceStatus = hasError ? "error" : hasDegraded ? "degraded" : "ok";
