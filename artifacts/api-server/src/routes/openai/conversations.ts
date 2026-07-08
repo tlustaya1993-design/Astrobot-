@@ -3,7 +3,7 @@ import { db, conversations, messages, usersTable, contactsTable, memoriesTable }
 import { eq, desc, and, sql } from "drizzle-orm";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
-import { sendTelegramAlert } from "../../lib/telegram-alert.js";
+import { sendTelegramAlert, sendN8nAlert } from "../../lib/telegram-alert.js";
 import { detectTier, checkAiThrottle, markInFlight, clearInFlight } from "../../lib/ai-rate-limit.js";
 import {
   calcNatalChart, calcEphemeris, calcSolarReturn, calcProgressions,
@@ -33,9 +33,14 @@ import {
   isUnlimitedUser,
   getRemainingFreeRequests,
   canAffordRequest,
-  getBalanceAfterCharge,
   coerceNonNegInt,
 } from "../../lib/billing-policy.js";
+import {
+  commitMessageSend,
+  compensateMessageCharge,
+  InsufficientBalanceError,
+  type MessageChargeCommit,
+} from "../../lib/billing-ledger.js";
 import { parseAvatarJson } from "../../lib/avatar-config.js";
 
 const router: IRouter = Router();
@@ -142,27 +147,6 @@ function requireSessionId(
     return null;
   }
   return req.sessionId;
-}
-
-async function rollbackRequestCharge(
-  sessionId: string,
-  balanceBeforeCharge: number,
-  requestCost: number,
-  context: string,
-) {
-  if (requestCost <= 0) return;
-  try {
-    await db
-      .update(usersTable)
-      .set({
-        requestsUsed: sql`GREATEST(0, ${usersTable.requestsUsed} - ${requestCost})`,
-        requestsBalance: balanceBeforeCharge,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.sessionId, sessionId));
-  } catch (rollbackErr) {
-    logger.error({ err: rollbackErr }, context);
-  }
 }
 
 router.get("/conversations", async (req, res) => {
@@ -394,9 +378,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  let balanceBeforeCharge = 0;
-  let chargedRequestCost = 0;
-  let insertedUserId: number | undefined;
+  let messageCharge: MessageChargeCommit | null = null;
 
   try {
   const [conv] = await db
@@ -560,31 +542,31 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   markInFlight(sessionId);
 
-  const nextBalance = getBalanceAfterCharge(
-    usedBeforeCharge,
-    balanceBefore,
-    requestCost,
-    owner.email,
-  );
-
-  balanceBeforeCharge = balanceBefore;
-  chargedRequestCost = requestCost;
-
-  const [insertedUser] = await db
-    .insert(messages)
-    .values({ conversationId: id, role: "user", content: normalizedContent })
-    .returning({ id: messages.id });
-  insertedUserId = insertedUser?.id;
-
-  // Reserve quota atomically before streaming (free + paid units).
-  await db
-    .update(usersTable)
-    .set({
-      requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
-      requestsBalance: nextBalance,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.sessionId, sessionId));
+  try {
+    messageCharge = await commitMessageSend({
+      sessionId,
+      conversationId: id,
+      content: normalizedContent,
+      requestCost,
+    });
+  } catch (chargeErr) {
+    clearInFlight(sessionId);
+    if (chargeErr instanceof InsufficientBalanceError) {
+      logger.info(
+        { sessionId, usedBeforeCharge, balanceBefore, requestCost, remainingFree, freeLimit: FREE_REQUESTS_LIMIT },
+        "Request blocked: insufficient quota (locked)",
+      );
+      res.status(402).json({
+        error: `Лимит бесплатных запросов (${FREE_REQUESTS_LIMIT}) исчерпан. Пополните пакет, чтобы продолжить.`,
+        required: requestCost,
+        balance: balanceBefore,
+        freeRemaining: remainingFree,
+        isUnlimited,
+      });
+      return;
+    }
+    throw chargeErr;
+  }
 
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
     db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
@@ -752,10 +734,18 @@ router.post("/conversations/:id/messages", async (req, res) => {
       // Tag as 'astro' when the response was built with a full natal chart (date+time+coords),
       // meaning it likely contains house/planet assignments that become stale over deploys.
       const hasNatalHouses = !!(userProfile?.birthDate && userProfile?.birthTime && userProfile?.birthLat);
-      await Promise.all([
-        db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse, messageType: hasNatalHouses ? "astro" : "chat" }),
-        updateConversationDialogState(id, fullResponse, conv),
-      ]);
+      try {
+        await Promise.all([
+          db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse, messageType: hasNatalHouses ? "astro" : "chat" }),
+          updateConversationDialogState(id, fullResponse, conv),
+        ]);
+      } catch (persistErr) {
+        logger.error(
+          { err: persistErr, conversationId: id, sessionId, event: "ai.message_persist_failed" },
+          "Failed to persist assistant message",
+        );
+        throw persistErr;
+      }
 
       if (sessionId && fullResponse) {
         extractAndSaveMemories(sessionId, normalizedContent, fullResponse).catch(() => {});
@@ -769,23 +759,22 @@ router.post("/conversations/:id/messages", async (req, res) => {
       // Sanitize before sending to the client — never expose raw provider API errors
       const userFacingMessage = sanitizeStreamError(rawErrMessage);
       logger.error({ err, aiAttempt }, "Chat streaming error");
+      const streamErrCtx = {
+        endpoint: `POST /conversations/${id}/messages`,
+        sessionId,
+        conversationId: id,
+        userSaw: userFacingMessage,
+        extra: exhaustedRetries ? `Попыток: ${aiAttempt + 1}` : undefined,
+      };
       sendTelegramAlert(
         exhaustedRetries ? "🚨 СРОЧНО: rate limit исчерпан после всех попыток" : "AI streaming error",
         rawErrMessage,
-        {
-          endpoint: `POST /conversations/${id}/messages`,
-          sessionId,
-          conversationId: id,
-          userSaw: userFacingMessage,
-          extra: exhaustedRetries ? `Попыток: ${aiAttempt + 1}` : undefined,
-        },
+        streamErrCtx,
       ).catch(() => {});
-      await rollbackRequestCharge(
-        sessionId,
-        balanceBeforeCharge,
-        chargedRequestCost,
-        "Failed to rollback request charge after stream error",
-      );
+      sendN8nAlert("AI streaming error", err, streamErrCtx).catch(() => {});
+      if (messageCharge) {
+        await compensateMessageCharge(messageCharge, sessionId, "generation_failed");
+      }
       safeWrite(`data: ${JSON.stringify({ error: userFacingMessage })}\n\n`);
       if (!res.writableEnded) {
         try { res.end(); } catch { /* ignore */ }
@@ -796,12 +785,9 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
   } catch (sseErr) {
     logger.error({ err: sseErr }, "Chat SSE setup or write failed");
-    await rollbackRequestCharge(
-      sessionId,
-      balanceBeforeCharge,
-      chargedRequestCost,
-      "Failed to rollback request charge after SSE failure",
-    );
+    if (messageCharge) {
+      await compensateMessageCharge(messageCharge, sessionId, "sse_failure");
+    }
     if (heartbeat) clearInterval(heartbeat);
     if (!res.headersSent) {
       res.status(500).json({
@@ -821,21 +807,15 @@ router.post("/conversations/:id/messages", async (req, res) => {
     clearInFlight(sessionId); // safety: in case inner try was never entered
     logger.error({ err: handlerErr }, "POST /conversations/:id/messages failed before or during setup");
     const handlerErrMsg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr);
-    sendTelegramAlert("Handler error", handlerErrMsg, {
+    const handlerErrCtx = {
       endpoint: `POST /conversations/${id}/messages`,
       sessionId,
-    }).catch(() => {});
-    if (insertedUserId != null) {
-      try {
-        await db.delete(messages).where(eq(messages.id, insertedUserId));
-      } catch { /* ignore */ }
+    };
+    sendTelegramAlert("Handler error", handlerErrMsg, handlerErrCtx).catch(() => {});
+    sendN8nAlert("Handler error", handlerErr, handlerErrCtx).catch(() => {});
+    if (messageCharge) {
+      await compensateMessageCharge(messageCharge, sessionId, "handler_error");
     }
-    await rollbackRequestCharge(
-      sessionId,
-      balanceBeforeCharge,
-      chargedRequestCost,
-      "Failed to rollback request charge after top-level handler error",
-    );
     if (!res.headersSent) {
       res.status(500).json({
         error:
@@ -1395,6 +1375,8 @@ ${contactAstroSection ? `\n${contactAstroSection}\n` : ""}`
 Ты не просто отвечаешь на вопрос — ты хочешь чтобы человек вышел из разговора с ощущением что его ситуацию кто-то по-настоящему увидел. Если первый слой ответа кажется недостаточным — копай дальше. Если чувствуешь что за вопросом есть что-то важное что человек не назвал — иди туда.
 
 Когда приходит вопрос — сначала пойми что за ним стоит. Человек спрашивает про деньги — он спрашивает: я в безопасности? Когда отпустит? Я не проиграю? Найди в карте ответ именно на это.
+
+После первого содержательного ответа по теме сформируй для себя рабочий центральный вывод — не окончательную истину, а текущую картину. В следующих сообщениях по той же теме сначала снова смотри в карту, потом сверяй с этим выводом.
 
 Отвечай на вопрос человека, не на «что интересного в карте». Не останавливайся на первом поверхностном смысле вопроса. Слои карты подключай по иерархии методов ниже — только если меняют ответ. Горизонт по вопросу. Не перечисляй сильные аспекты и дигнитеты ради полноты.
 

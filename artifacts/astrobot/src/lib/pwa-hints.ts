@@ -9,6 +9,9 @@ const KEYS = {
   sessionStarted:      'pwa_session_started',
 } as const;
 
+/** Fired once after the first successful AI response (stream completed). */
+export const PWA_FIRST_AI_SUCCESS_EVENT = 'astrobot:pwa-first-ai-success';
+
 function getInt(key: string): number {
   try { return parseInt(localStorage.getItem(key) ?? '0', 10) || 0; } catch { return 0; }
 }
@@ -32,14 +35,20 @@ export function recordSessionStart(): void {
 // AI success — call after every successful AI response
 
 export function recordAiSuccess(): void {
-  if (!localStorage.getItem(KEYS.firstSuccessAt)) {
+  const isFirst = !localStorage.getItem(KEYS.firstSuccessAt);
+  if (isFirst) {
     setStr(KEYS.firstSuccessAt, new Date().toISOString());
   }
   setStr(KEYS.actionsCount, String(getInt(KEYS.actionsCount) + 1));
+  if (isFirst) {
+    try {
+      window.dispatchEvent(new CustomEvent(PWA_FIRST_AI_SUCCESS_EVENT));
+    } catch { /* ignore */ }
+  }
 }
 
 // ---------------------------------------------------------------------------
-// Tutorial lifecycle
+// PWA prompt lifecycle (show once per device)
 
 export function recordTutorialShown(): void {
   setStr(KEYS.tutorialShownCount, String(getInt(KEYS.tutorialShownCount) + 1));
@@ -51,7 +60,7 @@ export function recordTutorialDismissed(): void {
 }
 
 // ---------------------------------------------------------------------------
-// Getters — used by the tutorial show/hide logic
+// Getters
 
 export type PwaHints = {
   firstSuccessAt:      string | null;
@@ -80,56 +89,20 @@ export function getPwaHints(): PwaHints {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Anti-spam gate — call before showing the tutorial
-
-const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
-
-function msSince(isoOrNull: string | null): number {
-  if (!isoOrNull) return Infinity;
-  const t = Date.parse(isoOrNull);
-  return isNaN(t) ? Infinity : Date.now() - t;
+/**
+ * Show the PWA install prompt exactly once: after the first successful AI reply.
+ * Caller must also skip standalone/PWA and active onboarding overlays.
+ */
+export function shouldShowPwaPrompt(): boolean {
+  const h = getPwaHints();
+  if (!h.firstSuccessAt) return false;
+  if (h.tutorialShownCount > 0) return false;
+  if (h.tutorialDismissedAt) return false;
+  return true;
 }
 
-export type PwaTutorialBlockReason =
-  | 'max_shown'           // shown >= 3 times
-  | 'shown_recently'      // shown < 3 days ago
-  | 'dismissed_recently'  // dismissed < 3 days ago
-  | 'conditions_not_met'  // none of A/B/C conditions are true
-  | null;                 // null = OK to show
-
-/**
- * Full gate for showing the PWA install tutorial.
- * Standalone check (isStandalone) and is_test check must be done by the caller
- * since they require browser APIs outside this pure-localStorage module.
- *
- * Positive conditions (at least one must be true):
- *   A) first AI response received + never shown before
- *   B) returning user (≥3 sessions) + shown < 2 times
- *   C) active user (≥3 actions) + shown < 2 times
- */
-export function shouldShowPwaTutorial(): { show: boolean; reason: PwaTutorialBlockReason } {
-  const h = getPwaHints();
-
-  // --- Positive conditions ---
-  const conditionA = h.firstSuccessAt !== null && h.tutorialShownCount === 0;
-  const conditionB = h.sessionCount >= 3 && h.tutorialShownCount < 2;
-  const conditionC = h.actionsCount >= 3 && h.tutorialShownCount < 2;
-
-  if (!conditionA && !conditionB && !conditionC) {
-    return { show: false, reason: 'conditions_not_met' };
-  }
-
-  // --- Anti-spam gates ---
-  if (h.tutorialShownCount >= 3) {
-    return { show: false, reason: 'max_shown' };
-  }
-  if (msSince(h.tutorialLastShownAt) < THREE_DAYS_MS) {
-    return { show: false, reason: 'shown_recently' };
-  }
-  if (msSince(h.tutorialDismissedAt) < THREE_DAYS_MS) {
-    return { show: false, reason: 'dismissed_recently' };
-  }
-
-  return { show: true, reason: null };
+/** @deprecated Use shouldShowPwaPrompt */
+export function shouldShowPwaTutorial(): { show: boolean; reason: string | null } {
+  const show = shouldShowPwaPrompt();
+  return { show, reason: show ? null : 'conditions_not_met' };
 }

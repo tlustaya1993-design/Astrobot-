@@ -86,6 +86,43 @@ async function sendToTelegram(text: string): Promise<void> {
   }
 }
 
+/**
+ * Репорт технической ошибки в n8n (stack trace и контекст).
+ * URL берётся строго из переменной окружения N8N_WEBHOOK_URL (без хардкода).
+ * Никогда не бросает — сбой вебхука не должен ронять основной запрос.
+ */
+export async function sendN8nAlert(
+  errorType: string,
+  rawError: unknown,
+  context: AlertContext = {},
+): Promise<void> {
+  const webhookUrl = process.env.N8N_WEBHOOK_URL?.trim();
+  if (!webhookUrl) {
+    logger.warn("N8N_WEBHOOK_URL is not set — skipping n8n error alert");
+    return;
+  }
+  try {
+    const err = rawError instanceof Error ? rawError : null;
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        errorType,
+        endpoint: context.endpoint ?? null,
+        sessionId: context.sessionId ?? null,
+        conversationId: context.conversationId ?? null,
+        email: context.email ?? null,
+        errorText: err?.message ?? String(rawError),
+        stackTrace: err?.stack ?? null,
+        source: "astrobot-error",
+        createdAt: new Date().toISOString(),
+      }),
+    });
+  } catch {
+    // Never crash the main request due to webhook failure
+  }
+}
+
 export async function sendTelegramAlert(
   errorType: string,
   rawError: string,
@@ -131,11 +168,11 @@ export type N8nSupportPayload = {
 };
 
 /**
- * Отправляет обращение в поддержку на вебхук n8n.
+ * Отправляет обращение из формы поддержки на вебхук n8n (текст + ссылка на скриншот).
  * URL берётся строго из переменной окружения N8N_WEBHOOK_URL (без хардкода).
  * Никогда не бросает — сбой уведомления не должен ронять основной запрос.
  */
-export async function sendN8nAlert(payload: N8nSupportPayload): Promise<void> {
+export async function sendN8nSupportRequest(payload: N8nSupportPayload): Promise<void> {
   const webhookUrl = process.env.N8N_WEBHOOK_URL?.trim();
   if (!webhookUrl) {
     logger.warn("N8N_WEBHOOK_URL is not set — skipping n8n support alert");

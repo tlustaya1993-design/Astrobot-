@@ -29,7 +29,7 @@ import AuthModal from '@/components/AuthModal';
 import DailyForecastCard from '@/components/chat/DailyForecastCard';
 import PaywallSheet from '@/components/billing/PaywallSheet';
 import ProfileSheet from '@/components/profile/ProfileSheet';
-import PwaInstallBanner, { type PwaInstallBannerHandle } from '@/components/pwa/PwaInstallBanner';
+import PwaInstallBanner from '@/components/pwa/PwaInstallBanner';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from '@/hooks/use-toast';
 import { getToken } from '@/lib/session';
@@ -267,7 +267,6 @@ export default function Chat() {
   }, []);
 
   const lastSendHapticAtRef = useRef(0);
-  const pwaInstallRef = useRef<PwaInstallBannerHandle>(null);
 
   type LlmFollowUpState = {
     key: string;
@@ -776,7 +775,6 @@ export default function Chat() {
       if (!conversationId && newConvId) {
         setLocation(`/chat/${newConvId}`, { replace: true });
       }
-      if (newConvId) pwaInstallRef.current?.check();
     } catch {
       pendingScrollAfterSendRef.current = false;
     }
@@ -797,7 +795,6 @@ export default function Chat() {
       if (!conversationId && newConvId) {
         setLocation(`/chat/${newConvId}`, { replace: true });
       }
-      if (newConvId) pwaInstallRef.current?.check();
     } catch {
       pendingScrollAfterSendRef.current = false;
     }
@@ -1468,6 +1465,7 @@ export default function Chat() {
         variant="sheet"
         open={showProfile}
         onClose={() => setShowProfile(false)}
+        conversationId={conversationId}
       />
 
       <HistoryDrawer
@@ -1497,7 +1495,9 @@ export default function Chat() {
         />
       ) : null}
 
-      <PwaInstallBanner handle={pwaInstallRef} />
+      <PwaInstallBanner
+        blocked={tutorialActive || onboardingPhase !== null || showSelfEmptyHero}
+      />
 
       {typeof contextSwitchTargetId !== 'undefined' && (
         <>

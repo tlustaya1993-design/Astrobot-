@@ -32,6 +32,19 @@ export async function ensureBootstrapSchema(pool: Pool): Promise<void> {
     updated_at timestamp NOT NULL DEFAULT now()
   )`);
 
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE users ADD CONSTRAINT users_requests_balance_nonneg CHECK (requests_balance >= 0);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE users ADD CONSTRAINT users_requests_used_nonneg CHECK (requests_used >= 0);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS contacts (
     id serial PRIMARY KEY,
     session_id text NOT NULL,
@@ -99,6 +112,36 @@ export async function ensureBootstrapSchema(pool: Pool): Promise<void> {
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS request_ledger (
+    id serial PRIMARY KEY,
+    session_id text NOT NULL,
+    user_id integer,
+    type text NOT NULL,
+    amount integer NOT NULL,
+    idempotency_key text NOT NULL UNIQUE,
+    ref_type text,
+    ref_id text,
+    metadata jsonb,
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
+    ON messages (conversation_id, created_at)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_conversations_session_created
+    ON conversations (session_id, created_at DESC)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_payments_session_created
+    ON payments (session_id, created_at DESC)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_request_ledger_session_created
+    ON request_ledger (session_id, created_at DESC)
+  `);
 }
 
 /** For logs / readiness: which core tables exist. */

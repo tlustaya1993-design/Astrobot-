@@ -114,6 +114,7 @@ interface Props {
   onChartMetaChanged?: () => void;
   /** Полноэкранная страница вместо нижнего шита */
   variant?: "sheet" | "page";
+  conversationId?: number;
 }
 
 export default function ProfileSheet({
@@ -121,6 +122,7 @@ export default function ProfileSheet({
   onClose,
   onChartMetaChanged,
   variant = "sheet",
+  conversationId,
 }: Props) {
   const { isLoggedIn, email, logout } = useAuth();
   const { start: startTutorial } = useTutorial();
@@ -605,7 +607,11 @@ export default function ProfileSheet({
 
               <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} initialTab="login" />
               <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
-              <SupportModal open={showSupport} onClose={() => setShowSupport(false)} />
+              <SupportModal
+                open={showSupport}
+                onClose={() => setShowSupport(false)}
+                conversationId={conversationId}
+              />
 
               {section === "memories" && (
                 <div

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { sendTelegramAlert, sendN8nAlert } from "../lib/telegram-alert.js";
+import { sendTelegramAlert, sendN8nSupportRequest } from "../lib/telegram-alert.js";
 import { uploadScreenshotToR2, isR2Configured } from "../lib/r2-upload.js";
 import { logger } from "../lib/logger.js";
 
@@ -75,7 +75,7 @@ router.post("/urgent", (req, res) => {
     }
 
     // Обращение в n8n — основной канал автоматизации поддержки.
-    await sendN8nAlert({
+    await sendN8nSupportRequest({
       text: text || "(без описания)",
       screenshotUrl,
       sessionId,
