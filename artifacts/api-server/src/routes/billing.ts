@@ -698,6 +698,7 @@ router.post("/payments/reconcile", async (req, res) => {
     try {
       const providerPayment = await getYookassaPayment(latest.providerPaymentId);
       const verification = verifyYookassaPaymentMatchesRecord(latest, providerPayment);
+      const verificationFailureReason = verification.ok ? null : verification.reason;
       if (providerPayment?.status) {
         effectiveStatus = providerPayment.status;
         await db
@@ -718,7 +719,7 @@ router.post("/payments/reconcile", async (req, res) => {
             paymentId: latest.id,
             providerPaymentId: latest.providerPaymentId,
             sessionId,
-            reason: verification.reason,
+            reason: verificationFailureReason,
           },
           "Payment reconcile rejected unverified YooKassa settlement",
         );
@@ -790,6 +791,7 @@ router.post("/payments/webhook", async (req, res) => {
     ? providerPayment.status
     : notification.object.status;
   const verification = verifyYookassaPaymentMatchesRecord(paymentRow, providerPayment);
+  const verificationFailureReason = verification.ok ? null : verification.reason;
 
   await db
     .update(paymentsTable)
@@ -808,7 +810,7 @@ router.post("/payments/webhook", async (req, res) => {
       {
         paymentId: paymentRow.id,
         providerPaymentId,
-        reason: verification.reason,
+        reason: verificationFailureReason,
       },
       "Payment webhook rejected unverified YooKassa settlement",
     );

@@ -1,15 +1,12 @@
-import type { Payment } from "@workspace/db";
-
-type PaymentForVerification = Pick<
-  Payment,
-  | "providerPaymentId"
-  | "appPaymentId"
-  | "sessionId"
-  | "packageCode"
-  | "creditsGranted"
-  | "amountRub"
-  | "currency"
->;
+type PaymentForVerification = {
+  providerPaymentId: string;
+  appPaymentId: string;
+  sessionId: string;
+  packageCode: string;
+  creditsGranted: number;
+  amountRub: string;
+  currency: string;
+};
 
 type ProviderPaymentForVerification = {
   id?: unknown;
