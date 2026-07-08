@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { sendTelegramAlert, sendN8nSupportRequest } from "../lib/telegram-alert.js";
-import { uploadScreenshotToR2, isR2Configured } from "../lib/r2-upload.js";
+import { uploadScreenshotToR2, isR2Configured, describeR2Config } from "../lib/r2-upload.js";
 import { logger } from "../lib/logger.js";
 
 const router = Router();
@@ -70,7 +70,10 @@ router.post("/urgent", (req, res) => {
           logger.warn({ err }, "Failed to upload support screenshot to R2");
         }
       } else {
-        logger.warn("Support screenshot received but R2 is not configured — skipping upload");
+        logger.warn(
+          { vars: describeR2Config() },
+          "Support screenshot received but R2 is not configured — skipping upload",
+        );
       }
     }
 

@@ -63,6 +63,16 @@ async function attachFullApplication(root: Express): Promise<void> {
 
     configureApp(root);
 
+    try {
+      const { describeR2Config, isR2Configured } = await import("./lib/r2-upload.js");
+      logger.info(
+        { configured: isR2Configured(), vars: describeR2Config() },
+        "[boot] Cloudflare R2 (support screenshots) env diagnostics",
+      );
+    } catch (err) {
+      logger.warn({ err }, "[boot] failed to log R2 diagnostics");
+    }
+
     if (db.pool) {
       startDbInitInBackground(db.pool, db.runDbMigrations);
     } else {

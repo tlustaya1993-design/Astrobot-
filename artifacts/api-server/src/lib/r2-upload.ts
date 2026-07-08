@@ -21,6 +21,27 @@ export function isR2Configured(): boolean {
   return Boolean(ACCESS_KEY_ID && SECRET_ACCESS_KEY && ENDPOINT && BUCKET_NAME);
 }
 
+/**
+ * Безопасная диагностика: по каждой переменной R2 показывает set(<длина>) или
+ * MISSING, без раскрытия секретов. Читает process.env напрямую, чтобы отражать
+ * реальное окружение процесса. Для логов при старте и отладки на Railway.
+ */
+export function describeR2Config(): string {
+  const vars: Record<string, string | undefined> = {
+    CLOUDFLARE_ACCESS_KEY_ID: process.env.CLOUDFLARE_ACCESS_KEY_ID,
+    CLOUDFLARE_SECRET_ACCESS_KEY: process.env.CLOUDFLARE_SECRET_ACCESS_KEY,
+    CLOUDFLARE_ENDPOINT: process.env.CLOUDFLARE_ENDPOINT,
+    CLOUDFLARE_BUCKET_NAME: process.env.CLOUDFLARE_BUCKET_NAME,
+  };
+  return Object.entries(vars)
+    .map(([name, raw]) => {
+      const trimmed = raw?.trim() ?? "";
+      const short = name.replace("CLOUDFLARE_", "");
+      return trimmed ? `${short}=set(${trimmed.length})` : `${short}=MISSING`;
+    })
+    .join(", ");
+}
+
 let cachedClient: S3Client | null = null;
 
 function getClient(): S3Client {
