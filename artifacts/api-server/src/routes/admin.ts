@@ -4,6 +4,10 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, usersTable, conversations, messages } from "@workspace/db";
 import { hasRedis, pingRedis } from "../lib/ai-rate-limit.js";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
+import {
+  verifyYooKassaPaymentForCredits,
+  type YooKassaPaymentForVerification,
+} from "../lib/billing-payment-safety.js";
 import { getYookassaPayment, createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
 import { safeBuildSystemPrompt } from "./openai/conversations.js";
 
@@ -54,26 +58,72 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
 
     if (!locked) return 0;
     if (locked.status !== "succeeded") return 0;
+    if (!locked.webhookVerified) return 0;
     if (locked.creditsAppliedAt) return 0;
+
+    const [claimed] = await tx
+      .update(paymentsTable)
+      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(paymentsTable.id, paymentId),
+          eq(paymentsTable.status, "succeeded"),
+          eq(paymentsTable.webhookVerified, true),
+          sql`${paymentsTable.creditsAppliedAt} IS NULL`,
+        ),
+      )
+      .returning({
+        sessionId: paymentsTable.sessionId,
+        creditsGranted: paymentsTable.creditsGranted,
+      });
+
+    if (!claimed) return 0;
 
     const updated = await tx
       .update(usersTable)
       .set({
-        requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
+        requestsBalance: sql`${usersTable.requestsBalance} + ${claimed.creditsGranted}`,
         updatedAt: new Date(),
       })
-      .where(eq(usersTable.sessionId, locked.sessionId))
+      .where(eq(usersTable.sessionId, claimed.sessionId))
       .returning({ id: usersTable.id });
 
-    if (updated.length === 0) return 0;
+    if (updated.length === 0) {
+      throw new Error(`Cannot apply credits: user session not found for payment ${paymentId}`);
+    }
 
-    await tx
-      .update(paymentsTable)
-      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
-      .where(eq(paymentsTable.id, paymentId));
-
-    return locked.creditsGranted;
+    return claimed.creditsGranted;
   });
+}
+
+async function syncYooKassaPaymentFromProvider(
+  paymentRow: typeof paymentsTable.$inferSelect,
+): Promise<{ status: string; verifiedForCredits: boolean }> {
+  const providerPayment = await getYookassaPayment(paymentRow.providerPaymentId);
+  const verification = verifyYooKassaPaymentForCredits(
+    paymentRow,
+    providerPayment as YooKassaPaymentForVerification,
+  );
+  const verifiedForCredits = verification.ok;
+  const statusToPersist =
+    providerPayment.status === "succeeded" && !verifiedForCredits
+      ? paymentRow.status
+      : providerPayment.status;
+
+  await db
+    .update(paymentsTable)
+    .set({
+      status: statusToPersist,
+      metadata: providerPayment as unknown as Record<string, unknown>,
+      webhookVerified: verifiedForCredits ? true : paymentRow.webhookVerified,
+      updatedAt: new Date(),
+    })
+    .where(eq(paymentsTable.id, paymentRow.id));
+
+  return {
+    status: statusToPersist,
+    verifiedForCredits: verifiedForCredits || paymentRow.webhookVerified,
+  };
 }
 
 type ServiceStatus = "ok" | "degraded" | "error";
@@ -430,21 +480,11 @@ router.post("/users/reconcile", async (req, res) => {
   let applied = 0;
   for (const payment of recentPayments) {
     applied += await applyCreditsIfNeededByPaymentId(payment.id);
-    if (payment.status !== "succeeded" && payment.providerPaymentId) {
+    if ((!payment.webhookVerified || payment.status !== "succeeded") && payment.providerPaymentId) {
       try {
-        const providerPayment = await getYookassaPayment(payment.providerPaymentId);
-        if (providerPayment?.status) {
-          await db
-            .update(paymentsTable)
-            .set({
-              status: providerPayment.status,
-              metadata: providerPayment as unknown as Record<string, unknown>,
-              updatedAt: new Date(),
-            })
-            .where(eq(paymentsTable.id, payment.id));
-          if (providerPayment.status === "succeeded") {
-            applied += await applyCreditsIfNeededByPaymentId(payment.id);
-          }
+        const synced = await syncYooKassaPaymentFromProvider(payment);
+        if (synced.verifiedForCredits && synced.status === "succeeded") {
+          applied += await applyCreditsIfNeededByPaymentId(payment.id);
         }
       } catch {
         // ignore provider sync errors; operator can retry
