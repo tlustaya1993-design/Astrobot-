@@ -1,5 +1,3 @@
-import type { Payment } from "@workspace/db";
-
 export type YooKassaPaymentForVerification = {
   id: string;
   status: string;
@@ -11,16 +9,15 @@ export type YooKassaPaymentForVerification = {
   metadata?: Record<string, unknown>;
 };
 
-type PaymentVerificationRow = Pick<
-  Payment,
-  | "providerPaymentId"
-  | "appPaymentId"
-  | "sessionId"
-  | "packageCode"
-  | "creditsGranted"
-  | "amountRub"
-  | "currency"
->;
+type PaymentVerificationRow = {
+  providerPaymentId: string;
+  appPaymentId: string;
+  sessionId: string;
+  packageCode: string;
+  creditsGranted: number;
+  amountRub: string;
+  currency: string;
+};
 
 export type YooKassaPaymentVerification =
   | { ok: true }
