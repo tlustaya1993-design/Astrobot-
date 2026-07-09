@@ -444,6 +444,7 @@ async function syncYooKassaPaymentFromProvider(
     providerPayment as YooKassaPaymentForVerification,
   );
   const verifiedForCredits = verification.ok;
+  const verificationFailureReason = verification.ok ? null : verification.reason;
   const statusToPersist =
     providerPayment.status === "succeeded" && !verifiedForCredits
       ? paymentRow.status
@@ -465,7 +466,7 @@ async function syncYooKassaPaymentFromProvider(
         paymentId: paymentRow.id,
         providerPaymentId: paymentRow.providerPaymentId,
         source,
-        reason: verification.reason,
+        reason: verificationFailureReason,
       },
       "YooKassa payment did not match local payment row; credits not applied",
     );
