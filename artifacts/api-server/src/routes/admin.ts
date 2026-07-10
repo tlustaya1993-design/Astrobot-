@@ -5,6 +5,7 @@ import { db, paymentsTable, usersTable, conversations, messages } from "@workspa
 import { hasRedis, pingRedis } from "../lib/ai-rate-limit.js";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
 import { getYookassaPayment, createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
+import { verifyYookassaPaymentMatchesRecord } from "../lib/billing-payment-safety.js";
 import { safeBuildSystemPrompt } from "./openai/conversations.js";
 
 const router: IRouter = Router();
@@ -21,22 +22,23 @@ function isAdminEmail(email: string | null | undefined): boolean {
   return parseAdminEmails().includes(email.trim().toLowerCase());
 }
 
-async function resolveEffectiveEmail(req: { authEmail?: string; sessionId?: string }): Promise<string | null> {
-  if (req.authEmail?.trim()) return req.authEmail.trim().toLowerCase();
-  if (!req.sessionId) return null;
+async function resolveAuthenticatedEmail(req: { authEmail?: string; sessionId?: string }): Promise<string | null> {
+  const authEmail = req.authEmail?.trim().toLowerCase();
+  if (!authEmail || !req.sessionId) return null;
   const [user] = await db
     .select({ email: usersTable.email })
     .from(usersTable)
     .where(eq(usersTable.sessionId, req.sessionId))
     .limit(1);
-  return user?.email?.trim().toLowerCase() ?? null;
+  const dbEmail = user?.email?.trim().toLowerCase() ?? "";
+  return dbEmail === authEmail ? authEmail : null;
 }
 
 async function requireAdmin(
   req: { authEmail?: string; sessionId?: string },
   res: { status: (n: number) => { json: (x: unknown) => void } },
 ): Promise<boolean> {
-  const effectiveEmail = await resolveEffectiveEmail(req);
+  const effectiveEmail = await resolveAuthenticatedEmail(req);
   if (!isAdminEmail(effectiveEmail)) {
     res.status(403).json({ error: "Доступ только для администратора" });
     return false;
@@ -47,14 +49,19 @@ async function requireAdmin(
 async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<number> {
   return db.transaction(async (tx) => {
     const [locked] = await tx
-      .select()
-      .from(paymentsTable)
-      .where(eq(paymentsTable.id, paymentId))
-      .limit(1);
+      .update(paymentsTable)
+      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(paymentsTable.id, paymentId),
+          eq(paymentsTable.status, "succeeded"),
+          eq(paymentsTable.webhookVerified, true),
+          sql`${paymentsTable.creditsAppliedAt} IS NULL`,
+        ),
+      )
+      .returning();
 
     if (!locked) return 0;
-    if (locked.status !== "succeeded") return 0;
-    if (locked.creditsAppliedAt) return 0;
 
     const updated = await tx
       .update(usersTable)
@@ -65,15 +72,32 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
       .where(eq(usersTable.sessionId, locked.sessionId))
       .returning({ id: usersTable.id });
 
-    if (updated.length === 0) return 0;
-
-    await tx
-      .update(paymentsTable)
-      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
-      .where(eq(paymentsTable.id, paymentId));
+    if (updated.length === 0) {
+      throw new Error(`Cannot apply payment credits: user session ${locked.sessionId} not found`);
+    }
 
     return locked.creditsGranted;
   });
+}
+
+async function syncPaymentFromYookassa(
+  payment: typeof paymentsTable.$inferSelect,
+  providerPayment: Awaited<ReturnType<typeof getYookassaPayment>>,
+): Promise<{ status: string; verified: boolean }> {
+  const verification = verifyYookassaPaymentMatchesRecord(payment, providerPayment);
+  const verified = verification.ok;
+
+  await db
+    .update(paymentsTable)
+    .set({
+      status: providerPayment.status,
+      webhookVerified: verified,
+      metadata: providerPayment as unknown as Record<string, unknown>,
+      updatedAt: new Date(),
+    })
+    .where(eq(paymentsTable.id, payment.id));
+
+  return { status: providerPayment.status, verified };
 }
 
 type ServiceStatus = "ok" | "degraded" | "error";
@@ -307,7 +331,7 @@ router.get("/metrics", async (req, res) => {
 
 router.get("/me", async (req, res) => {
   if (!(await requireAdmin(req, res))) return;
-  res.json({ ok: true, email: await resolveEffectiveEmail(req) });
+  res.json({ ok: true, email: await resolveAuthenticatedEmail(req) });
 });
 
 router.get("/users", async (req, res) => {
@@ -430,21 +454,12 @@ router.post("/users/reconcile", async (req, res) => {
   let applied = 0;
   for (const payment of recentPayments) {
     applied += await applyCreditsIfNeededByPaymentId(payment.id);
-    if (payment.status !== "succeeded" && payment.providerPaymentId) {
+    if (payment.providerPaymentId && (!payment.webhookVerified || payment.status !== "succeeded")) {
       try {
         const providerPayment = await getYookassaPayment(payment.providerPaymentId);
-        if (providerPayment?.status) {
-          await db
-            .update(paymentsTable)
-            .set({
-              status: providerPayment.status,
-              metadata: providerPayment as unknown as Record<string, unknown>,
-              updatedAt: new Date(),
-            })
-            .where(eq(paymentsTable.id, payment.id));
-          if (providerPayment.status === "succeeded") {
-            applied += await applyCreditsIfNeededByPaymentId(payment.id);
-          }
+        const synced = await syncPaymentFromYookassa(payment, providerPayment);
+        if (synced.verified) {
+          applied += await applyCreditsIfNeededByPaymentId(payment.id);
         }
       } catch {
         // ignore provider sync errors; operator can retry
