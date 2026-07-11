@@ -74,7 +74,9 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
       .where(eq(usersTable.sessionId, claimed.sessionId))
       .returning({ id: usersTable.id });
 
-    if (updated.length === 0) return 0;
+    if (updated.length === 0) {
+      throw new Error(`Cannot apply payment credits: user session ${claimed.sessionId} not found`);
+    }
 
     return claimed.creditsGranted;
   });
