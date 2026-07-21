@@ -35,6 +35,7 @@ import {
   canAffordRequest,
   getBalanceAfterCharge,
   coerceNonNegInt,
+  getVerifiedAccountEmail,
 } from "../../lib/billing-policy.js";
 import { parseAvatarJson } from "../../lib/avatar-config.js";
 
@@ -522,9 +523,10 @@ router.post("/conversations/:id/messages", async (req, res) => {
     requestCost = baseCost >= 2 ? 3 : 2;
   }
   const remainingFree = getRemainingFreeRequests(usedBeforeCharge);
-  const isUnlimited = isUnlimitedUser(owner.email);
+  const verifiedAccountEmail = getVerifiedAccountEmail(req.authEmail, owner.email);
+  const isUnlimited = isUnlimitedUser(verifiedAccountEmail);
 
-  if (!canAffordRequest(usedBeforeCharge, balanceBefore, requestCost, owner.email)) {
+  if (!canAffordRequest(usedBeforeCharge, balanceBefore, requestCost, verifiedAccountEmail)) {
     logger.info(
       { sessionId, usedBeforeCharge, balanceBefore, requestCost, remainingFree, freeLimit: FREE_REQUESTS_LIMIT },
       "Request blocked: insufficient quota",
@@ -542,7 +544,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
   // Rate limit — technical safeguard against spam, bugs, and bots.
   // Does not block paid users from using their balance; only enforces a minimum
   // interval between requests and prevents parallel requests from the same session.
-  const tier = detectTier(owner.email, balanceBefore, isUnlimited);
+  const tier = detectTier(verifiedAccountEmail, balanceBefore, isUnlimited);
   const throttle = await checkAiThrottle(sessionId, tier);
   if (!throttle.ok) {
     res.setHeader("Retry-After", String(throttle.waitSec));
@@ -564,7 +566,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     usedBeforeCharge,
     balanceBefore,
     requestCost,
-    owner.email,
+    verifiedAccountEmail,
   );
 
   balanceBeforeCharge = balanceBefore;
