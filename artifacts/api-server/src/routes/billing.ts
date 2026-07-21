@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { Router, type IRouter } from "express";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, usersTable } from "@workspace/db";
 import {
   createYookassaPayment,
@@ -12,6 +12,7 @@ import {
 import { logger } from "../lib/logger.js";
 import {
   FREE_REQUESTS_LIMIT,
+  getVerifiedAccountEmail,
   isUnlimitedEmail,
 } from "../lib/billing-policy.js";
 import {
@@ -351,18 +352,6 @@ function isValidReceiptEmailForGuest(value: unknown): value is string {
   return normalizeReceiptEmail(email) !== DEFAULT_RECEIPT_EMAIL;
 }
 
-async function persistReceiptEmailIfMissing(sessionId: string, email: string): Promise<void> {
-  await db
-    .update(usersTable)
-    .set({ email, updatedAt: new Date() })
-    .where(
-      and(
-        eq(usersTable.sessionId, sessionId),
-        or(sql`${usersTable.email} IS NULL`, eq(usersTable.email, "")),
-      ),
-    );
-}
-
 function appendReturnFlag(returnUrl: string): string {
   try {
     const url = new URL(returnUrl);
@@ -498,7 +487,9 @@ router.get("/credits", async (req, res) => {
   const used = user?.requestsUsed ?? 0;
   const balance = user?.requestsBalance ?? 0;
   const freeRemaining = Math.max(0, FREE_REQUESTS_LIMIT - used);
-  const isUnlimited = isUnlimitedEmail(user?.email);
+  const isUnlimited = isUnlimitedEmail(
+    getVerifiedAccountEmail(req.authEmail, user?.email),
+  );
   const remaining = isUnlimited ? Number.MAX_SAFE_INTEGER : freeRemaining + Math.max(0, balance);
 
   res.json({
@@ -591,16 +582,13 @@ router.post("/payments/create", async (req, res) => {
   const userId = user?.id ?? null;
 
   let receiptForYoo: string | null = null;
-  let receiptPersist = false;
 
   if (user?.email?.trim() && isValidReceiptEmailForGuest(user.email)) {
     receiptForYoo = normalizeReceiptEmail(user.email);
   } else if (req.authEmail?.trim() && isValidReceiptEmailForGuest(req.authEmail)) {
     receiptForYoo = normalizeReceiptEmail(req.authEmail);
-    receiptPersist = true;
   } else if (isValidReceiptEmailForGuest(receiptEmail)) {
     receiptForYoo = normalizeReceiptEmail(receiptEmail);
-    receiptPersist = true;
   }
 
   if (!receiptForYoo) {
@@ -621,10 +609,6 @@ router.post("/payments/create", async (req, res) => {
       rejectCode: "missing_receipt_email",
     });
     return;
-  }
-
-  if (receiptPersist) {
-    await persistReceiptEmailIfMissing(sessionId, receiptForYoo);
   }
 
   try {

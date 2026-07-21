@@ -3,7 +3,11 @@ import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, usersTable, conversations, messages } from "@workspace/db";
 import { hasRedis, pingRedis } from "../lib/ai-rate-limit.js";
-import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
+import {
+  FREE_REQUESTS_LIMIT,
+  getVerifiedAccountEmail,
+  isUnlimitedEmail,
+} from "../lib/billing-policy.js";
 import {
   verifyYooKassaPaymentForCredits,
   type YooKassaPaymentForVerification,
@@ -26,14 +30,13 @@ function isAdminEmail(email: string | null | undefined): boolean {
 }
 
 async function resolveEffectiveEmail(req: { authEmail?: string; sessionId?: string }): Promise<string | null> {
-  if (req.authEmail?.trim()) return req.authEmail.trim().toLowerCase();
-  if (!req.sessionId) return null;
+  if (!req.authEmail?.trim() || !req.sessionId) return null;
   const [user] = await db
     .select({ email: usersTable.email })
     .from(usersTable)
     .where(eq(usersTable.sessionId, req.sessionId))
     .limit(1);
-  return user?.email?.trim().toLowerCase() ?? null;
+  return getVerifiedAccountEmail(req.authEmail, user?.email);
 }
 
 async function requireAdmin(
