@@ -26,14 +26,15 @@ function isAdminEmail(email: string | null | undefined): boolean {
 }
 
 async function resolveEffectiveEmail(req: { authEmail?: string; sessionId?: string }): Promise<string | null> {
-  if (req.authEmail?.trim()) return req.authEmail.trim().toLowerCase();
-  if (!req.sessionId) return null;
+  if (!req.authEmail?.trim() || !req.sessionId) return null;
+  const authenticatedEmail = req.authEmail.trim().toLowerCase();
   const [user] = await db
     .select({ email: usersTable.email })
     .from(usersTable)
     .where(eq(usersTable.sessionId, req.sessionId))
     .limit(1);
-  return user?.email?.trim().toLowerCase() ?? null;
+  const storedEmail = user?.email?.trim().toLowerCase();
+  return storedEmail === authenticatedEmail ? authenticatedEmail : null;
 }
 
 async function requireAdmin(
