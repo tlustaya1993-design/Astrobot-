@@ -1,0 +1,3 @@
+kb-sync-test: multi-tier push verification 2026-07-24, safe to remove.
+This file lives under artifacts/astrobot/public/ and must NOT be ingested
+into the knowledge base — it exists only to confirm the exclude rule works.

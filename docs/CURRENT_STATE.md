@@ -79,3 +79,5 @@
 4. Technical note streaming → согласование PR  
 5. Billing analysis (без pending table без отдельного OK)  
 6. Prompt behavior audit (read-only)
+
+<!-- kb-sync-test: multi-tier push verification 2026-07-24, safe to remove -->
