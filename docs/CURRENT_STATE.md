@@ -83,3 +83,4 @@
 <!-- kb-sync-test: multi-tier push verification 2026-07-24, safe to remove -->
 <!-- kb-sync-test #3: modification to a whitelisted tier=docs file — must appear in changedFiles and get re-ingested -->
 <!-- kb-sync-test #4: repeat of the control test, same file/tier -->
+<!-- kb-sync-test #5: decode check — non-ASCII stress test: русский текст, «ёлочки», emoji 🚀, é à ü — must survive base64→UTF-8 decode without mojibake -->
