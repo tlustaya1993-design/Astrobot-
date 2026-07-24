@@ -82,3 +82,4 @@
 
 <!-- kb-sync-test: multi-tier push verification 2026-07-24, safe to remove -->
 <!-- kb-sync-test #3: modification to a whitelisted tier=docs file — must appear in changedFiles and get re-ingested -->
+<!-- kb-sync-test #4: repeat of the control test, same file/tier -->
