@@ -8,7 +8,17 @@ import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "astrobot-dev-secret-change-in-production";
+const DEFAULT_DEV_JWT_SECRET = "astrobot-dev-secret-change-in-production";
+function resolveJwtSecret(): string {
+  const configured = process.env.JWT_SECRET?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET is required in production");
+  }
+  return DEFAULT_DEV_JWT_SECRET;
+}
+
+const JWT_SECRET = resolveJwtSecret();
 const SALT_ROUNDS = 10;
 const TOKEN_TTL = "365d";
 const OAUTH_STATE_TTL = "10m";
@@ -49,6 +59,16 @@ function buildYandexCallbackUrl(req: Request): string {
 
 function buildFrontendCallbackUrl(req: Request): URL {
   return new URL("/auth/callback", getPublicBaseUrl(req));
+}
+
+function getTrustedOAuthSessionId(req: Pick<Request, "sessionId">): string | null {
+  const sessionId = req.sessionId?.trim();
+  return sessionId || null;
+}
+
+function clientWantsJson(req: Request): boolean {
+  const accept = req.headers.accept;
+  return typeof accept === "string" && accept.includes("application/json");
 }
 
 async function exchangeYandexCode(code: string, redirectUri: string): Promise<string> {
@@ -203,14 +223,22 @@ router.post("/register", async (req, res) => {
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
   if (existingSessionId) {
+    if (req.sessionId !== existingSessionId) {
+      res.status(403).json({ error: "Нельзя привязать чужую сессию" });
+      return;
+    }
     // Migrate anonymous session → registered account
     const [anon] = await db
-      .select({ id: usersTable.id })
+      .select({ id: usersTable.id, email: usersTable.email, passwordHash: usersTable.passwordHash })
       .from(usersTable)
       .where(eq(usersTable.sessionId, existingSessionId))
       .limit(1);
 
     if (anon) {
+      if (anon.email || anon.passwordHash) {
+        res.status(409).json({ error: "Эта сессия уже привязана к аккаунту" });
+        return;
+      }
       const [updated] = await db
         .update(usersTable)
         .set({ email: normalizedEmail, passwordHash })
@@ -275,8 +303,7 @@ router.get("/yandex/start", async (req, res) => {
     return;
   }
 
-  const sessionIdFromQuery = typeof req.query.sessionId === "string" ? req.query.sessionId : null;
-  const sessionId = sessionIdFromQuery || req.sessionId || null;
+  const sessionId = getTrustedOAuthSessionId(req);
   const returnTo = sanitizeReturnTo(req.query.returnTo);
   const statePayload: YandexOAuthState = {
     type: "yandex_oauth_state",
@@ -290,6 +317,11 @@ router.get("/yandex/start", async (req, res) => {
   authorizeUrl.searchParams.set("client_id", clientId);
   authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("state", state);
+
+  if (clientWantsJson(req)) {
+    res.json({ authorizeUrl: authorizeUrl.toString() });
+    return;
+  }
 
   res.redirect(authorizeUrl.toString());
 });
@@ -386,5 +418,5 @@ router.post("/logout", (req, res) => {
   res.json({ ok: true });
 });
 
-export { JWT_SECRET };
+export { JWT_SECRET, getTrustedOAuthSessionId };
 export default router;
