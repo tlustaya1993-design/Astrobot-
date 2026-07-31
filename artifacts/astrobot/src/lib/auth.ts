@@ -1,4 +1,4 @@
-import { getAuthHeaders, getSessionId, getStoredEmail, getToken } from './session';
+import { getAuthHeaders, getStoredEmail, getToken } from './session';
 
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -11,7 +11,10 @@ export interface AuthResponse {
 export async function apiRegister(email: string, password: string, sessionId?: string): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE}/api/auth/register`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(sessionId ? { 'x-session-id': sessionId } : {}),
+    },
     body: JSON.stringify({ email, password, sessionId }),
   });
   const data = await res.json();
@@ -52,10 +55,23 @@ export function getYandexOAuthStartUrl(returnTo = '/chat'): string {
   const normalizedReturnTo =
     returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/chat';
   const params = new URLSearchParams({
-    sessionId: getSessionId(),
     returnTo: normalizedReturnTo,
   });
   return `${API_BASE}/api/auth/yandex/start?${params.toString()}`;
+}
+
+export async function apiGetYandexOAuthStartUrl(returnTo = '/chat'): Promise<string> {
+  const normalizedReturnTo =
+    returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/chat';
+  const params = new URLSearchParams({ returnTo: normalizedReturnTo });
+  const res = await fetch(`${API_BASE}/api/auth/yandex/start-url?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  const data = await res.json();
+  if (!res.ok || typeof data.url !== 'string') {
+    throw new Error(data.error || 'Не удалось начать вход через Яндекс');
+  }
+  return data.url;
 }
 
 export async function apiLogout(): Promise<void> {
