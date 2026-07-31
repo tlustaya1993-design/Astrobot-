@@ -12,7 +12,7 @@ let status: DbInitStatus = "pending";
 let lastError: unknown;
 
 const DB_PING_TIMEOUT_MS = 10_000;
-const MIGRATIONS_TIMEOUT_MS = 30_000;
+const MIGRATIONS_SLOW_LOG_MS = 30_000;
 const MAX_WAIT_ATTEMPTS = 12;
 const WAIT_DELAY_MS = 5_000;
 
@@ -104,7 +104,19 @@ export function startDbInitInBackground(
     }
 
     try {
-      await withTimeout(runMigrations(pool), MIGRATIONS_TIMEOUT_MS, "DB migrations");
+      const slowMigrationTimer = setTimeout(() => {
+        logger.warn(
+          { db: diag.target, elapsedMs: MIGRATIONS_SLOW_LOG_MS },
+          "Database migrations still running",
+        );
+      }, MIGRATIONS_SLOW_LOG_MS);
+      slowMigrationTimer.unref?.();
+
+      try {
+        await runMigrations(pool);
+      } finally {
+        clearTimeout(slowMigrationTimer);
+      }
       status = "ready";
       lastError = undefined;
       const tables = await listPublicTables(pool);
