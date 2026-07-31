@@ -14,6 +14,7 @@ import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedEmail,
 } from "../lib/billing-policy.js";
+import { applyCreditsIfNeededByPaymentId } from "../lib/payment-credits.js";
 
 const router: IRouter = Router();
 
@@ -380,38 +381,6 @@ async function ensurePaymentsTableReady(): Promise<void> {
     });
   }
   await paymentsTableChecked;
-}
-
-async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<number> {
-  return db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select()
-      .from(paymentsTable)
-      .where(eq(paymentsTable.id, paymentId))
-      .limit(1);
-
-    if (!locked) return 0;
-    if (locked.status !== "succeeded") return 0;
-    if (locked.creditsAppliedAt) return 0;
-
-    const updated = await tx
-      .update(usersTable)
-      .set({
-        requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.sessionId, locked.sessionId))
-      .returning({ id: usersTable.id });
-
-    if (updated.length === 0) return 0;
-
-    await tx
-      .update(paymentsTable)
-      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
-      .where(eq(paymentsTable.id, paymentId));
-
-    return locked.creditsGranted;
-  });
 }
 
 router.get("/credits", async (req, res) => {
