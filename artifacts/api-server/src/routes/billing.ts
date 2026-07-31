@@ -14,6 +14,10 @@ import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedEmail,
 } from "../lib/billing-policy.js";
+import {
+  verifyYooKassaPaymentForCredits,
+  type YooKassaPaymentForVerification,
+} from "../lib/billing-payment-safety.js";
 
 const router: IRouter = Router();
 
@@ -392,26 +396,86 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
 
     if (!locked) return 0;
     if (locked.status !== "succeeded") return 0;
+    if (!locked.webhookVerified) return 0;
     if (locked.creditsAppliedAt) return 0;
+
+    const [claimed] = await tx
+      .update(paymentsTable)
+      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(paymentsTable.id, paymentId),
+          eq(paymentsTable.status, "succeeded"),
+          eq(paymentsTable.webhookVerified, true),
+          sql`${paymentsTable.creditsAppliedAt} IS NULL`,
+        ),
+      )
+      .returning({
+        sessionId: paymentsTable.sessionId,
+        creditsGranted: paymentsTable.creditsGranted,
+      });
+
+    if (!claimed) return 0;
 
     const updated = await tx
       .update(usersTable)
       .set({
-        requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
+        requestsBalance: sql`${usersTable.requestsBalance} + ${claimed.creditsGranted}`,
         updatedAt: new Date(),
       })
-      .where(eq(usersTable.sessionId, locked.sessionId))
+      .where(eq(usersTable.sessionId, claimed.sessionId))
       .returning({ id: usersTable.id });
 
-    if (updated.length === 0) return 0;
+    if (updated.length === 0) {
+      throw new Error(`Cannot apply credits: user session not found for payment ${paymentId}`);
+    }
 
-    await tx
-      .update(paymentsTable)
-      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
-      .where(eq(paymentsTable.id, paymentId));
-
-    return locked.creditsGranted;
+    return claimed.creditsGranted;
   });
+}
+
+async function syncYooKassaPaymentFromProvider(
+  paymentRow: typeof paymentsTable.$inferSelect,
+  source: "webhook" | "reconcile",
+): Promise<{ status: string; verifiedForCredits: boolean }> {
+  const providerPayment = await getYookassaPayment(paymentRow.providerPaymentId);
+  const verification = verifyYooKassaPaymentForCredits(
+    paymentRow,
+    providerPayment as YooKassaPaymentForVerification,
+  );
+  const verifiedForCredits = verification.ok;
+  const verificationFailureReason = verification.ok ? null : verification.reason;
+  const statusToPersist =
+    providerPayment.status === "succeeded" && !verifiedForCredits
+      ? paymentRow.status
+      : providerPayment.status;
+
+  await db
+    .update(paymentsTable)
+    .set({
+      status: statusToPersist,
+      metadata: providerPayment as unknown as Record<string, unknown>,
+      webhookVerified: verifiedForCredits ? true : paymentRow.webhookVerified,
+      updatedAt: new Date(),
+    })
+    .where(eq(paymentsTable.id, paymentRow.id));
+
+  if (providerPayment.status === "succeeded" && !verifiedForCredits) {
+    logger.warn(
+      {
+        paymentId: paymentRow.id,
+        providerPaymentId: paymentRow.providerPaymentId,
+        source,
+        reason: verificationFailureReason,
+      },
+      "YooKassa payment did not match local payment row; credits not applied",
+    );
+  }
+
+  return {
+    status: statusToPersist,
+    verifiedForCredits: verifiedForCredits || paymentRow.webhookVerified,
+  };
 }
 
 router.get("/credits", async (req, res) => {
@@ -707,21 +771,11 @@ router.post("/payments/reconcile", async (req, res) => {
   let applied = await applyCreditsIfNeededByPaymentId(latest.id);
 
   // Fallback for cases when webhook was delayed/lost: reconcile directly with YooKassa.
-  if (applied === 0 && latest.providerPaymentId && effectiveStatus !== "succeeded") {
+  if (applied === 0 && latest.providerPaymentId && (!latest.webhookVerified || effectiveStatus !== "succeeded")) {
     try {
-      const providerPayment = await getYookassaPayment(latest.providerPaymentId);
-      if (providerPayment?.status) {
-        effectiveStatus = providerPayment.status;
-        await db
-          .update(paymentsTable)
-          .set({
-            status: providerPayment.status,
-            metadata: providerPayment as unknown as Record<string, unknown>,
-            updatedAt: new Date(),
-          })
-          .where(eq(paymentsTable.id, latest.id));
-      }
-      if (effectiveStatus === "succeeded") {
+      const synced = await syncYooKassaPaymentFromProvider(latest, "reconcile");
+      effectiveStatus = synced.status;
+      if (synced.verifiedForCredits && effectiveStatus === "succeeded") {
         applied = await applyCreditsIfNeededByPaymentId(latest.id);
       }
     } catch (err) {
@@ -771,18 +825,23 @@ router.post("/payments/webhook", async (req, res) => {
     return;
   }
 
-  const nextStatus = notification.object.status;
+  let synced: { status: string; verifiedForCredits: boolean };
+  try {
+    synced = await syncYooKassaPaymentFromProvider(paymentRow, "webhook");
+  } catch (err) {
+    logger.warn(
+      {
+        err,
+        paymentId: paymentRow.id,
+        providerPaymentId,
+      },
+      "Payment webhook provider verification failed",
+    );
+    res.status(200).json({ ok: true });
+    return;
+  }
 
-  await db
-    .update(paymentsTable)
-    .set({
-      status: nextStatus,
-      metadata: notification.object as unknown as Record<string, unknown>,
-      updatedAt: new Date(),
-    })
-    .where(eq(paymentsTable.id, paymentRow.id));
-
-  if (nextStatus === "succeeded") {
+  if (synced.verifiedForCredits && synced.status === "succeeded") {
     await applyCreditsIfNeededByPaymentId(paymentRow.id);
   }
 
