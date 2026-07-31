@@ -33,7 +33,6 @@ import {
   isUnlimitedUser,
   getRemainingFreeRequests,
   canAffordRequest,
-  getBalanceAfterCharge,
   coerceNonNegInt,
 } from "../../lib/billing-policy.js";
 import { parseAvatarJson } from "../../lib/avatar-config.js";
@@ -146,23 +145,32 @@ function requireSessionId(
 
 async function rollbackRequestCharge(
   sessionId: string,
-  balanceBeforeCharge: number,
   requestCost: number,
+  wasUnlimited: boolean,
   context: string,
 ) {
   if (requestCost <= 0) return;
   try {
+    const paidUnitsToRestore = wasUnlimited
+      ? sql<number>`0`
+      : sql<number>`GREATEST(0, GREATEST(0, ${usersTable.requestsUsed}) - ${FREE_REQUESTS_LIMIT}) - GREATEST(0, GREATEST(0, ${usersTable.requestsUsed} - ${requestCost}) - ${FREE_REQUESTS_LIMIT})`;
     await db
       .update(usersTable)
       .set({
         requestsUsed: sql`GREATEST(0, ${usersTable.requestsUsed} - ${requestCost})`,
-        requestsBalance: balanceBeforeCharge,
+        requestsBalance: wasUnlimited
+          ? sql`${usersTable.requestsBalance}`
+          : sql`${usersTable.requestsBalance} + ${paidUnitsToRestore}`,
         updatedAt: new Date(),
       })
       .where(eq(usersTable.sessionId, sessionId));
   } catch (rollbackErr) {
     logger.error({ err: rollbackErr }, context);
   }
+}
+
+function paidUnitsForCurrentRowSql(requestCost: number) {
+  return sql<number>`GREATEST(0, GREATEST(0, ${usersTable.requestsUsed} + ${requestCost}) - ${FREE_REQUESTS_LIMIT}) - GREATEST(0, GREATEST(0, ${usersTable.requestsUsed}) - ${FREE_REQUESTS_LIMIT})`;
 }
 
 router.get("/conversations", async (req, res) => {
@@ -394,8 +402,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  let balanceBeforeCharge = 0;
   let chargedRequestCost = 0;
+  let chargeWasUnlimited = false;
   let insertedUserId: number | undefined;
 
   try {
@@ -560,31 +568,53 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   markInFlight(sessionId);
 
-  const nextBalance = getBalanceAfterCharge(
-    usedBeforeCharge,
-    balanceBefore,
-    requestCost,
-    owner.email,
-  );
+  // Reserve quota atomically before streaming (free + paid units).
+  const paidUnitsToCharge = paidUnitsForCurrentRowSql(requestCost);
+  const reserveWhere = isUnlimited
+    ? eq(usersTable.sessionId, sessionId)
+    : and(
+        eq(usersTable.sessionId, sessionId),
+        sql`${usersTable.requestsBalance} >= ${paidUnitsToCharge}`,
+      );
+  const [reservedCharge] = await db
+    .update(usersTable)
+    .set({
+      requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
+      requestsBalance: isUnlimited
+        ? sql`${usersTable.requestsBalance}`
+        : sql`${usersTable.requestsBalance} - ${paidUnitsToCharge}`,
+      updatedAt: new Date(),
+    })
+    .where(reserveWhere)
+    .returning({
+      requestsUsed: usersTable.requestsUsed,
+      requestsBalance: usersTable.requestsBalance,
+    });
 
-  balanceBeforeCharge = balanceBefore;
+  if (!reservedCharge) {
+    clearInFlight(sessionId);
+    logger.info(
+      { sessionId, usedBeforeCharge, balanceBefore, requestCost, remainingFree, freeLimit: FREE_REQUESTS_LIMIT },
+      "Request blocked during atomic quota reservation",
+    );
+    res.status(402).json({
+      error: `Лимит бесплатных запросов (${FREE_REQUESTS_LIMIT}) исчерпан. Пополните пакет, чтобы продолжить.`,
+      required: requestCost,
+      balance: balanceBefore,
+      freeRemaining: remainingFree,
+      isUnlimited,
+    });
+    return;
+  }
+
   chargedRequestCost = requestCost;
+  chargeWasUnlimited = isUnlimited;
 
   const [insertedUser] = await db
     .insert(messages)
     .values({ conversationId: id, role: "user", content: normalizedContent })
     .returning({ id: messages.id });
   insertedUserId = insertedUser?.id;
-
-  // Reserve quota atomically before streaming (free + paid units).
-  await db
-    .update(usersTable)
-    .set({
-      requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
-      requestsBalance: nextBalance,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.sessionId, sessionId));
 
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
     db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
@@ -748,7 +778,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
         }
       }
 
-      // Save to DB and charge regardless of whether client is still connected.
+      // Save to DB regardless of whether client is still connected.
       // Tag as 'astro' when the response was built with a full natal chart (date+time+coords),
       // meaning it likely contains house/planet assignments that become stale over deploys.
       const hasNatalHouses = !!(userProfile?.birthDate && userProfile?.birthTime && userProfile?.birthLat);
@@ -782,8 +812,8 @@ router.post("/conversations/:id/messages", async (req, res) => {
       ).catch(() => {});
       await rollbackRequestCharge(
         sessionId,
-        balanceBeforeCharge,
         chargedRequestCost,
+        chargeWasUnlimited,
         "Failed to rollback request charge after stream error",
       );
       safeWrite(`data: ${JSON.stringify({ error: userFacingMessage })}\n\n`);
@@ -795,30 +825,33 @@ router.post("/conversations/:id/messages", async (req, res) => {
       if (heartbeat) clearInterval(heartbeat);
     }
   } catch (sseErr) {
-    logger.error({ err: sseErr }, "Chat SSE setup or write failed");
-    await rollbackRequestCharge(
-      sessionId,
-      balanceBeforeCharge,
-      chargedRequestCost,
-      "Failed to rollback request charge after SSE failure",
-    );
-    if (heartbeat) clearInterval(heartbeat);
-    if (!res.headersSent) {
-      res.status(500).json({
-        error:
-          "Не удалось открыть поток ответа. Проверьте соединение или попробуйте позже.",
-      });
-    } else if (!res.writableEnded) {
-      try {
-        res.end();
-      } catch {
-        /* ignore */
+    try {
+      logger.error({ err: sseErr }, "Chat SSE setup or write failed");
+      await rollbackRequestCharge(
+        sessionId,
+        chargedRequestCost,
+        chargeWasUnlimited,
+        "Failed to rollback request charge after SSE failure",
+      );
+      if (!res.headersSent) {
+        res.status(500).json({
+          error:
+            "Не удалось открыть поток ответа. Проверьте соединение или попробуйте позже.",
+        });
+      } else if (!res.writableEnded) {
+        try {
+          res.end();
+        } catch {
+          /* ignore */
+        }
       }
+    } finally {
+      clearInFlight(sessionId);
+      if (heartbeat) clearInterval(heartbeat);
     }
   }
 
   } catch (handlerErr) {
-    clearInFlight(sessionId); // safety: in case inner try was never entered
     logger.error({ err: handlerErr }, "POST /conversations/:id/messages failed before or during setup");
     const handlerErrMsg = handlerErr instanceof Error ? handlerErr.message : String(handlerErr);
     sendTelegramAlert("Handler error", handlerErrMsg, {
@@ -832,10 +865,11 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
     await rollbackRequestCharge(
       sessionId,
-      balanceBeforeCharge,
       chargedRequestCost,
+      chargeWasUnlimited,
       "Failed to rollback request charge after top-level handler error",
     );
+    clearInFlight(sessionId);
     if (!res.headersSent) {
       res.status(500).json({
         error:
