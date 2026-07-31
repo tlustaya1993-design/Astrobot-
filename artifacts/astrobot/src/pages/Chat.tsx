@@ -334,14 +334,20 @@ export default function Chat() {
   const isStreamVisibleHere =
     isStreaming &&
     streamingConversationId != null &&
-    conversationId === streamingConversationId;
+    (conversationId === streamingConversationId ||
+      (conversationId == null && streamingConversationId != null));
 
   const localMessagesForView = useMemo(() => {
     if (conversationId != null) {
       return localMessages.filter((m) => m.conversationId === conversationId);
     }
-    return localMessages.filter((m) => m.conversationId === 0);
-  }, [localMessages, conversationId]);
+    return localMessages.filter(
+      (m) =>
+        m.conversationId === 0 ||
+        (streamingConversationId != null &&
+          m.conversationId === streamingConversationId),
+    );
+  }, [localMessages, conversationId, streamingConversationId]);
 
   const displayMessages = useMemo(() => {
     const persisted = conversation?.messages ?? [];
@@ -355,6 +361,11 @@ export default function Chat() {
   }, [conversation?.messages, localMessagesForView]);
 
   // Do not clear local stream state on navigation — fetch continues; filter by conversationId above.
+
+  useEffect(() => {
+    if (conversationId != null || streamingConversationId == null) return;
+    setLocation(`/chat/${streamingConversationId}`, { replace: true });
+  }, [conversationId, streamingConversationId, setLocation]);
 
   const lastSyncedConversationId = useRef<number | undefined>(undefined);
   useEffect(() => {
