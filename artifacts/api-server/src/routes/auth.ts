@@ -8,7 +8,16 @@ import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "astrobot-dev-secret-change-in-production";
+function resolveJwtSecret(): string {
+  const configured = process.env.JWT_SECRET?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET is required in production");
+  }
+  return "astrobot-dev-secret-change-in-production";
+}
+
+const JWT_SECRET = resolveJwtSecret();
 const SALT_ROUNDS = 10;
 const TOKEN_TTL = "365d";
 const OAUTH_STATE_TTL = "10m";
