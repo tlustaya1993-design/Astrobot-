@@ -3,6 +3,8 @@ import {
   canAffordRequest,
   coerceNonNegInt,
   getBalanceAfterCharge,
+  getPaidUnitsForRequest,
+  getPaidUnitsRefundedAfterRollback,
   getRemainingFreeRequests,
 } from "../billing-policy.js";
 
@@ -37,5 +39,17 @@ describe("free request quota", () => {
   it("consumes two free slots for cost=2 when enough free remains", () => {
     expect(canAffordRequest(0, 0, 2, null)).toBe(true);
     expect(getBalanceAfterCharge(0, 0, 2, null)).toBe(0);
+  });
+
+  it("computes paid units from the current used count", () => {
+    expect(getPaidUnitsForRequest(4, 1, null)).toBe(0);
+    expect(getPaidUnitsForRequest(5, 1, null)).toBe(1);
+    expect(getPaidUnitsForRequest(4, 3, null)).toBe(2);
+  });
+
+  it("refunds paid units based on aggregate usage at rollback time", () => {
+    expect(getPaidUnitsRefundedAfterRollback(6, 1, null)).toBe(1);
+    expect(getPaidUnitsRefundedAfterRollback(5, 1, null)).toBe(0);
+    expect(getPaidUnitsRefundedAfterRollback(8, 3, null)).toBe(3);
   });
 });

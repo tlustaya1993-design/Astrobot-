@@ -55,11 +55,8 @@ export function canAffordRequest(
   if (requestCost <= 0) return true;
   if (isUnlimitedEmail(email)) return true;
 
-  const used = coerceNonNegInt(requestsUsed);
   const balance = coerceNonNegInt(requestsBalance);
-  const freeRemaining = getRemainingFreeRequests(used);
-  const paidUnitsNeeded = Math.max(0, requestCost - freeRemaining);
-  return balance >= paidUnitsNeeded;
+  return balance >= getPaidUnitsForRequest(requestsUsed, requestCost, email);
 }
 
 export function getBalanceAfterCharge(
@@ -71,9 +68,34 @@ export function getBalanceAfterCharge(
   if (requestCost <= 0) return coerceNonNegInt(requestsBalance);
   if (isUnlimitedEmail(email)) return coerceNonNegInt(requestsBalance);
 
-  const used = coerceNonNegInt(requestsUsed);
   const balance = coerceNonNegInt(requestsBalance);
+  return Math.max(0, balance - getPaidUnitsForRequest(requestsUsed, requestCost, email));
+}
+
+export function getPaidUnitsForRequest(
+  requestsUsed: number,
+  requestCost: number,
+  email: string | null | undefined,
+): number {
+  if (requestCost <= 0) return 0;
+  if (isUnlimitedEmail(email)) return 0;
+
+  const used = coerceNonNegInt(requestsUsed);
   const freeRemaining = getRemainingFreeRequests(used);
-  const paidUnitsNeeded = Math.max(0, requestCost - freeRemaining);
-  return Math.max(0, balance - paidUnitsNeeded);
+  return Math.max(0, requestCost - freeRemaining);
+}
+
+export function getPaidUnitsRefundedAfterRollback(
+  requestsUsedAtRollback: number,
+  requestCost: number,
+  email: string | null | undefined,
+): number {
+  if (requestCost <= 0) return 0;
+  if (isUnlimitedEmail(email)) return 0;
+
+  const used = coerceNonNegInt(requestsUsedAtRollback);
+  const usedAfterRollback = Math.max(0, used - requestCost);
+  const paidUsedBeforeRollback = Math.max(0, used - FREE_REQUESTS_LIMIT);
+  const paidUsedAfterRollback = Math.max(0, usedAfterRollback - FREE_REQUESTS_LIMIT);
+  return paidUsedBeforeRollback - paidUsedAfterRollback;
 }
