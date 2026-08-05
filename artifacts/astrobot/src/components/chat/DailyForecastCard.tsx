@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { getAuthHeaders } from '@/lib/session';
+import { getAuthHeaders, getSessionId } from '@/lib/session';
 import AstroMarkdown from '@/components/chat/AstroMarkdown';
 
 interface ForecastData {
@@ -31,8 +31,8 @@ export default function DailyForecastCard({ onAskQuestion }: Props) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    // Check local cache first
-    const cacheKey = `daily-forecast-${getToday()}`;
+    // Scope cache by session so account switches in the same tab cannot leak forecasts.
+    const cacheKey = `daily-forecast-${getSessionId()}-${getToday()}`;
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {

@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
+import { mergeAnonymousSessionInto } from "../lib/merge-anonymous-session.js";
 
 const router: IRouter = Router();
 
@@ -132,6 +133,17 @@ async function resolveOAuthUserSession(email: string, name: string | null, candi
         .update(usersTable)
         .set({ name, updatedAt: new Date() })
         .where(eq(usersTable.sessionId, existingByEmail.sessionId));
+    }
+    // Preserve guest progress (paid credits, chats, contacts) from this browser
+    // when OAuth lands on an already-registered email.
+    try {
+      await mergeAnonymousSessionInto(
+        existingByEmail.sessionId,
+        candidateSessionId,
+        email,
+      );
+    } catch (err) {
+      logger.warn({ err, candidateSessionId, email }, "OAuth guest session merge failed");
     }
     return existingByEmail.sessionId;
   }
@@ -261,6 +273,20 @@ router.post("/login", async (req, res) => {
   if (!valid) {
     res.status(401).json({ error: "Неверный email или пароль" });
     return;
+  }
+
+  // Merge the caller's current anonymous/guest session (x-session-id) so paid
+  // credits and chat history are not orphaned when logging into an existing account.
+  const guestSessionId =
+    typeof req.sessionId === "string" && req.sessionId !== user.sessionId
+      ? req.sessionId
+      : null;
+  if (guestSessionId) {
+    try {
+      await mergeAnonymousSessionInto(user.sessionId, guestSessionId, normalizedEmail);
+    } catch (err) {
+      logger.warn({ err, guestSessionId, email: normalizedEmail }, "Login guest session merge failed");
+    }
   }
 
   const token = signToken(user.sessionId, normalizedEmail);

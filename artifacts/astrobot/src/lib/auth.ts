@@ -20,9 +20,11 @@ export async function apiRegister(email: string, password: string, sessionId?: s
 }
 
 export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
+  // Include current guest x-session-id so the server can merge anonymous
+  // credits/history into the existing account instead of orphaning them.
   const res = await fetch(`${API_BASE}/api/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ email, password }),
   });
   const data = await res.json();
