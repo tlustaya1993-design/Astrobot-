@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { saveAuth } from '@/lib/session';
+import { clearDailyForecastCache, saveAuth } from '@/lib/session';
 
 function safeDecode(value: string): string {
   try {
@@ -29,6 +29,7 @@ export default function AuthCallback() {
     }
 
     if (token && sessionId && email) {
+      clearDailyForecastCache();
       saveAuth(token, sessionId, email);
       setLocation(returnTo, { replace: true });
       return;

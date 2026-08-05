@@ -62,6 +62,21 @@ export function clearAuth() {
   // Rotate session id on logout so backend no longer associates this browser
   // with the previous authenticated profile.
   localStorage.setItem(SESSION_KEY, uuidv4());
+  clearDailyForecastCache();
+}
+
+/** Personalized daily forecast must not leak across accounts in the same tab. */
+export function clearDailyForecastCache() {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && key.startsWith('daily-forecast-')) keys.push(key);
+    }
+    for (const key of keys) sessionStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
 }
 
 export function getAuthHeaders(): Record<string, string> {
