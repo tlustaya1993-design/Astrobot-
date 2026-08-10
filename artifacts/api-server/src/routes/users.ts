@@ -2,7 +2,11 @@ import { Router, type IRouter } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { normalizeAvatarConfig, parseAvatarJson } from "../lib/avatar-config.js";
-import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
+import {
+  FREE_REQUESTS_LIMIT,
+  getVerifiedAccountEmail,
+  isUnlimitedEmail,
+} from "../lib/billing-policy.js";
 import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
@@ -43,12 +47,14 @@ function chartSignature(slice: ReturnType<typeof pickChartSlice>) {
   return JSON.stringify(slice);
 }
 
-function toApiUser(row: UserRow) {
+function toApiUser(row: UserRow, authEmail?: string) {
   const { passwordHash: _, avatarJson, ...rest } = row;
   const requestsUsed = Math.max(0, rest.requestsUsed ?? 0);
   const requestsBalance = Math.max(0, rest.requestsBalance ?? 0);
   const freeRemaining = Math.max(0, FREE_REQUESTS_LIMIT - requestsUsed);
-  const isUnlimited = isUnlimitedEmail(rest.email);
+  const isUnlimited = isUnlimitedEmail(
+    getVerifiedAccountEmail(authEmail, rest.email),
+  );
   return {
     ...rest,
     avatarConfig: parseAvatarJson(avatarJson),
@@ -89,7 +95,7 @@ router.get("/me", async (req, res) => {
       return;
     }
 
-    res.json(toApiUser(user));
+    res.json(toApiUser(user, req.authEmail));
   } catch (err) {
     logger.error({ err, sessionId }, "GET /users/me database error");
     res.status(503).json({ error: "База данных временно недоступна. Попробуйте через минуту." });
@@ -189,13 +195,13 @@ router.put("/me", async (req, res) => {
       .set({ ...fields, updatedAt: now })
       .where(eq(usersTable.sessionId, sessionId))
       .returning();
-    res.json({ ...toApiUser(updated), chartMetaChanged });
+    res.json({ ...toApiUser(updated, req.authEmail), chartMetaChanged });
   } else {
     const [created] = await db
       .insert(usersTable)
       .values({ sessionId, ...fields })
       .returning();
-    res.json({ ...toApiUser(created), chartMetaChanged });
+    res.json({ ...toApiUser(created, req.authEmail), chartMetaChanged });
   }
 });
 

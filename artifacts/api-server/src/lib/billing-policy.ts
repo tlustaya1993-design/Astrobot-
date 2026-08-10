@@ -23,6 +23,18 @@ export function normalizeEmail(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
+export function getVerifiedAccountEmail(
+  authEmail: string | null | undefined,
+  storedEmail: string | null | undefined,
+): string | null {
+  const normalizedAuthEmail = normalizeEmail(authEmail);
+  const normalizedStoredEmail = normalizeEmail(storedEmail);
+  if (!normalizedAuthEmail || normalizedAuthEmail !== normalizedStoredEmail) {
+    return null;
+  }
+  return normalizedStoredEmail;
+}
+
 function buildUnlimitedEmailSet(): Set<string> {
   const configured = (process.env.UNLIMITED_REQUEST_EMAILS ?? "")
     .split(",")
