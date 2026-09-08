@@ -690,6 +690,24 @@ export default function Chat() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const authError = params.get('authError');
+    if (!authError) return;
+
+    params.delete('authError');
+    const qs = params.toString();
+    const path = window.location.pathname;
+    window.history.replaceState({}, '', qs ? `${path}?${qs}` : path);
+
+    toast({
+      title: 'Не удалось войти через Яндекс',
+      description: authError,
+      variant: 'destructive',
+    });
+    setShowAuthModal(true);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
     if (params.get('onboardingBlocked') !== '1') return;
 
     params.delete('onboardingBlocked');
