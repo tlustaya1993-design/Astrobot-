@@ -71,11 +71,13 @@
 |------|------------|
 | [`artifacts/astrobot`](../artifacts/astrobot) | SPA/PWA: страницы (Onboarding, Chat, Home), компоненты чата, `use-chat-stream`, сессия в `session.ts` |
 | [`artifacts/api-server`](../artifacts/api-server) | HTTP API под префиксом `/api`, астродвижок [`src/lib/astrology.ts`](../artifacts/api-server/src/lib/astrology.ts), маршруты в `src/routes/` |
+| [`artifacts/mockup-sandbox`](../artifacts/mockup-sandbox) | Отдельное Vite-приложение для дизайн-мокапов/прототипов UI (Radix UI + react-hook-form); в прод не деплоится |
 | [`lib/db`](../lib/db) | `DATABASE_URL`, Drizzle-схемы, `runDbMigrations` |
 | [`lib/api-spec`](../lib/api-spec) | `openapi.yaml`, скрипт codegen (Orval) |
 | [`lib/api-client-react`](../lib/api-client-react) | Сгенерированные хуки/клиент для фронта |
 | [`lib/api-zod`](../lib/api-zod) | Сгенерированные Zod-схемы |
 | [`lib/integrations-openai-ai-server`](../lib/integrations-openai-ai-server) | OpenAI SDK-обёртка (ключи `OPENAI_API_KEY` / `AI_INTEGRATIONS_*`) |
+| [`lib/integrations-openai-ai-react`](../lib/integrations-openai-ai-react) | React-обвязка поверх OpenAI-интеграции (в т.ч. `audio/`) для фронта |
 | [`lib/integrations-anthropic-ai`](../lib/integrations-anthropic-ai) | Клиент Anthropic |
 | [`scripts`](../scripts) | В т.ч. e2e-smoke |
 
@@ -116,7 +118,9 @@ flowchart LR
 ```
 
 - В **production** при `NODE_ENV=production` Express отдаёт собранный фронт из каталога `FRONTEND_DIST` или по умолчанию `artifacts/astrobot/dist/public` — см. [`artifacts/api-server/src/app.ts`](../artifacts/api-server/src/app.ts). SPA fallback и OG-meta: [`spaHtml.ts`](../artifacts/api-server/src/lib/spaHtml.ts).
-- Роутер API: [`artifacts/api-server/src/routes/index.ts`](../artifacts/api-server/src/routes/index.ts) — health, auth, users, openai (conversations + daily-forecast), astrology, contacts, billing, admin.
+- Роутер API: [`artifacts/api-server/src/routes/index.ts`](../artifacts/api-server/src/routes/index.ts) — health, auth, users, openai (conversations + daily-forecast + follow-up-chips), astrology (ленивый mount, чтобы сбой swisseph не ронял весь API+SPA), contacts, billing, admin, support, client-log.
+  - [`support.ts`](../artifacts/api-server/src/routes/support.ts) — кнопка «Срочный запрос в поддержку» в UI, шлёт алерт в Telegram.
+  - [`client-diag.ts`](../artifacts/api-server/src/routes/client-diag.ts) (маршрут `/api/client-log`) — **временный** маршрут для диагностики репортов о «белом экране» при Яндекс OAuth (клиентские ошибки логируются на сервере); в коде помечен на удаление после диагностики.
 
 ---
 
