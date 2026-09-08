@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useLocation } from 'wouter';
-import { saveAuth } from '@/lib/session';
+import { useAuth } from '@/context/AuthContext';
 
 function safeDecode(value: string): string {
   try {
@@ -12,6 +12,7 @@ function safeDecode(value: string): string {
 
 export default function AuthCallback() {
   const [, setLocation] = useLocation();
+  const { login } = useAuth();
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
@@ -29,13 +30,13 @@ export default function AuthCallback() {
     }
 
     if (token && sessionId && email) {
-      saveAuth(token, sessionId, email);
+      login(token, sessionId, email);
       setLocation(returnTo, { replace: true });
       return;
     }
 
     setLocation('/chat?authError=' + encodeURIComponent('Не удалось завершить авторизацию'), { replace: true });
-  }, [setLocation]);
+  }, [login, setLocation]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center relative overflow-hidden">
