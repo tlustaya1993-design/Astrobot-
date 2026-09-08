@@ -9,11 +9,13 @@ import contactsRouter from "./contacts.js";
 import billingRouter from "./billing.js";
 import adminRouter from "./admin.js";
 import supportRouter from "./support.js";
+import clientDiagRouter from "./client-diag.js";
 import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use("/client-log", clientDiagRouter);
 router.use("/auth", authRouter);
 router.use("/users", usersRouter);
 router.use("/openai", openaiRouter);
