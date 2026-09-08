@@ -43,8 +43,14 @@ export default function AuthCallback() {
 
       if (token && sessionId && email) {
         login(token, sessionId, email);
-        reportClientEvent({ kind: 'auth_callback_login_ok', returnTo });
-        setLocation(returnTo, { replace: true });
+        // Логин мог разрешиться в уже существующий (не текущий анонимный) аккаунт —
+        // если вход начался с онбординга, не возвращаем на форму онбординга напрямую
+        // (там сброс шага/полей и возможен лишний редирект-мигание для уже готовых
+        // аккаунтов). Отправляем на "/", а её загрузочная логика сама решит:
+        // онбординг для нового профиля или чат для уже настроенного.
+        const target = returnTo.startsWith('/onboarding') ? '/' : returnTo;
+        reportClientEvent({ kind: 'auth_callback_login_ok', returnTo, target });
+        setLocation(target, { replace: true });
         return;
       }
 
