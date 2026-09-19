@@ -8,7 +8,11 @@ import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "astrobot-dev-secret-change-in-production";
+const configuredJwtSecret = process.env.JWT_SECRET?.trim();
+if (!configuredJwtSecret && process.env.NODE_ENV === "production") {
+  throw new Error("JWT_SECRET is required in production");
+}
+const JWT_SECRET = configuredJwtSecret || "astrobot-dev-secret-change-in-production";
 const SALT_ROUNDS = 10;
 const TOKEN_TTL = "365d";
 const OAUTH_STATE_TTL = "10m";
@@ -203,6 +207,10 @@ router.post("/register", async (req, res) => {
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
   if (existingSessionId) {
+    if (!req.sessionId || req.sessionId !== existingSessionId) {
+      res.status(403).json({ error: "Нельзя привязать чужую анонимную сессию" });
+      return;
+    }
     // Migrate anonymous session → registered account
     const [anon] = await db
       .select({ id: usersTable.id })
@@ -275,8 +283,7 @@ router.get("/yandex/start", async (req, res) => {
     return;
   }
 
-  const sessionIdFromQuery = typeof req.query.sessionId === "string" ? req.query.sessionId : null;
-  const sessionId = sessionIdFromQuery || req.sessionId || null;
+  const sessionId = req.sessionId || null;
   const returnTo = sanitizeReturnTo(req.query.returnTo);
   const statePayload: YandexOAuthState = {
     type: "yandex_oauth_state",

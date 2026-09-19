@@ -5,6 +5,10 @@ import { db, paymentsTable, usersTable, conversations, messages } from "@workspa
 import { hasRedis, pingRedis } from "../lib/ai-rate-limit.js";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
 import { getYookassaPayment, createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
+import {
+  verifyYooKassaPaymentIdentity,
+  verifyYooKassaPaymentSettled,
+} from "../lib/billing-payment-safety.js";
 import { safeBuildSystemPrompt } from "./openai/conversations.js";
 
 const router: IRouter = Router();
@@ -22,14 +26,15 @@ function isAdminEmail(email: string | null | undefined): boolean {
 }
 
 async function resolveEffectiveEmail(req: { authEmail?: string; sessionId?: string }): Promise<string | null> {
-  if (req.authEmail?.trim()) return req.authEmail.trim().toLowerCase();
-  if (!req.sessionId) return null;
+  if (!req.authEmail?.trim() || !req.sessionId) return null;
+  const authEmail = req.authEmail.trim().toLowerCase();
   const [user] = await db
     .select({ email: usersTable.email })
     .from(usersTable)
     .where(eq(usersTable.sessionId, req.sessionId))
     .limit(1);
-  return user?.email?.trim().toLowerCase() ?? null;
+  const dbEmail = user?.email?.trim().toLowerCase();
+  return dbEmail === authEmail ? authEmail : null;
 }
 
 async function requireAdmin(
@@ -47,14 +52,22 @@ async function requireAdmin(
 async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<number> {
   return db.transaction(async (tx) => {
     const [locked] = await tx
-      .select()
-      .from(paymentsTable)
-      .where(eq(paymentsTable.id, paymentId))
-      .limit(1);
+      .update(paymentsTable)
+      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(paymentsTable.id, paymentId),
+          eq(paymentsTable.status, "succeeded"),
+          eq(paymentsTable.webhookVerified, true),
+          sql`${paymentsTable.creditsAppliedAt} IS NULL`,
+        ),
+      )
+      .returning({
+        sessionId: paymentsTable.sessionId,
+        creditsGranted: paymentsTable.creditsGranted,
+      });
 
     if (!locked) return 0;
-    if (locked.status !== "succeeded") return 0;
-    if (locked.creditsAppliedAt) return 0;
 
     const updated = await tx
       .update(usersTable)
@@ -65,12 +78,9 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
       .where(eq(usersTable.sessionId, locked.sessionId))
       .returning({ id: usersTable.id });
 
-    if (updated.length === 0) return 0;
-
-    await tx
-      .update(paymentsTable)
-      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
-      .where(eq(paymentsTable.id, paymentId));
+    if (updated.length === 0) {
+      throw new Error(`Cannot apply credits for payment ${paymentId}: user session not found`);
+    }
 
     return locked.creditsGranted;
   });
@@ -430,19 +440,25 @@ router.post("/users/reconcile", async (req, res) => {
   let applied = 0;
   for (const payment of recentPayments) {
     applied += await applyCreditsIfNeededByPaymentId(payment.id);
-    if (payment.status !== "succeeded" && payment.providerPaymentId) {
+    if ((!payment.webhookVerified || payment.status !== "succeeded") && payment.providerPaymentId) {
       try {
         const providerPayment = await getYookassaPayment(payment.providerPaymentId);
+        const identity = verifyYooKassaPaymentIdentity(payment, providerPayment);
+        if (!identity.ok) {
+          continue;
+        }
         if (providerPayment?.status) {
+          const settled = verifyYooKassaPaymentSettled(payment, providerPayment);
           await db
             .update(paymentsTable)
             .set({
               status: providerPayment.status,
+              webhookVerified: settled.ok,
               metadata: providerPayment as unknown as Record<string, unknown>,
               updatedAt: new Date(),
             })
             .where(eq(paymentsTable.id, payment.id));
-          if (providerPayment.status === "succeeded") {
+          if (settled.ok) {
             applied += await applyCreditsIfNeededByPaymentId(payment.id);
           }
         }
