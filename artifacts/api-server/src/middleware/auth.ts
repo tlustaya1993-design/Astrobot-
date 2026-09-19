@@ -1,11 +1,12 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "../routes/auth.js";
+import { JWT_SECRET } from "../lib/auth-jwt.js";
 
 declare module "express" {
   interface Request {
     sessionId?: string;
     authEmail?: string;
+    authTokenInvalid?: boolean;
   }
 }
 
@@ -21,12 +22,19 @@ export function sessionMiddleware(req: Request, _res: Response, next: NextFuncti
   if (auth?.startsWith("Bearer ")) {
     const token = auth.slice(7);
     try {
-      const payload = jwt.verify(token, JWT_SECRET) as { sessionId: string; email?: string };
+      const payload = jwt.verify(token, JWT_SECRET) as { sessionId?: unknown; email?: unknown };
+      if (typeof payload.sessionId !== "string" || !payload.sessionId.trim()) {
+        req.authTokenInvalid = true;
+        return next();
+      }
       req.sessionId = payload.sessionId;
-      req.authEmail = payload.email;
+      if (typeof payload.email === "string") {
+        req.authEmail = payload.email;
+      }
       return next();
     } catch {
-      // Invalid token — fall through to x-session-id
+      req.authTokenInvalid = true;
+      return next();
     }
   }
 
