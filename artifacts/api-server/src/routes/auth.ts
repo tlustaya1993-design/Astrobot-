@@ -8,7 +8,16 @@ import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "astrobot-dev-secret-change-in-production";
+function resolveJwtSecret(): string {
+  const configured = process.env.JWT_SECRET?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET is required in production");
+  }
+  return "astrobot-dev-secret-change-in-production";
+}
+
+const JWT_SECRET = resolveJwtSecret();
 const SALT_ROUNDS = 10;
 const TOKEN_TTL = "365d";
 const OAUTH_STATE_TTL = "10m";
@@ -49,6 +58,27 @@ function buildYandexCallbackUrl(req: Request): string {
 
 function buildFrontendCallbackUrl(req: Request): URL {
   return new URL("/auth/callback", getPublicBaseUrl(req));
+}
+
+function buildYandexAuthorizeUrl(req: Request, sessionId: string | null, returnTo: string): string {
+  const clientId = process.env.YANDEX_CLIENT_ID?.trim();
+  if (!clientId) {
+    throw new Error("Yandex OAuth не настроен (нет YANDEX_CLIENT_ID)");
+  }
+
+  const statePayload: YandexOAuthState = {
+    type: "yandex_oauth_state",
+    sessionId,
+    returnTo,
+  };
+  const state = jwt.sign(statePayload, JWT_SECRET, { expiresIn: OAUTH_STATE_TTL });
+  const redirectUri = buildYandexCallbackUrl(req);
+  const authorizeUrl = new URL(YANDEX_OAUTH_AUTHORIZE_URL);
+  authorizeUrl.searchParams.set("response_type", "code");
+  authorizeUrl.searchParams.set("client_id", clientId);
+  authorizeUrl.searchParams.set("redirect_uri", redirectUri);
+  authorizeUrl.searchParams.set("state", state);
+  return authorizeUrl.toString();
 }
 
 async function exchangeYandexCode(code: string, redirectUri: string): Promise<string> {
@@ -203,6 +233,10 @@ router.post("/register", async (req, res) => {
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
   if (existingSessionId) {
+    if (!req.sessionId || req.sessionId !== existingSessionId) {
+      res.status(403).json({ error: "Нельзя привязать чужую сессию" });
+      return;
+    }
     // Migrate anonymous session → registered account
     const [anon] = await db
       .select({ id: usersTable.id })
@@ -268,30 +302,28 @@ router.post("/login", async (req, res) => {
 });
 
 // GET /auth/yandex/start
-router.get("/yandex/start", async (req, res) => {
-  const clientId = process.env.YANDEX_CLIENT_ID?.trim();
-  if (!clientId) {
-    res.status(503).json({ error: "Yandex OAuth не настроен (нет YANDEX_CLIENT_ID)" });
-    return;
+router.get("/yandex/start-url", (req, res) => {
+  try {
+    const returnTo = sanitizeReturnTo(req.query.returnTo);
+    const url = buildYandexAuthorizeUrl(req, req.sessionId || null, returnTo);
+    res.json({ url });
+  } catch (err) {
+    res.status(503).json({
+      error: err instanceof Error ? err.message : "Yandex OAuth не настроен",
+    });
   }
+});
 
-  const sessionIdFromQuery = typeof req.query.sessionId === "string" ? req.query.sessionId : null;
-  const sessionId = sessionIdFromQuery || req.sessionId || null;
-  const returnTo = sanitizeReturnTo(req.query.returnTo);
-  const statePayload: YandexOAuthState = {
-    type: "yandex_oauth_state",
-    sessionId,
-    returnTo,
-  };
-  const state = jwt.sign(statePayload, JWT_SECRET, { expiresIn: OAUTH_STATE_TTL });
-  const redirectUri = buildYandexCallbackUrl(req);
-  const authorizeUrl = new URL(YANDEX_OAUTH_AUTHORIZE_URL);
-  authorizeUrl.searchParams.set("response_type", "code");
-  authorizeUrl.searchParams.set("client_id", clientId);
-  authorizeUrl.searchParams.set("redirect_uri", redirectUri);
-  authorizeUrl.searchParams.set("state", state);
-
-  res.redirect(authorizeUrl.toString());
+router.get("/yandex/start", async (req, res) => {
+  try {
+    const returnTo = sanitizeReturnTo(req.query.returnTo);
+    const authorizeUrl = buildYandexAuthorizeUrl(req, req.sessionId || null, returnTo);
+    res.redirect(authorizeUrl);
+  } catch (err) {
+    res.status(503).json({
+      error: err instanceof Error ? err.message : "Yandex OAuth не настроен",
+    });
+  }
 });
 
 // GET /auth/yandex/callback
