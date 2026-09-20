@@ -75,7 +75,7 @@ type YooKassaCreatePaymentResponse = {
   metadata?: Record<string, string>;
 };
 
-type YooKassaPaymentObject = {
+export type YooKassaPaymentObject = {
   id: string;
   status: string;
   paid: boolean;
