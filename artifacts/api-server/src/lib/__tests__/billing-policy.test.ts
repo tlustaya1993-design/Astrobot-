@@ -4,12 +4,21 @@ import {
   coerceNonNegInt,
   getBalanceAfterCharge,
   getRemainingFreeRequests,
+  getVerifiedAccountEmail,
 } from "../billing-policy.js";
 
 describe("coerceNonNegInt", () => {
   it("treats null/undefined as 0", () => {
     expect(coerceNonNegInt(null)).toBe(0);
     expect(coerceNonNegInt(undefined)).toBe(0);
+  });
+});
+
+describe("getVerifiedAccountEmail", () => {
+  it("requires the signed identity to match the stored account email", () => {
+    expect(getVerifiedAccountEmail("Admin@Example.com", "admin@example.com")).toBe("admin@example.com");
+    expect(getVerifiedAccountEmail("admin@example.com", undefined)).toBeNull();
+    expect(getVerifiedAccountEmail("receipt@example.com", "user@example.com")).toBeNull();
   });
 });
 
