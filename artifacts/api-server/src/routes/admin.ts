@@ -6,6 +6,7 @@ import { hasRedis, pingRedis } from "../lib/ai-rate-limit.js";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
 import { getYookassaPayment, createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
 import { safeBuildSystemPrompt } from "./openai/conversations.js";
+import { verifyYooKassaSucceededPayment } from "../lib/billing-payment-safety.js";
 
 const router: IRouter = Router();
 
@@ -54,6 +55,7 @@ async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<numbe
 
     if (!locked) return 0;
     if (locked.status !== "succeeded") return 0;
+    if (!locked.webhookVerified) return 0;
     if (locked.creditsAppliedAt) return 0;
 
     const updated = await tx
@@ -430,19 +432,32 @@ router.post("/users/reconcile", async (req, res) => {
   let applied = 0;
   for (const payment of recentPayments) {
     applied += await applyCreditsIfNeededByPaymentId(payment.id);
-    if (payment.status !== "succeeded" && payment.providerPaymentId) {
+    if (payment.providerPaymentId && (!payment.webhookVerified || payment.status !== "succeeded")) {
       try {
         const providerPayment = await getYookassaPayment(payment.providerPaymentId);
         if (providerPayment?.status) {
+          const trust = verifyYooKassaSucceededPayment(payment, providerPayment);
+          const trustedSucceeded = trust.ok;
+          if (providerPayment.status === "succeeded" && !trustedSucceeded) {
+            await db
+              .update(paymentsTable)
+              .set({
+                metadata: providerPayment as unknown as Record<string, unknown>,
+                updatedAt: new Date(),
+              })
+              .where(eq(paymentsTable.id, payment.id));
+            continue;
+          }
           await db
             .update(paymentsTable)
             .set({
               status: providerPayment.status,
+              webhookVerified: trustedSucceeded,
               metadata: providerPayment as unknown as Record<string, unknown>,
               updatedAt: new Date(),
             })
             .where(eq(paymentsTable.id, payment.id));
-          if (providerPayment.status === "succeeded") {
+          if (trustedSucceeded) {
             applied += await applyCreditsIfNeededByPaymentId(payment.id);
           }
         }
