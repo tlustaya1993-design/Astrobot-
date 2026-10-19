@@ -16,7 +16,7 @@ declare module "express" {
  *
  * Does NOT block requests without auth — downstream routes check as needed.
  */
-export function sessionMiddleware(req: Request, _res: Response, next: NextFunction) {
+export function sessionMiddleware(req: Request, res: Response, next: NextFunction) {
   const auth = req.headers["authorization"];
   if (auth?.startsWith("Bearer ")) {
     const token = auth.slice(7);
@@ -26,7 +26,8 @@ export function sessionMiddleware(req: Request, _res: Response, next: NextFuncti
       req.authEmail = payload.email;
       return next();
     } catch {
-      // Invalid token — fall through to x-session-id
+      res.status(401).json({ error: "Недействительный или просроченный токен" });
+      return;
     }
   }
 
