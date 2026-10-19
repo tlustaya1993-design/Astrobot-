@@ -5,6 +5,10 @@ import { db, paymentsTable, usersTable, conversations, messages } from "@workspa
 import { hasRedis, pingRedis } from "../lib/ai-rate-limit.js";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
 import { getYookassaPayment, createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
+import {
+  applyVerifiedCreditsIfNeededByPaymentId,
+  verifyAndPersistYooKassaPayment,
+} from "../lib/billing-payment-safety.js";
 import { safeBuildSystemPrompt } from "./openai/conversations.js";
 
 const router: IRouter = Router();
@@ -23,13 +27,7 @@ function isAdminEmail(email: string | null | undefined): boolean {
 
 async function resolveEffectiveEmail(req: { authEmail?: string; sessionId?: string }): Promise<string | null> {
   if (req.authEmail?.trim()) return req.authEmail.trim().toLowerCase();
-  if (!req.sessionId) return null;
-  const [user] = await db
-    .select({ email: usersTable.email })
-    .from(usersTable)
-    .where(eq(usersTable.sessionId, req.sessionId))
-    .limit(1);
-  return user?.email?.trim().toLowerCase() ?? null;
+  return null;
 }
 
 async function requireAdmin(
@@ -42,38 +40,6 @@ async function requireAdmin(
     return false;
   }
   return true;
-}
-
-async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<number> {
-  return db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select()
-      .from(paymentsTable)
-      .where(eq(paymentsTable.id, paymentId))
-      .limit(1);
-
-    if (!locked) return 0;
-    if (locked.status !== "succeeded") return 0;
-    if (locked.creditsAppliedAt) return 0;
-
-    const updated = await tx
-      .update(usersTable)
-      .set({
-        requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.sessionId, locked.sessionId))
-      .returning({ id: usersTable.id });
-
-    if (updated.length === 0) return 0;
-
-    await tx
-      .update(paymentsTable)
-      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
-      .where(eq(paymentsTable.id, paymentId));
-
-    return locked.creditsGranted;
-  });
 }
 
 type ServiceStatus = "ok" | "degraded" | "error";
@@ -429,27 +395,15 @@ router.post("/users/reconcile", async (req, res) => {
 
   let applied = 0;
   for (const payment of recentPayments) {
-    applied += await applyCreditsIfNeededByPaymentId(payment.id);
-    if (payment.status !== "succeeded" && payment.providerPaymentId) {
+    if (payment.providerPaymentId && (!payment.webhookVerified || payment.status !== "succeeded")) {
       try {
         const providerPayment = await getYookassaPayment(payment.providerPaymentId);
-        if (providerPayment?.status) {
-          await db
-            .update(paymentsTable)
-            .set({
-              status: providerPayment.status,
-              metadata: providerPayment as unknown as Record<string, unknown>,
-              updatedAt: new Date(),
-            })
-            .where(eq(paymentsTable.id, payment.id));
-          if (providerPayment.status === "succeeded") {
-            applied += await applyCreditsIfNeededByPaymentId(payment.id);
-          }
-        }
+        await verifyAndPersistYooKassaPayment(payment, providerPayment);
       } catch {
         // ignore provider sync errors; operator can retry
       }
     }
+    applied += await applyVerifiedCreditsIfNeededByPaymentId(payment.id);
   }
 
   const [updatedUser] = await db
