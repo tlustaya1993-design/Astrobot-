@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { Router, type IRouter } from "express";
 import { and, eq, or, sql } from "drizzle-orm";
-import { db, paymentsTable, usersTable } from "@workspace/db";
+import { db, paymentsTable, usersTable, type Payment } from "@workspace/db";
 import {
   createYookassaPayment,
   getYookassaPayment,
@@ -39,8 +39,69 @@ const CREATE_PAYMENT_MIN_INTERVAL_MS = 2_500;
 const CREATE_PAYMENT_RETRY_DELAY_MS = 500;
 const CREATE_PAYMENT_IP_WINDOW_MS = 60_000;
 const CREATE_PAYMENT_IP_MAX_PER_WINDOW = 180;
+const PAYMENT_RECONCILE_RECENT_LIMIT = 5;
 const REDIS_REST_URL = process.env.UPSTASH_REDIS_REST_URL?.trim() || "";
 const REDIS_REST_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN?.trim() || "";
+
+type ReconcilePaymentRow = Pick<Payment, "id" | "status" | "providerPaymentId">;
+type ReconcileProviderPayment = { status?: string } & Record<string, unknown>;
+type ReconcileWarn = (details: Record<string, unknown>, message: string) => void;
+
+export async function reconcileYookassaPaymentRows(
+  payments: ReconcilePaymentRow[],
+  options: {
+    sessionId: string;
+    applyCredits: (paymentId: number) => Promise<number>;
+    getProviderPayment: (providerPaymentId: string) => Promise<ReconcileProviderPayment | null | undefined>;
+    updatePaymentFromProvider: (
+      paymentId: number,
+      providerPayment: ReconcileProviderPayment & { status: string },
+    ) => Promise<void>;
+    warn: ReconcileWarn;
+  },
+): Promise<{ applied: number; status: string }> {
+  let applied = 0;
+  let latestEffectiveStatus = payments[0]?.status ?? "none";
+
+  for (const payment of payments) {
+    let effectiveStatus = payment.status;
+    applied += await options.applyCredits(payment.id);
+
+    // Webhooks can be delayed/lost; check each recent attempt so a newer
+    // pending/canceled row cannot hide an older paid-but-unapplied payment.
+    if (payment.providerPaymentId && effectiveStatus !== "succeeded") {
+      try {
+        const providerPayment = await options.getProviderPayment(payment.providerPaymentId);
+        if (providerPayment?.status) {
+          effectiveStatus = providerPayment.status;
+          await options.updatePaymentFromProvider(
+            payment.id,
+            providerPayment as ReconcileProviderPayment & { status: string },
+          );
+        }
+        if (effectiveStatus === "succeeded") {
+          applied += await options.applyCredits(payment.id);
+        }
+      } catch (err) {
+        options.warn(
+          {
+            err,
+            paymentId: payment.id,
+            providerPaymentId: payment.providerPaymentId,
+            sessionId: options.sessionId,
+          },
+          "Payment reconcile fallback via YooKassa failed",
+        );
+      }
+    }
+
+    if (payment === payments[0]) {
+      latestEffectiveStatus = effectiveStatus;
+    }
+  }
+
+  return { applied, status: latestEffectiveStatus };
+}
 
 function isPackageCode(value: unknown): value is PackageCode {
   return typeof value === "string" && value in PACKAGE_CONFIG;
@@ -686,7 +747,7 @@ router.post("/payments/reconcile", async (req, res) => {
   }
   await ensurePaymentsTableReady();
 
-  const [latest] = await db
+  const recentPayments = await db
     .select()
     .from(paymentsTable)
     .where(
@@ -696,48 +757,31 @@ router.post("/payments/reconcile", async (req, res) => {
       ),
     )
     .orderBy(sql`${paymentsTable.createdAt} DESC`)
-    .limit(1);
+    .limit(PAYMENT_RECONCILE_RECENT_LIMIT);
 
-  if (!latest) {
+  if (recentPayments.length === 0) {
     res.json({ ok: true, applied: 0, status: "none" });
     return;
   }
 
-  let effectiveStatus = latest.status;
-  let applied = await applyCreditsIfNeededByPaymentId(latest.id);
+  const { applied, status } = await reconcileYookassaPaymentRows(recentPayments, {
+    sessionId,
+    applyCredits: applyCreditsIfNeededByPaymentId,
+    getProviderPayment: getYookassaPayment,
+    updatePaymentFromProvider: async (paymentId, providerPayment) => {
+      await db
+        .update(paymentsTable)
+        .set({
+          status: providerPayment.status,
+          metadata: providerPayment as unknown as Record<string, unknown>,
+          updatedAt: new Date(),
+        })
+        .where(eq(paymentsTable.id, paymentId));
+    },
+    warn: logger.warn.bind(logger),
+  });
 
-  // Fallback for cases when webhook was delayed/lost: reconcile directly with YooKassa.
-  if (applied === 0 && latest.providerPaymentId && effectiveStatus !== "succeeded") {
-    try {
-      const providerPayment = await getYookassaPayment(latest.providerPaymentId);
-      if (providerPayment?.status) {
-        effectiveStatus = providerPayment.status;
-        await db
-          .update(paymentsTable)
-          .set({
-            status: providerPayment.status,
-            metadata: providerPayment as unknown as Record<string, unknown>,
-            updatedAt: new Date(),
-          })
-          .where(eq(paymentsTable.id, latest.id));
-      }
-      if (effectiveStatus === "succeeded") {
-        applied = await applyCreditsIfNeededByPaymentId(latest.id);
-      }
-    } catch (err) {
-      logger.warn(
-        {
-          err,
-          paymentId: latest.id,
-          providerPaymentId: latest.providerPaymentId,
-          sessionId,
-        },
-        "Payment reconcile fallback via YooKassa failed",
-      );
-    }
-  }
-
-  res.json({ ok: true, applied, status: effectiveStatus });
+  res.json({ ok: true, applied, status });
 });
 
 router.post("/payments/webhook", async (req, res) => {
