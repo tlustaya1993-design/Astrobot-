@@ -26,7 +26,7 @@ export function sessionMiddleware(req: Request, _res: Response, next: NextFuncti
       req.authEmail = payload.email;
       return next();
     } catch {
-      // Invalid token — fall through to x-session-id
+      return next();
     }
   }
 
