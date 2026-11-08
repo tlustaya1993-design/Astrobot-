@@ -1,9 +1,14 @@
-import { anthropic } from "@workspace/integrations-anthropic-ai";
+import {
+  anthropic,
+  hasClaudeProvider,
+  resolveClaudeModelId,
+} from "@workspace/integrations-anthropic-ai";
 import { logger } from "./logger.js";
 
 /** Haiku — как память; не списывает запросы пользователя. */
-const FOLLOW_UP_CHIPS_MODEL =
-  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-haiku-4-5";
+const FOLLOW_UP_CHIPS_MODEL = resolveClaudeModelId(
+  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-haiku-4-5",
+);
 
 const MAX_CHIPS = 4;
 const MAX_CHIP_CHARS = 120;
@@ -48,10 +53,7 @@ const GENERIC_CHIP_PATTERNS: RegExp[] = [
 ];
 
 function hasAnthropicProvider(): boolean {
-  return Boolean(
-    process.env.ANTHROPIC_API_KEY ||
-      process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  );
+  return hasClaudeProvider();
 }
 
 /** Хвост ответа с приглашением углубиться — первый chip «Да, расскажи подробнее». */

@@ -59,7 +59,7 @@
 | API | **Express 5** |
 | БД | **PostgreSQL**, **Drizzle ORM** |
 | Валидация / codegen | Zod, Orval из OpenAPI |
-| LLM (чат) | **Anthropic Claude** по умолчанию; при отсутствии ключа — **OpenAI** (fallback) |
+| LLM (чат) | **Claude через OpenRouter** (`OPENROUTER_API_KEY`, модель `anthropic/claude-sonnet-4.5`); иначе прямой Anthropic; при отсутствии ключей — **OpenAI** (fallback) |
 
 Файл workspace: [`pnpm-workspace.yaml`](../pnpm-workspace.yaml) — пакеты в `artifacts/*`, `lib/*`, `scripts`.
 
@@ -85,7 +85,7 @@
 
 **Прод:** деплой на **Railway** из ветки `main` ([`railway.toml`](../railway.toml)). Один HTTP-сервис: API + статика фронта. Подробности — [`CURRENT_STATE.md`](./CURRENT_STATE.md).
 
-Минимальные требования для API: **`PORT`**, **`DATABASE_URL`**. Для чата в проде нужен хотя бы один провайдер LLM (**Anthropic** или **OpenAI**).
+Минимальные требования для API: **`PORT`**, **`DATABASE_URL`**. Для чата в проде нужен хотя бы один провайдер LLM (**OpenRouter**, прямой **Anthropic** или **OpenAI**).
 
 Примеры (из [`replit.md`](../replit.md), уточняйте под свою среду):
 
@@ -153,9 +153,10 @@ flowchart LR
 - **Финал ответа:** в `buildSystemPrompt` заданы правила «хвоста» — только астрологический мостик (планета/дом/транзит и т.д.), без коучинговых опросников («застой/смена/конфликт» и т.п.); иначе лучше закончить без вопроса.
 - **Стриминг:** `text/event-stream`, SSE chunks.
 - **Модели:**
-  - Если задан ключ Anthropic (`ANTHROPIC_API_KEY` или `AI_INTEGRATIONS_ANTHROPIC_API_KEY`) — чат идёт в **Claude** (`ANTHROPIC_CHAT_MODEL`, по умолчанию `claude-sonnet-4-6`).
+  - Если задан **`OPENROUTER_API_KEY`** — чат идёт в Claude через OpenRouter (`ANTHROPIC_CHAT_MODEL`, по умолчанию `anthropic/claude-sonnet-4.5`; endpoint `https://openrouter.ai/api`).
+  - Иначе если задан ключ Anthropic (`ANTHROPIC_API_KEY` / `AI_INTEGRATIONS_ANTHROPIC_API_KEY`) — прямой Claude (`claude-sonnet-4-6`).
   - Иначе — **OpenAI** (`OPENAI_CHAT_MODEL`, по умолчанию `gpt-4o-mini`) через `@workspace/integrations-openai-ai-server`.
-- **Ежедневный прогноз:** отдельный роут [`daily-forecast.ts`](../artifacts/api-server/src/routes/openai/daily-forecast.ts), модель `ANTHROPIC_FORECAST_MODEL` или fallback на memory model.
+  - **Ежедневный прогноз:** отдельный роут [`daily-forecast.ts`](../artifacts/api-server/src/routes/openai/daily-forecast.ts), модель `ANTHROPIC_FORECAST_MODEL` или fallback на memory model (через OpenRouter slug при необходимости).
 
 Итог: документ `replit.md`, где указан только GPT-5.2, для чата **не является единственным источником истины** — ориентируйтесь на `conversations.ts` выше.
 
@@ -199,9 +200,12 @@ flowchart LR
 
 | Переменная | Назначение |
 |------------|------------|
-| `ANTHROPIC_API_KEY` / `AI_INTEGRATIONS_ANTHROPIC_API_KEY` | Ключ Anthropic (предпочтительно для чата) |
-| `ANTHROPIC_CHAT_MODEL` | Модель чата (default `claude-sonnet-4-6`) |
-| `ANTHROPIC_MEMORY_MODEL` | Модель извлечения памяти (default `claude-haiku-4-5`) |
+| `OPENROUTER_API_KEY` | Ключ OpenRouter (**предпочтительно** для Claude в prod) |
+| `OPENROUTER_BASE_URL` | Override base URL (default `https://openrouter.ai/api`) |
+| `OPENROUTER_HTTP_REFERER` / `OPENROUTER_APP_TITLE` | Опционально для рейтингов OpenRouter |
+| `ANTHROPIC_API_KEY` / `AI_INTEGRATIONS_ANTHROPIC_API_KEY` | Прямой Anthropic (fallback, если нет OpenRouter) |
+| `ANTHROPIC_CHAT_MODEL` | Модель чата (OpenRouter default `anthropic/claude-sonnet-4.5`) |
+| `ANTHROPIC_MEMORY_MODEL` | Модель извлечения памяти (default `claude-haiku-4-5` → OpenRouter `anthropic/claude-haiku-4.5`) |
 | `OPENAI_CHAT_MODEL` | Fallback чата OpenAI |
 | `OPENAI_API_KEY` / `AI_INTEGRATIONS_OPENAI_API_KEY` | Ключ OpenAI |
 | `AI_INTEGRATIONS_OPENAI_BASE_URL` | Необязательный base URL OpenAI |

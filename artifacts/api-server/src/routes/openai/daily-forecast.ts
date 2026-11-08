@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { anthropic, resolveClaudeModelId } from "@workspace/integrations-anthropic-ai";
 import {
   calcNatalChart, calcEphemeris, calcLunarReturn,
   formatEphemerisForPrompt,
@@ -13,10 +13,11 @@ const router: IRouter = Router();
  * Дневной прогноз: отдельная переменная или общая с памятью.
  * Дефолт — Haiku 4.5 (alias); старый id `claude-3-5-haiku-20241022` в API часто даёт 404.
  */
-const dailyForecastAnthropicModel =
+const dailyForecastAnthropicModel = resolveClaudeModelId(
   process.env.ANTHROPIC_FORECAST_MODEL?.trim() ||
-  process.env.ANTHROPIC_MEMORY_MODEL?.trim() ||
-  "claude-haiku-4-5";
+    process.env.ANTHROPIC_MEMORY_MODEL?.trim() ||
+    "claude-haiku-4-5",
+);
 
 // Simple in-memory cache: sessionId → { date, text, moonPhase }
 const cache = new Map<string, { date: string; text: string; moonPhase: { name: string; emoji: string } }>();

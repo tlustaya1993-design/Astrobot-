@@ -1,8 +1,10 @@
-import { getAnthropic } from "@workspace/integrations-anthropic-ai";
+import { getAnthropic, resolveClaudeModelId } from "@workspace/integrations-anthropic-ai";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_ADMIN_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID;
-const HAIKU_MODEL = process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-haiku-4-5";
+const HAIKU_MODEL = resolveClaudeModelId(
+  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-haiku-4-5",
+);
 
 export type AlertContext = {
   sessionId?: string;
