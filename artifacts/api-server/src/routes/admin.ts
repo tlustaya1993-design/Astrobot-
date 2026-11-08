@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
-import { db, paymentsTable, usersTable, conversations, messages } from "@workspace/db";
+import { db, pool, paymentsTable, usersTable, conversations, messages } from "@workspace/db";
 import { hasRedis, pingRedis } from "../lib/ai-rate-limit.js";
 import { FREE_REQUESTS_LIMIT, isUnlimitedEmail } from "../lib/billing-policy.js";
 import { createYookassaRefund, YooKassaError } from "../lib/yookassa.js";
@@ -9,6 +9,7 @@ import {
   applyCreditsIfNeededByPaymentId,
   syncYooKassaPaymentFromProvider,
 } from "../lib/billing-credits.js";
+import { createLogicalBackupPayload, gzipLogicalBackup } from "../lib/logical-backup.js";
 import { safeBuildSystemPrompt } from "./openai/conversations.js";
 
 const router: IRouter = Router();
@@ -560,6 +561,33 @@ router.get("/export/emails", async (req, res) => {
     .header("Content-Disposition", `attachment; filename="users-${today}.csv"`)
     .header("Cache-Control", "no-store")
     .send("﻿" + lines.join("\r\n")); // BOM для Excel
+});
+
+/** Full logical backup (users/chats/payments) as JSON.GZ — download and store off Railway. */
+router.get("/backup/download", async (req, res) => {
+  if (!(await requireAdmin(req, res))) return;
+  if (!pool) {
+    res.status(503).json({ error: "База данных не настроена" });
+    return;
+  }
+
+  try {
+    const payload = await createLogicalBackupPayload(pool);
+    const gzipped = gzipLogicalBackup(payload);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    res
+      .status(200)
+      .header("Content-Type", "application/gzip")
+      .header("Content-Disposition", `attachment; filename="astrobot-backup-${stamp}.json.gz"`)
+      .header("Cache-Control", "no-store")
+      .header("X-Astrobot-Backup-Counts", JSON.stringify(payload.counts))
+      .send(gzipped);
+  } catch (err) {
+    res.status(500).json({
+      error: "Не удалось создать бэкап",
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
 });
 
 export default router;

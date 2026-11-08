@@ -14,6 +14,7 @@
 | Сервис | Один процесс: API + static SPA (`FRONTEND_DIST` / `artifacts/astrobot/dist/public`) |
 | Health | `GET /api/healthz` — регистрируется **до** загрузки routes; bind `0.0.0.0`; старт `node dist/index.cjs` |
 | Схема БД | `runDbMigrations`: `ensureBootstrapSchema` (CREATE TABLE IF NOT EXISTS) + ALTER колонок. Drizzle push **отключён** в деплое. |
+| Бэкапы | См. [`docs/BACKUP_RESTORE.md`](./BACKUP_RESTORE.md): Railway/Neon PITR + `pnpm db:backup` / `GET /api/admin/backup/download`. Пустая prod-БД → Telegram alert. |
 | Pre-deploy | `railway.json`: `preDeployCommand: null`; `push:ci` в `lib/db` — exit 1. Деплой **latest commit**, не Redeploy старого билда. |
 
 **Legacy (не использовать для prod):** `.replit`, `artifacts/*/.replit-artifact/` — остатки Replit, на Railway не влияют.
