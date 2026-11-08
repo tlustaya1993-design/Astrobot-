@@ -54,3 +54,6 @@ attached_assets/
 .env.local
 .env.*.local
 .railway/
+
+# Logical DB backups (pnpm db:backup)
+backups/

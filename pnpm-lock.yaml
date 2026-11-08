@@ -160,6 +160,9 @@ importers:
       '@replit/connectors-sdk':
         specifier: ^0.3.0
         version: 0.3.0
+      pg:
+        specifier: ^8.20.0
+        version: 8.20.0
     devDependencies:
       playwright:
         specifier: ^1.59.1

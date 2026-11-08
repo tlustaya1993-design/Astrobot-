@@ -77,7 +77,7 @@
 | [`lib/api-zod`](../lib/api-zod) | Сгенерированные Zod-схемы |
 | [`lib/integrations-openai-ai-server`](../lib/integrations-openai-ai-server) | OpenAI SDK-обёртка (ключи `OPENAI_API_KEY` / `AI_INTEGRATIONS_*`) |
 | [`lib/integrations-anthropic-ai`](../lib/integrations-anthropic-ai) | Клиент Anthropic |
-| [`scripts`](../scripts) | В т.ч. e2e-smoke |
+| [`scripts`](../scripts) | e2e-smoke, `db:backup` / `db:restore` (см. [`docs/BACKUP_RESTORE.md`](./BACKUP_RESTORE.md)) |
 
 ---
 

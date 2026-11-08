@@ -5,6 +5,7 @@ import {
   listPublicTables,
 } from "@workspace/db";
 import { logger } from "./logger.js";
+import { sendTelegramAlert } from "./telegram-alert.js";
 
 export type DbInitStatus = "pending" | "ready" | "failed";
 
@@ -112,6 +113,33 @@ export function startDbInitInBackground(
         { db: diag.target, tables, usersExists: tables.includes("users") },
         "Database migrations complete",
       );
+
+      // Detect wipe / brand-new empty prod DB early (Telegram if configured).
+      if (process.env.NODE_ENV === "production" && tables.includes("users")) {
+        try {
+          const usersCount = await pool.query<{ n: number }>(
+            "SELECT COUNT(*)::int AS n FROM users",
+          );
+          const paymentsCount = tables.includes("payments")
+            ? await pool.query<{ n: number }>("SELECT COUNT(*)::int AS n FROM payments")
+            : { rows: [{ n: 0 }] };
+          const nUsers = usersCount.rows[0]?.n ?? 0;
+          const nPayments = paymentsCount.rows[0]?.n ?? 0;
+          if (nUsers === 0 && nPayments === 0) {
+            logger.error(
+              { nUsers, nPayments },
+              "Production database is empty after migrations — possible wipe or new DATABASE_URL",
+            );
+            void sendTelegramAlert(
+              "Пустая production БД",
+              "После старта users=0 и payments=0. Если это не самый первый запуск — восстановите бэкап (см. docs/BACKUP_RESTORE.md), не продолжайте на пустой базе.",
+              { endpoint: "db-init", extra: "ALERT_ON_EMPTY_DB" },
+            );
+          }
+        } catch (countErr) {
+          logger.warn({ err: countErr }, "Failed to count users for empty-DB check");
+        }
+      }
     } catch (err) {
       lastError = err;
       status = "failed";
