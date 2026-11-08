@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/context/AuthContext';
-import { reportClientEvent } from '@/lib/clientLog';
 
 function safeDecode(value: string): string {
   try {
@@ -24,46 +23,25 @@ export default function AuthCallback() {
     const returnToRaw = search.get('returnTo') || '/';
     const returnTo = returnToRaw.startsWith('/') ? returnToRaw : '/';
 
-    reportClientEvent({
-      kind: 'auth_callback_mounted',
-      hasToken: Boolean(token),
-      hasSessionId: Boolean(sessionId),
-      hasEmail: Boolean(email),
-      hasError: Boolean(error),
-      returnTo,
-    });
-
-    try {
-      if (error) {
-        const message = safeDecode(error);
-        reportClientEvent({ kind: 'auth_callback_error_param', message });
-        setLocation(`/chat?authError=${encodeURIComponent(message)}`, { replace: true });
-        return;
-      }
-
-      if (token && sessionId && email) {
-        login(token, sessionId, email);
-        // Логин мог разрешиться в уже существующий (не текущий анонимный) аккаунт —
-        // если вход начался с онбординга, не возвращаем на форму онбординга напрямую
-        // (там сброс шага/полей и возможен лишний редирект-мигание для уже готовых
-        // аккаунтов). Отправляем на "/", а её загрузочная логика сама решит:
-        // онбординг для нового профиля или чат для уже настроенного.
-        const target = returnTo.startsWith('/onboarding') ? '/' : returnTo;
-        reportClientEvent({ kind: 'auth_callback_login_ok', returnTo, target });
-        setLocation(target, { replace: true });
-        return;
-      }
-
-      reportClientEvent({ kind: 'auth_callback_missing_params' });
-      setLocation('/chat?authError=' + encodeURIComponent('Не удалось завершить авторизацию'), { replace: true });
-    } catch (err) {
-      reportClientEvent({
-        kind: 'auth_callback_exception',
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      throw err;
+    if (error) {
+      const message = safeDecode(error);
+      setLocation(`/chat?authError=${encodeURIComponent(message)}`, { replace: true });
+      return;
     }
+
+    if (token && sessionId && email) {
+      login(token, sessionId, email);
+      // Логин мог разрешиться в уже существующий (не текущий анонимный) аккаунт —
+      // если вход начался с онбординга, не возвращаем на форму онбординга напрямую
+      // (там сброс шага/полей и возможен лишний редирект-мигание для уже готовых
+      // аккаунтов). Отправляем на "/", а её загрузочная логика сама решит:
+      // онбординг для нового профиля или чат для уже настроенного.
+      const target = returnTo.startsWith('/onboarding') ? '/' : returnTo;
+      setLocation(target, { replace: true });
+      return;
+    }
+
+    setLocation('/chat?authError=' + encodeURIComponent('Не удалось завершить авторизацию'), { replace: true });
   }, [login, setLocation]);
 
   return (
