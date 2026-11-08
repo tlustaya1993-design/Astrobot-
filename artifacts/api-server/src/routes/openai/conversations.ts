@@ -1,7 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db, conversations, messages, usersTable, contactsTable, memoriesTable } from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
-import { anthropic } from "@workspace/integrations-anthropic-ai";
+import {
+  anthropic,
+  hasClaudeProvider,
+  isOpenRouterProvider,
+  resolveClaudeModelId,
+} from "@workspace/integrations-anthropic-ai";
 import { logger } from "../../lib/logger.js";
 import { sendTelegramAlert } from "../../lib/telegram-alert.js";
 import { detectTier, checkAiThrottle, markInFlight, clearInFlight } from "../../lib/ai-rate-limit.js";
@@ -73,18 +78,21 @@ function sanitizeStreamError(msg: string): string {
   return msg;
 }
 
-/** Переопредели в Railway, если аккаунт Anthropic ещё не видит новый id. */
-const ANTHROPIC_CHAT_MODEL =
-  process.env.ANTHROPIC_CHAT_MODEL?.trim() || "claude-sonnet-4-6";
-/** Память / дешёвые вызовы: дефолт Haiku 4.5; старый Haiku 3.5 snapshot часто недоступен в API. */
-const ANTHROPIC_MEMORY_MODEL =
-  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-haiku-4-5";
+/**
+ * Chat via OpenRouter Claude Sonnet 4.5 (verified on openrouter.ai/api/v1/models).
+ * Override with ANTHROPIC_CHAT_MODEL if needed.
+ */
+const ANTHROPIC_CHAT_MODEL = resolveClaudeModelId(
+  process.env.ANTHROPIC_CHAT_MODEL?.trim() ||
+    (isOpenRouterProvider() ? "anthropic/claude-sonnet-4.5" : "claude-sonnet-4-6"),
+);
+/** Память / дешёвые вызовы: тот же Haiku 4.5; через OpenRouter slug адаптируется. */
+const ANTHROPIC_MEMORY_MODEL = resolveClaudeModelId(
+  process.env.ANTHROPIC_MEMORY_MODEL?.trim() || "claude-haiku-4-5",
+);
 
 function hasAnthropicProvider(): boolean {
-  return Boolean(
-    process.env.ANTHROPIC_API_KEY ||
-      process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-  );
+  return hasClaudeProvider();
 }
 
 function heuristicConversationTitle(firstMessage: string): string {

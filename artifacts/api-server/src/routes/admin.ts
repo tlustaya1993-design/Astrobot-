@@ -72,15 +72,21 @@ router.get("/status", async (req, res) => {
     checks.push({ id: "db", name: "База данных", status: "error", message: "Нет связи — данные недоступны" });
   }
 
-  // 2. Anthropic AI
+  // 2. Claude via OpenRouter (preferred) or direct Anthropic
+  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY?.trim());
   const hasAnthropicKey = Boolean(
-    process.env.ANTHROPIC_API_KEY?.trim() || process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY?.trim()
+    process.env.ANTHROPIC_API_KEY?.trim() || process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY?.trim(),
   );
+  const hasClaudeKey = hasOpenRouter || hasAnthropicKey;
   checks.push({
     id: "ai",
-    name: "Anthropic AI",
-    status: hasAnthropicKey ? "ok" : "error",
-    message: hasAnthropicKey ? "API-ключ настроен, чат работает" : "Ключ API не найден — чат не работает",
+    name: hasOpenRouter ? "Claude (OpenRouter)" : "Anthropic AI",
+    status: hasClaudeKey ? "ok" : "error",
+    message: hasOpenRouter
+      ? "OPENROUTER_API_KEY настроен, чат через OpenRouter"
+      : hasAnthropicKey
+        ? "API-ключ Anthropic настроен, чат работает"
+        : "Ключ API не найден — задайте OPENROUTER_API_KEY",
   });
 
   // 3. YooKassa payments
