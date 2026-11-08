@@ -20,6 +20,7 @@ import { AvatarSyncProvider } from "@/context/AvatarSyncContext";
 import { ChatStreamProvider } from "@/hooks/use-chat-stream";
 import { TutorialProvider } from "@/context/TutorialContext";
 import { TutorialOverlay } from "@/components/tutorial/TutorialOverlay";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { toast } from "@/hooks/use-toast";
 
 const billingTestEnabled = import.meta.env.VITE_ENABLE_BILLING_TEST === "true";
@@ -107,6 +108,7 @@ function App() {
   }, []);
 
   return (
+    <AppErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TutorialProvider>
@@ -125,6 +127,7 @@ function App() {
         </TutorialProvider>
       </AuthProvider>
     </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }
 

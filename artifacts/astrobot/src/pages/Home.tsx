@@ -5,10 +5,17 @@ import { ApiError, getGetMeQueryKey, useGetMe } from '@workspace/api-client-reac
 import { getAuthHeaders } from '@/lib/session';
 import { Button } from '@/components/ui/button';
 
-const BOOT_TIMEOUT_MS = 60_000;
+const BOOT_TIMEOUT_MS = 20_000;
 
 function isDbWarmupError(error: unknown): boolean {
   return error instanceof ApiError && error.status === 503;
+}
+
+function isNetworkishError(error: unknown): boolean {
+  if (!error) return false;
+  if (error instanceof TypeError) return true;
+  const msg = error instanceof Error ? error.message : String(error);
+  return /failed to fetch|networkerror|load failed|aborted/i.test(msg);
 }
 
 export default function Home() {
@@ -34,11 +41,11 @@ export default function Home() {
     return () => window.clearTimeout(t);
   }, []);
 
-  const warmingUp = isDbWarmupError(error) && (isFetching || isLoading);
+  const warmingUp = isDbWarmupError(error) && (isFetching || isLoading) && !bootTimedOut;
   const bootFailed =
     Boolean(error) &&
     !warmingUp &&
-    (bootTimedOut ? !user && !isFetching : true);
+    (isNetworkishError(error) || bootTimedOut || !isDbWarmupError(error));
   const bootReady = !isLoading && !isFetching;
 
   useEffect(() => {
@@ -67,7 +74,9 @@ export default function Home() {
             Сервер не отвечает
           </p>
           <p className="text-muted-foreground text-sm leading-relaxed">
-            Не удалось загрузить профиль. Обычно это временная проблема с базой данных на сервере.
+            {isNetworkishError(error)
+              ? 'Нет связи с сервером. На Android иногда мешает режим экономии данных или открытие из Telegram — попробуйте Chrome и кнопку ниже.'
+              : 'Не удалось загрузить профиль. Обычно это временная проблема с сервером.'}
           </p>
           <Button type="button" className="min-w-[10rem]" onClick={handleRetry}>
             Повторить
