@@ -20,9 +20,14 @@ export async function apiRegister(email: string, password: string, sessionId?: s
 }
 
 export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
+  // Always send the browser's current session as x-session-id (not a JWT) so the
+  // server can merge anonymous credits/history into the account being logged into.
   const res = await fetch(`${API_BASE}/api/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-session-id': getSessionId(),
+    },
     body: JSON.stringify({ email, password }),
   });
   const data = await res.json();

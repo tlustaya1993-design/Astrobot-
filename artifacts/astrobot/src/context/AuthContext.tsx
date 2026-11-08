@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getStoredEmail, getToken, saveAuth, clearAuth, getSessionId } from '@/lib/session';
+import { useQueryClient } from '@tanstack/react-query';
+import { getStoredEmail, getToken, saveAuth, clearAuth, getSessionId, clearDailyForecastCache } from '@/lib/session';
 import { apiLogout, apiVerifyToken } from '@/lib/auth';
 import AuthModal from '@/components/AuthModal';
 
@@ -18,6 +19,7 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [state, setState] = useState<AuthState>({
     isLoggedIn: false,
     email: null,
@@ -41,27 +43,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       apiVerifyToken().then(payload => {
         if (!payload) {
           clearAuth();
+          queryClient.clear();
           setState({ isLoggedIn: false, email: null, loading: false });
         }
       });
     } else {
       setState({ isLoggedIn: false, email: null, loading: false });
     }
-  }, []);
+  }, [queryClient]);
 
   const login = useCallback((token: string, sessionId: string, email: string) => {
+    // Drop prior account/guest caches so history/profile never leak across identities.
+    queryClient.clear();
+    clearDailyForecastCache();
     saveAuth(token, sessionId, email);
     setState({ isLoggedIn: true, email, loading: false });
-  }, []);
+  }, [queryClient]);
 
   const logout = useCallback(() => {
     void apiLogout();
     clearAuth();
+    queryClient.clear();
     setState({ isLoggedIn: false, email: null, loading: false });
     // Force immediate UX transition to a fresh profile flow after logout.
     // This keeps all logout entry points consistent.
     window.location.replace('/onboarding');
-  }, []);
+  }, [queryClient]);
 
   const openAuthModal = useCallback((tab: 'login' | 'register' = 'login') => {
     setAuthModalState({ open: true, tab });
