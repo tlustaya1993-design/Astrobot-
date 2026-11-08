@@ -5,63 +5,87 @@ const TOKEN_KEY = 'astrobot_jwt';
 const EMAIL_KEY = 'astrobot_email';
 const IS_TEST_KEY = 'is_test';
 
+/**
+ * Some Android WebViews / in-app browsers (Telegram, VK, old Chrome) throw
+ * SecurityError on localStorage access. A throw during React render → white screen.
+ * Keep an in-memory fallback so the app still boots.
+ */
+const memoryStore = new Map<string, string>();
+
+function storageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return memoryStore.has(key) ? memoryStore.get(key)! : null;
+  }
+}
+
+function storageSet(key: string, value: string): void {
+  memoryStore.set(key, value);
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // memory-only session for this tab
+  }
+}
+
+function storageRemove(key: string): void {
+  memoryStore.delete(key);
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
 // Run synchronously at module load — before any React component mounts or
 // makes API calls — so the x-is-test header is present from the very first request.
 try {
   if (new URLSearchParams(window.location.search).get('test') === 'true') {
-    localStorage.setItem(IS_TEST_KEY, 'true');
+    storageSet(IS_TEST_KEY, 'true');
   }
 } catch {
   // SSR or restricted env — skip silently
 }
 
 export function isTestMode(): boolean {
-  try {
-    return localStorage.getItem(IS_TEST_KEY) === 'true';
-  } catch {
-    return false;
-  }
+  return storageGet(IS_TEST_KEY) === 'true';
 }
 
 export function activateTestMode(): void {
-  try {
-    localStorage.setItem(IS_TEST_KEY, 'true');
-    // Ensure a session ID exists so the backend can tag it as test
-    getSessionId();
-  } catch {
-    // ignore
-  }
+  storageSet(IS_TEST_KEY, 'true');
+  getSessionId();
 }
 
 export function getSessionId(): string {
-  let sessionId = localStorage.getItem(SESSION_KEY);
+  let sessionId = storageGet(SESSION_KEY);
   if (!sessionId) {
     sessionId = uuidv4();
-    localStorage.setItem(SESSION_KEY, sessionId);
+    storageSet(SESSION_KEY, sessionId);
   }
   return sessionId;
 }
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  return storageGet(TOKEN_KEY);
 }
 
 export function getStoredEmail(): string | null {
-  return localStorage.getItem(EMAIL_KEY);
+  return storageGet(EMAIL_KEY);
 }
 
 export function saveAuth(token: string, sessionId: string, email: string) {
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(SESSION_KEY, sessionId);
-  localStorage.setItem(EMAIL_KEY, email);
+  storageSet(TOKEN_KEY, token);
+  storageSet(SESSION_KEY, sessionId);
+  storageSet(EMAIL_KEY, email);
 }
 
 export function clearAuth() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(EMAIL_KEY);
+  storageRemove(TOKEN_KEY);
+  storageRemove(EMAIL_KEY);
   // Rotate session id on logout so backend no longer associates this browser
   // with the previous authenticated profile.
-  localStorage.setItem(SESSION_KEY, uuidv4());
+  storageSet(SESSION_KEY, uuidv4());
   clearDailyForecastCache();
 }
 
@@ -80,12 +104,15 @@ export function clearDailyForecastCache() {
 }
 
 export function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
   const token = getToken();
-  const base = token
-    ? { 'Authorization': `Bearer ${token}` }
-    : { 'x-session-id': getSessionId() };
-  if (isTestMode()) {
-    return { ...base, 'x-is-test': 'true' };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  } else {
+    headers['x-session-id'] = getSessionId();
   }
-  return base;
+  if (isTestMode()) {
+    headers['x-is-test'] = 'true';
+  }
+  return headers;
 }

@@ -3,7 +3,7 @@
  * Перехват fetch отключён — на мобильных сетях он ломал загрузку HTML/чанков
  * (ошибка до появления записи в кэше → белый экран).
  */
-const CACHE_NAME = "astrobot-v14";
+const CACHE_NAME = "astrobot-v15";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());

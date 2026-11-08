@@ -2,7 +2,8 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- interactive-widget omitted: unsupported / buggy in some Android WebViews -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#2D2152" />
     <meta name="description" content="AstroBot — твой личный AI-астролог. Живой диалог, натальная карта, транзиты и персональные советы." />
     <!-- Open Graph / мессенджеры (VK, Telegram, WhatsApp и др.) — og:image подставляется при сборке, см. VITE_PUBLIC_ORIGIN в vite.config -->
@@ -31,25 +32,85 @@
     <link rel="icon" type="image/png" href="/favicon.png" sizes="512x512" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Non-blocking fonts: avoid stalling first paint on slow Android networks -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    </noscript>
+    <style>
+      /* Critical paint before JS/CSS chunks — avoids white flash / blank WebView */
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: #2D2152;
+        color: #f5f5f5;
+      }
+      #root {
+        min-height: 100vh;
+        min-height: 100dvh;
+      }
+      #boot-fallback {
+        display: none;
+        box-sizing: border-box;
+        min-height: 100vh;
+        padding: 24px;
+        font-family: system-ui, -apple-system, sans-serif;
+        text-align: center;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
+      }
+      #boot-fallback.visible { display: flex; }
+      #boot-fallback button {
+        margin-top: 8px;
+        padding: 12px 20px;
+        border: 0;
+        border-radius: 12px;
+        background: #E8C36A;
+        color: #1a1230;
+        font-weight: 600;
+        font-size: 15px;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="boot-fallback" role="alert">
+      <p style="font-size:18px;font-weight:600;margin:0">AstroBot не загрузился</p>
+      <p style="font-size:14px;opacity:.85;margin:0;max-width:320px;line-height:1.45">
+        Откройте сайт в Chrome (не из Telegram) или обновите браузер на телефоне.
+      </p>
+      <button type="button" onclick="location.reload()">Обновить</button>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // If the ES module bundle never mounts React, show a recoverable UI
+      // (old Android WebViews / failed chunk download).
+      window.setTimeout(function () {
+        var root = document.getElementById('root');
+        var fallback = document.getElementById('boot-fallback');
+        if (!root || !fallback) return;
+        if (!root.childElementCount) {
+          fallback.className = 'visible';
+        }
+      }, 12000);
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', async () => {
-          const SW_VERSION = 'v14';
-          const stored = localStorage.getItem('sw_version');
-          if (stored !== SW_VERSION) {
-            // New version: unregister old SWs and purge all caches
-            const regs = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(regs.map(r => r.unregister()));
-            const keys = await caches.keys();
-            await Promise.all(keys.map(k => caches.delete(k)));
-            localStorage.setItem('sw_version', SW_VERSION);
-          }
-          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(console.error);
+          try {
+            const SW_VERSION = 'v15';
+            var stored = null;
+            try { stored = localStorage.getItem('sw_version'); } catch (e) {}
+            if (stored !== SW_VERSION) {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(function (r) { return r.unregister(); }));
+              const keys = await caches.keys();
+              await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+              try { localStorage.setItem('sw_version', SW_VERSION); } catch (e) {}
+            }
+            navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(function () {});
+          } catch (e) {}
         });
       }
     </script>

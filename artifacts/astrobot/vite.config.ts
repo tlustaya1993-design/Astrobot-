@@ -124,8 +124,12 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    /** Старые мобильные Safari без части синтаксиса esnext */
-    target: ["es2020", "safari14"],
+    /**
+     * Wider mobile coverage: older Android Chrome / WebViews (Telegram, Huawei)
+     * plus Safari 14. Private fields / modern syntax get downleveled by esbuild.
+     */
+    target: ["es2019", "chrome80", "safari14"],
+    cssTarget: ["chrome80", "safari14"],
   },
   server: {
     port,
