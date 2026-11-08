@@ -33,7 +33,7 @@ import {
   isUnlimitedUser,
   getRemainingFreeRequests,
   canAffordRequest,
-  getBalanceAfterCharge,
+  getPaidUnitsNeeded,
   coerceNonNegInt,
 } from "../../lib/billing-policy.js";
 import { parseAvatarJson } from "../../lib/avatar-config.js";
@@ -144,25 +144,75 @@ function requireSessionId(
   return req.sessionId;
 }
 
+/**
+ * Delta rollback: restore used/balance by the reserved amounts.
+ * Never write an absolute balance snapshot (would wipe concurrent top-ups).
+ */
 async function rollbackRequestCharge(
   sessionId: string,
-  balanceBeforeCharge: number,
+  paidUnitsReserved: number,
   requestCost: number,
   context: string,
 ) {
   if (requestCost <= 0) return;
+  const paid = Math.max(0, paidUnitsReserved);
   try {
     await db
       .update(usersTable)
       .set({
         requestsUsed: sql`GREATEST(0, ${usersTable.requestsUsed} - ${requestCost})`,
-        requestsBalance: balanceBeforeCharge,
+        requestsBalance: sql`${usersTable.requestsBalance} + ${paid}`,
         updatedAt: new Date(),
       })
       .where(eq(usersTable.sessionId, sessionId));
   } catch (rollbackErr) {
     logger.error({ err: rollbackErr }, context);
   }
+}
+
+/**
+ * Atomically reserve free+paid quota. Returns paid units reserved, or null if race lost.
+ */
+async function reserveRequestCharge(
+  sessionId: string,
+  requestCost: number,
+  paidUnitsNeeded: number,
+  isUnlimited: boolean,
+): Promise<{ paidUnitsReserved: number } | null> {
+  if (requestCost <= 0 || isUnlimited) {
+    return { paidUnitsReserved: 0 };
+  }
+
+  const freeLimit = FREE_REQUESTS_LIMIT;
+  const paid = Math.max(0, paidUnitsNeeded);
+
+  // Affordability in SQL using pre-update free remaining:
+  // freeRemaining = GREATEST(0, freeLimit - used)
+  // paidNeeded = GREATEST(0, cost - freeRemaining)
+  // require balance >= paidNeeded (and paidNeeded matches our computed paid for consistency)
+  const [claimed] = await db
+    .update(usersTable)
+    .set({
+      requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
+      requestsBalance: sql`GREATEST(0, ${usersTable.requestsBalance} - ${paid})`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(usersTable.sessionId, sessionId),
+        sql`${usersTable.requestsBalance} >= ${paid}`,
+        sql`(
+          GREATEST(0, ${freeLimit} - ${usersTable.requestsUsed}) + ${usersTable.requestsBalance}
+        ) >= ${requestCost}`,
+      ),
+    )
+    .returning({
+      requestsUsed: usersTable.requestsUsed,
+      requestsBalance: usersTable.requestsBalance,
+    });
+
+  if (!claimed) return null;
+  return { paidUnitsReserved: paid };
 }
 
 router.get("/conversations", async (req, res) => {
@@ -394,7 +444,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     return;
   }
 
-  let balanceBeforeCharge = 0;
+  let paidUnitsReserved = 0;
   let chargedRequestCost = 0;
   let insertedUserId: number | undefined;
 
@@ -560,31 +610,33 @@ router.post("/conversations/:id/messages", async (req, res) => {
 
   markInFlight(sessionId);
 
-  const nextBalance = getBalanceAfterCharge(
-    usedBeforeCharge,
-    balanceBefore,
-    requestCost,
-    owner.email,
-  );
-
-  balanceBeforeCharge = balanceBefore;
   chargedRequestCost = requestCost;
+  const paidUnitsNeeded = getPaidUnitsNeeded(usedBeforeCharge, requestCost, owner.email);
+
+  const reserved = await reserveRequestCharge(
+    sessionId,
+    requestCost,
+    paidUnitsNeeded,
+    isUnlimited,
+  );
+  if (!reserved) {
+    clearInFlight(sessionId);
+    res.status(402).json({
+      error: `Лимит бесплатных запросов (${FREE_REQUESTS_LIMIT}) исчерпан. Пополните пакет, чтобы продолжить.`,
+      required: requestCost,
+      balance: balanceBefore,
+      freeRemaining: remainingFree,
+      isUnlimited,
+    });
+    return;
+  }
+  paidUnitsReserved = reserved.paidUnitsReserved;
 
   const [insertedUser] = await db
     .insert(messages)
     .values({ conversationId: id, role: "user", content: normalizedContent })
     .returning({ id: messages.id });
   insertedUserId = insertedUser?.id;
-
-  // Reserve quota atomically before streaming (free + paid units).
-  await db
-    .update(usersTable)
-    .set({
-      requestsUsed: sql`${usersTable.requestsUsed} + ${requestCost}`,
-      requestsBalance: nextBalance,
-      updatedAt: new Date(),
-    })
-    .where(eq(usersTable.sessionId, sessionId));
 
   const [history, userProfile, contactProfile, userMemories] = await Promise.all([
     db.select().from(messages).where(eq(messages.conversationId, id)).orderBy(messages.createdAt),
@@ -782,7 +834,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
       ).catch(() => {});
       await rollbackRequestCharge(
         sessionId,
-        balanceBeforeCharge,
+        paidUnitsReserved,
         chargedRequestCost,
         "Failed to rollback request charge after stream error",
       );
@@ -798,7 +850,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     logger.error({ err: sseErr }, "Chat SSE setup or write failed");
     await rollbackRequestCharge(
       sessionId,
-      balanceBeforeCharge,
+      paidUnitsReserved,
       chargedRequestCost,
       "Failed to rollback request charge after SSE failure",
     );
@@ -832,7 +884,7 @@ router.post("/conversations/:id/messages", async (req, res) => {
     }
     await rollbackRequestCharge(
       sessionId,
-      balanceBeforeCharge,
+      paidUnitsReserved,
       chargedRequestCost,
       "Failed to rollback request charge after top-level handler error",
     );

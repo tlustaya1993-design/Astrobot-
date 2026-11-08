@@ -8,16 +8,27 @@ import { logger } from "../lib/logger.js";
 
 const router: IRouter = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET ?? "astrobot-dev-secret-change-in-production";
+const JWT_DEV_FALLBACK = "astrobot-dev-secret-change-in-production";
+const configuredJwtSecret = process.env.JWT_SECRET?.trim() || "";
+if (
+  process.env.NODE_ENV === "production" &&
+  (!configuredJwtSecret || configuredJwtSecret === JWT_DEV_FALLBACK)
+) {
+  throw new Error(
+    "JWT_SECRET must be set to a strong unique value in production (dev fallback is forbidden)",
+  );
+}
+const JWT_SECRET = configuredJwtSecret || JWT_DEV_FALLBACK;
 const SALT_ROUNDS = 10;
-const TOKEN_TTL = "365d";
+/** Shorter TTL reduces blast radius of stolen localStorage tokens. */
+const TOKEN_TTL = process.env.JWT_TTL?.trim() || "7d";
 const OAUTH_STATE_TTL = "10m";
 const YANDEX_OAUTH_AUTHORIZE_URL = "https://oauth.yandex.ru/authorize";
 const YANDEX_OAUTH_TOKEN_URL = "https://oauth.yandex.ru/token";
 const YANDEX_USERINFO_URL = "https://login.yandex.ru/info?format=json";
 
 function signToken(sessionId: string, email: string): string {
-  return jwt.sign({ sessionId, email }, JWT_SECRET, { expiresIn: TOKEN_TTL });
+  return jwt.sign({ sessionId, email }, JWT_SECRET, { expiresIn: TOKEN_TTL } as jwt.SignOptions);
 }
 
 interface YandexOAuthState {
@@ -203,14 +214,26 @@ router.post("/register", async (req, res) => {
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
   if (existingSessionId) {
-    // Migrate anonymous session → registered account
+    // Migrate anonymous session → registered account.
+    // Refuse if the session already has credentials (blocks takeover of known UUIDs).
     const [anon] = await db
-      .select({ id: usersTable.id })
+      .select({
+        id: usersTable.id,
+        email: usersTable.email,
+        passwordHash: usersTable.passwordHash,
+      })
       .from(usersTable)
       .where(eq(usersTable.sessionId, existingSessionId))
       .limit(1);
 
     if (anon) {
+      if (anon.email?.trim() || anon.passwordHash) {
+        res.status(409).json({
+          error: "Эта сессия уже привязана к аккаунту. Войдите или продолжите без sessionId.",
+        });
+        return;
+      }
+
       const [updated] = await db
         .update(usersTable)
         .set({ email: normalizedEmail, passwordHash })

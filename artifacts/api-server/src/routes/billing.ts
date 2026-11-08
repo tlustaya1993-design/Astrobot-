@@ -1,10 +1,9 @@
 import { randomUUID } from "crypto";
 import { Router, type IRouter } from "express";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, paymentsTable, usersTable } from "@workspace/db";
 import {
   createYookassaPayment,
-  getYookassaPayment,
   parseYookassaNotification,
   YooKassaError,
   validateYookassaWebhook,
@@ -14,6 +13,11 @@ import {
   FREE_REQUESTS_LIMIT,
   isUnlimitedEmail,
 } from "../lib/billing-policy.js";
+import { isAllowedPaymentReturnUrl } from "../lib/billing-payment-safety.js";
+import {
+  applyCreditsIfNeededByPaymentId,
+  syncYooKassaPaymentFromProvider,
+} from "../lib/billing-credits.js";
 
 const router: IRouter = Router();
 
@@ -347,18 +351,6 @@ function isValidReceiptEmailForGuest(value: unknown): value is string {
   return normalizeReceiptEmail(email) !== DEFAULT_RECEIPT_EMAIL;
 }
 
-async function persistReceiptEmailIfMissing(sessionId: string, email: string): Promise<void> {
-  await db
-    .update(usersTable)
-    .set({ email, updatedAt: new Date() })
-    .where(
-      and(
-        eq(usersTable.sessionId, sessionId),
-        or(sql`${usersTable.email} IS NULL`, eq(usersTable.email, "")),
-      ),
-    );
-}
-
 function appendReturnFlag(returnUrl: string): string {
   try {
     const url = new URL(returnUrl);
@@ -380,38 +372,6 @@ async function ensurePaymentsTableReady(): Promise<void> {
     });
   }
   await paymentsTableChecked;
-}
-
-async function applyCreditsIfNeededByPaymentId(paymentId: number): Promise<number> {
-  return db.transaction(async (tx) => {
-    const [locked] = await tx
-      .select()
-      .from(paymentsTable)
-      .where(eq(paymentsTable.id, paymentId))
-      .limit(1);
-
-    if (!locked) return 0;
-    if (locked.status !== "succeeded") return 0;
-    if (locked.creditsAppliedAt) return 0;
-
-    const updated = await tx
-      .update(usersTable)
-      .set({
-        requestsBalance: sql`${usersTable.requestsBalance} + ${locked.creditsGranted}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(usersTable.sessionId, locked.sessionId))
-      .returning({ id: usersTable.id });
-
-    if (updated.length === 0) return 0;
-
-    await tx
-      .update(paymentsTable)
-      .set({ creditsAppliedAt: new Date(), updatedAt: new Date() })
-      .where(eq(paymentsTable.id, paymentId));
-
-    return locked.creditsGranted;
-  });
 }
 
 router.get("/credits", async (req, res) => {
@@ -487,6 +447,25 @@ router.post("/payments/create", async (req, res) => {
     return;
   }
 
+  const requestOrigin =
+    typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+  if (
+    !isAllowedPaymentReturnUrl(returnUrl, {
+      extraHosts: requestOrigin ? [requestOrigin] : [],
+    })
+  ) {
+    logPaymentCreateRejected({
+      httpStatus: 400,
+      reason: "validation",
+      rejectCode: "invalid_return_url",
+      message: "returnUrl host is not allowlisted",
+      sessionId,
+      packageCode,
+    });
+    res.status(400).json({ error: "Недопустимый returnUrl" });
+    return;
+  }
+
   cleanupPaymentThrottle();
   const clientIp = getClientIp(req);
   const throttleSessionKey = `sid:${sessionId}`;
@@ -526,17 +505,16 @@ router.post("/payments/create", async (req, res) => {
 
   const userId = user?.id ?? null;
 
+  // Receipt email is for YooKassa fiscal receipt only — never persist as account identity
+  // (would escalate into ADMIN_EMAILS / UNLIMITED_REQUEST_EMAILS).
   let receiptForYoo: string | null = null;
-  let receiptPersist = false;
 
   if (user?.email?.trim() && isValidReceiptEmailForGuest(user.email)) {
     receiptForYoo = normalizeReceiptEmail(user.email);
   } else if (req.authEmail?.trim() && isValidReceiptEmailForGuest(req.authEmail)) {
     receiptForYoo = normalizeReceiptEmail(req.authEmail);
-    receiptPersist = true;
   } else if (isValidReceiptEmailForGuest(receiptEmail)) {
     receiptForYoo = normalizeReceiptEmail(receiptEmail);
-    receiptPersist = true;
   }
 
   if (!receiptForYoo) {
@@ -557,10 +535,6 @@ router.post("/payments/create", async (req, res) => {
       rejectCode: "missing_receipt_email",
     });
     return;
-  }
-
-  if (receiptPersist) {
-    await persistReceiptEmailIfMissing(sessionId, receiptForYoo);
   }
 
   try {
@@ -707,21 +681,16 @@ router.post("/payments/reconcile", async (req, res) => {
   let applied = await applyCreditsIfNeededByPaymentId(latest.id);
 
   // Fallback for cases when webhook was delayed/lost: reconcile directly with YooKassa.
-  if (applied === 0 && latest.providerPaymentId && effectiveStatus !== "succeeded") {
+  // Always re-GET + verify before granting credits — never trust local status alone.
+  if (
+    applied === 0 &&
+    latest.providerPaymentId &&
+    (!latest.webhookVerified || effectiveStatus !== "succeeded")
+  ) {
     try {
-      const providerPayment = await getYookassaPayment(latest.providerPaymentId);
-      if (providerPayment?.status) {
-        effectiveStatus = providerPayment.status;
-        await db
-          .update(paymentsTable)
-          .set({
-            status: providerPayment.status,
-            metadata: providerPayment as unknown as Record<string, unknown>,
-            updatedAt: new Date(),
-          })
-          .where(eq(paymentsTable.id, latest.id));
-      }
-      if (effectiveStatus === "succeeded") {
+      const synced = await syncYooKassaPaymentFromProvider(latest, "reconcile");
+      effectiveStatus = synced.status;
+      if (synced.verifiedForCredits && effectiveStatus === "succeeded") {
         applied = await applyCreditsIfNeededByPaymentId(latest.id);
       }
     } catch (err) {
@@ -771,18 +740,24 @@ router.post("/payments/webhook", async (req, res) => {
     return;
   }
 
-  const nextStatus = notification.object.status;
+  // Never trust notification.object.status / paid — always re-fetch from YooKassa.
+  let synced: { status: string; verifiedForCredits: boolean };
+  try {
+    synced = await syncYooKassaPaymentFromProvider(paymentRow, "webhook");
+  } catch (err) {
+    logger.warn(
+      {
+        err,
+        paymentId: paymentRow.id,
+        providerPaymentId,
+      },
+      "Payment webhook provider verification failed",
+    );
+    res.status(200).json({ ok: true });
+    return;
+  }
 
-  await db
-    .update(paymentsTable)
-    .set({
-      status: nextStatus,
-      metadata: notification.object as unknown as Record<string, unknown>,
-      updatedAt: new Date(),
-    })
-    .where(eq(paymentsTable.id, paymentRow.id));
-
-  if (nextStatus === "succeeded") {
+  if (synced.verifiedForCredits && synced.status === "succeeded") {
     await applyCreditsIfNeededByPaymentId(paymentRow.id);
   }
 
