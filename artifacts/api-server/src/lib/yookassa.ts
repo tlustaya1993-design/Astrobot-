@@ -344,7 +344,11 @@ export const getYookassaPayment = getYooKassaPayment;
 export const createYookassaRefund = createYooKassaRefund;
 export const parseYookassaNotification = parseYooKassaWebhook;
 
-// Signature validation can be added later if/when YooKassa webhook signing is enabled.
+/**
+ * YooKassa does not ship a signed webhook HMAC by default.
+ * Real security is in syncYooKassaPaymentFromProvider (re-GET + amount/metadata check)
+ * before credits are applied. This stub remains for route shape compatibility.
+ */
 export function validateYookassaWebhook(_req: { headers?: Record<string, unknown> }): boolean {
   return true;
 }

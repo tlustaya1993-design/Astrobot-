@@ -38,7 +38,7 @@
 | R-8K | **Исправлено (PR2)** | Клиент отправлял >8000 при активной кнопке |
 | R-BODY | **Частично (PR2)** | Пустой `res.body` → явная ошибка на клиенте; server charge — см. billing analysis |
 | R-CTX | **Исправлено (PR2)** | Модалка смены контакта под sheet’ами |
-| R-BILL | Открыт | Split: `requestsBalance` до стрима, `requestsUsed` после успеха |
+| R-BILL | **Исправлено (P0)** | Атомарный reserve (`WHERE balance/free достаточны`) + delta-rollback; webhook ЮKassa только после re-GET + `webhook_verified` |
 | R-STR | Открыт | Навигация сбрасывает local stream; server может дописать в БД — см. [`STREAMING_NAVIGATION_NOTE.md`](./STREAMING_NAVIGATION_NOTE.md) |
 | R-SCR | Отложен | Scroll/jank во время стрима — после streaming |
 | R-PRM | Аудит | Качество ответов после «чистки» промпта — read-only audit, без правок до согласования |

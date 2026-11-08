@@ -3,6 +3,7 @@ import {
   canAffordRequest,
   coerceNonNegInt,
   getBalanceAfterCharge,
+  getPaidUnitsNeeded,
   getRemainingFreeRequests,
 } from "../billing-policy.js";
 
@@ -37,5 +38,11 @@ describe("free request quota", () => {
   it("consumes two free slots for cost=2 when enough free remains", () => {
     expect(canAffordRequest(0, 0, 2, null)).toBe(true);
     expect(getBalanceAfterCharge(0, 0, 2, null)).toBe(0);
+  });
+
+  it("computes paid units only after free quota", () => {
+    expect(getPaidUnitsNeeded(0, 1, null)).toBe(0);
+    expect(getPaidUnitsNeeded(5, 1, null)).toBe(1);
+    expect(getPaidUnitsNeeded(4, 2, null)).toBe(1);
   });
 });
