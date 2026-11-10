@@ -99,6 +99,15 @@ export async function ensureBootstrapSchema(pool: Pool): Promise<void> {
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   )`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS ops_credit_grants (
+    grant_key text PRIMARY KEY,
+    email text NOT NULL,
+    credits integer NOT NULL,
+    note text,
+    user_id integer,
+    applied_at timestamptz NOT NULL DEFAULT now()
+  )`);
 }
 
 /** For logs / readiness: which core tables exist. */
