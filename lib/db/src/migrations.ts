@@ -79,6 +79,15 @@ async function applySchemaPatches(pool: Pool): Promise<void> {
     ADD COLUMN IF NOT EXISTS webhook_verified boolean NOT NULL DEFAULT false
   `);
   await pool.query(`ALTER TABLE payments ADD COLUMN IF NOT EXISTS metadata jsonb`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS ops_credit_grants (
+    grant_key text PRIMARY KEY,
+    email text NOT NULL,
+    credits integer NOT NULL,
+    note text,
+    user_id integer,
+    applied_at timestamptz NOT NULL DEFAULT now()
+  )`);
 }
 
 export async function runDbMigrations(pool: Pool): Promise<void> {

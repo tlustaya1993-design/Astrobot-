@@ -5,6 +5,7 @@ import {
   listPublicTables,
 } from "@workspace/db";
 import { logger } from "./logger.js";
+import { applyOneTimeCreditGrants } from "./one-time-credit-grants.js";
 import { sendTelegramAlert } from "./telegram-alert.js";
 
 export type DbInitStatus = "pending" | "ready" | "failed";
@@ -139,6 +140,12 @@ export function startDbInitInBackground(
         } catch (countErr) {
           logger.warn({ err: countErr }, "Failed to count users for empty-DB check");
         }
+      }
+
+      try {
+        await applyOneTimeCreditGrants(pool);
+      } catch (grantErr) {
+        logger.warn({ err: grantErr }, "One-time credit grants failed");
       }
     } catch (err) {
       lastError = err;
