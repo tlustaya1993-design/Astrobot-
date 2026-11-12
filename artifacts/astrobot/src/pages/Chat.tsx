@@ -776,10 +776,11 @@ export default function Chat() {
       /* best-effort */
     }
     toast({
-      title: 'Запрос отправлен',
-      description: 'Мы получили сигнал и скоро разберёмся. Спасибо за терпение ❤️',
-      duration: 4000,
+      title: 'Открываем поддержку',
+      description: 'Опишите проблему в обращении — там же будет переписка.',
+      duration: 3500,
     });
+    setLocation('/support');
   };
 
   const inputTooLong = inputValue.length > MAX_CHAT_MESSAGE_CHARS;

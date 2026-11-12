@@ -12,7 +12,9 @@ import {
   Save,
   Users,
   GraduationCap,
+  LifeBuoy,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import { useTutorial } from "@/context/TutorialContext";
 import { type AvatarConfig, DEFAULT_AVATAR } from "@/components/ui/AstroAvatar";
 import IllustratedAvatar, {
@@ -121,6 +123,7 @@ export default function ProfileSheet({
   variant = "sheet",
 }: Props) {
   const { isLoggedIn, email, logout } = useAuth();
+  const [, setLocation] = useLocation();
   const { start: startTutorial } = useTutorial();
   const { avatarConfig, setAvatarConfigLocal } = useAvatarSync();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -467,6 +470,17 @@ export default function ProfileSheet({
                     className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/15 py-2.5 text-sm font-medium text-primary transition-all hover:bg-primary/25"
                   >
                     Хочу больше разборов
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      setLocation("/support");
+                    }}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-border/50 bg-white/[0.02] py-2.5 text-sm font-medium text-foreground transition-all hover:bg-white/[0.05]"
+                  >
+                    <LifeBuoy className="h-4 w-4 text-primary" />
+                    Поддержка
                   </button>
                   </div>
 

@@ -12,6 +12,7 @@ import ProfilePage from "@/pages/ProfilePage";
 import AuthCallback from "@/pages/AuthCallback";
 import BillingTestPage from "@/pages/BillingTestPage";
 import AdminPage from "@/pages/AdminPage";
+import SupportPage from "@/pages/SupportPage";
 import { getSessionId, getAuthHeaders } from "@/lib/session";
 import { recordSessionStart } from "@/lib/pwa-hints";
 import { useVisualViewport } from "@/hooks/useVisualViewport";
@@ -71,6 +72,7 @@ function Router() {
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/chat/:id?" component={Chat} />
       <Route path="/profile" component={ProfilePage} />
+      <Route path="/support" component={SupportPage} />
       <Route path="/history" component={History} />
       <Route path="/admin" component={AdminPage} />
       <Route path="/auth/callback" component={AuthCallback} />
