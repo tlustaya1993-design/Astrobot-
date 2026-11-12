@@ -37,10 +37,15 @@ function bridgeAuthorized(req: { headers: Record<string, unknown> }): boolean {
   return header === SUPPORT_BRIDGE_SECRET;
 }
 
-async function notifyN8nOwner(text: string, ticketId?: number): Promise<void> {
-  if (!SUPPORT_N8N_NOTIFY_URL) return;
+async function notifyN8nOwner(
+  text: string,
+  ticketId?: number,
+): Promise<{ delivered: boolean; reason?: string }> {
+  if (!SUPPORT_N8N_NOTIFY_URL) {
+    return { delivered: false, reason: "notify_url_unset" };
+  }
   try {
-    await fetch(SUPPORT_N8N_NOTIFY_URL, {
+    const res = await fetch(SUPPORT_N8N_NOTIFY_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -54,16 +59,26 @@ async function notifyN8nOwner(text: string, ticketId?: number): Promise<void> {
         ticket_id: ticketId ?? null,
       }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      logger.warn({ status: res.status, body }, "Failed to notify owner via n8n");
+      return { delivered: false, reason: `http_${res.status}` };
+    }
+    return { delivered: true };
   } catch (err) {
     logger.warn({ err }, "Failed to notify owner via n8n");
+    return { delivered: false, reason: "network_error" };
   }
 }
 
-async function forwardTicketToN8n(payload: Record<string, unknown>): Promise<{
-  ticket_id?: number;
-  public_id?: string;
-} | null> {
-  if (!N8N_WEBHOOK_URL) return null;
+type N8nIntakeResult =
+  | { ok: true; ticket_id?: number; public_id?: string }
+  | { ok: false; reason: "url_unset" | "http_error" | "invalid_response" | "network_error" };
+
+async function forwardTicketToN8n(
+  payload: Record<string, unknown>,
+): Promise<N8nIntakeResult> {
+  if (!N8N_WEBHOOK_URL) return { ok: false, reason: "url_unset" };
   try {
     const res = await fetch(N8N_WEBHOOK_URL, {
       method: "POST",
@@ -73,18 +88,19 @@ async function forwardTicketToN8n(payload: Record<string, unknown>): Promise<{
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       logger.warn({ status: res.status, body }, "n8n ticket intake failed");
-      return null;
+      return { ok: false, reason: "http_error" };
     }
     const data = (await res.json().catch(() => null)) as Record<string, unknown> | null;
-    if (!data) return null;
+    if (!data) return { ok: false, reason: "invalid_response" };
     const ticketId = Number(data.ticket_id ?? data.id);
     return {
+      ok: true,
       ticket_id: Number.isFinite(ticketId) ? ticketId : undefined,
       public_id: typeof data.public_id === "string" ? data.public_id : undefined,
     };
   } catch (err) {
     logger.warn({ err }, "n8n ticket intake error");
-    return null;
+    return { ok: false, reason: "network_error" };
   }
 }
 
@@ -240,20 +256,44 @@ router.post("/tickets", async (req, res) => {
       app_ticket_id: ticket.id,
     });
 
-    if (n8n?.ticket_id || n8n?.public_id) {
-      await database
-        .update(supportTickets)
-        .set({
-          n8nTicketId: n8n.ticket_id ?? null,
-          n8nPublicId: n8n.public_id ?? null,
-          updatedAt: new Date(),
-        })
-        .where(eq(supportTickets.id, ticket.id));
-      ticket.n8nTicketId = n8n.ticket_id ?? null;
-      ticket.n8nPublicId = n8n.public_id ?? null;
+    if (n8n.ok) {
+      if (n8n.ticket_id || n8n.public_id) {
+        await database
+          .update(supportTickets)
+          .set({
+            n8nTicketId: n8n.ticket_id ?? null,
+            n8nPublicId: n8n.public_id ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(supportTickets.id, ticket.id));
+        ticket.n8nTicketId = n8n.ticket_id ?? null;
+        ticket.n8nPublicId = n8n.public_id ?? null;
+      }
+      res.status(201).json({ ticket, intakeDelivered: true });
+      return;
     }
 
-    res.status(201).json({ ticket });
+    // Keep the local ticket, but do not pretend Support pipeline received it.
+    const [pending] = await database
+      .update(supportTickets)
+      .set({ status: "open", updatedAt: new Date() })
+      .where(eq(supportTickets.id, ticket.id))
+      .returning();
+    ticket.status = pending.status;
+
+    await database.insert(supportMessages).values({
+      ticketId: ticket.id,
+      role: "system",
+      content:
+        "Обращение сохранено, но до службы поддержки пока не дошло. Мы повторим доставку; можете дополнить сообщение ниже.",
+      source: "system",
+    });
+
+    res.status(202).json({
+      ticket,
+      intakeDelivered: false,
+      intakeError: n8n.reason,
+    });
   } catch (err) {
     logger.error({ err }, "POST /support/tickets failed");
     res.status(500).json({ error: "failed" });
@@ -295,12 +335,26 @@ router.post("/tickets/:id/messages", async (req, res) => {
       .where(eq(supportTickets.id, id));
 
     const n8nRef = ticket.n8nTicketId ? `#${ticket.n8nTicketId}` : `#app-${ticket.id}`;
-    await notifyN8nOwner(
+    const notify = await notifyN8nOwner(
       `[ТЕСТ] 💬 Ответ пользователя по тикету ${n8nRef}\n\n${content}`,
       ticket.n8nTicketId ?? ticket.id,
     );
 
-    res.status(201).json({ message });
+    if (!notify.delivered) {
+      await database.insert(supportMessages).values({
+        ticketId: id,
+        role: "system",
+        content:
+          "Сообщение сохранено в переписке, но уведомление владельцу не доставлено. Попробуйте ещё раз чуть позже.",
+        source: "system",
+      });
+    }
+
+    res.status(notify.delivered ? 201 : 202).json({
+      message,
+      deliveredToOwner: notify.delivered,
+      ...(notify.delivered ? {} : { deliveryError: notify.reason }),
+    });
   } catch (err) {
     logger.error({ err }, "POST /support/tickets/:id/messages failed");
     res.status(500).json({ error: "failed" });

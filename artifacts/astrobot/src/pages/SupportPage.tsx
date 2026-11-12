@@ -115,11 +115,19 @@ export default function SupportPage() {
           sessionId: getSessionId(),
         }),
       });
-      if (!res.ok) throw new Error("Не удалось создать обращение");
-      const data = (await res.json()) as { ticket: TicketDetail };
+      if (!res.ok && res.status !== 202) throw new Error("Не удалось создать обращение");
+      const data = (await res.json()) as {
+        ticket: TicketDetail;
+        intakeDelivered?: boolean;
+      };
       setDescription("");
       setExpectedBehavior("");
       setScreenshotUrl("");
+      if (data.intakeDelivered === false) {
+        setError(
+          "Обращение сохранено, но до поддержки пока не дошло. Можно дополнить его в переписке.",
+        );
+      }
       await loadTickets();
       await loadTicket(data.ticket.id);
     } catch (err) {
@@ -143,8 +151,12 @@ export default function SupportPage() {
         },
         body: JSON.stringify({ content: reply.trim() }),
       });
-      if (!res.ok) throw new Error("Не удалось отправить сообщение");
+      if (!res.ok && res.status !== 202) throw new Error("Не удалось отправить сообщение");
+      const data = (await res.json()) as { deliveredToOwner?: boolean };
       setReply("");
+      if (data.deliveredToOwner === false) {
+        setError("Сообщение сохранено, но уведомление владельцу не ушло. Попробуйте позже.");
+      }
       await loadTicket(activeId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ошибка");
