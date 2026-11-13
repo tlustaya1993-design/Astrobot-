@@ -9,7 +9,11 @@ const router = Router();
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL?.trim() || "";
 const SUPPORT_BRIDGE_SECRET = process.env.SUPPORT_BRIDGE_SECRET?.trim() || "";
 const SUPPORT_N8N_NOTIFY_URL = process.env.SUPPORT_N8N_NOTIFY_URL?.trim() || "";
-const OWNER_CHAT_ID = process.env.TELEGRAM_ADMIN_CHAT_ID?.trim() || "656328649";
+// Prefer Support-specific owner chat; TELEGRAM_ADMIN_CHAT_ID may point at a different ops chat.
+const OWNER_CHAT_ID =
+  process.env.SUPPORT_OWNER_CHAT_ID?.trim() ||
+  process.env.TELEGRAM_ADMIN_CHAT_ID?.trim() ||
+  "656328649";
 
 type TicketStatus =
   | "open"
