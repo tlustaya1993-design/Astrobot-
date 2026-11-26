@@ -457,7 +457,7 @@ router.post("/tickets/:id/messages", async (req, res) => {
 
     const n8nRef = ticket.n8nTicketId ? `#${ticket.n8nTicketId}` : `#app-${ticket.id}`;
     const notify = await notifyN8nOwner(
-      `[ТЕСТ] 💬 Ответ пользователя по тикету ${n8nRef}\n\n${content}`,
+      `💬 Ответ пользователя по тикету ${n8nRef}\n\n${content}`,
       ticket.n8nTicketId ?? ticket.id,
     );
 
