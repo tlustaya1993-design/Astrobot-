@@ -5,12 +5,12 @@ import { db, supportMessages, supportTickets } from "@workspace/db";
 import { sendTelegramAlert, sendN8nSupportRequest } from "../lib/telegram-alert.js";
 import { uploadScreenshotToR2, isR2Configured, describeR2Config } from "../lib/r2-upload.js";
 import { logger } from "../lib/logger.js";
+import { buildSupportIntakePayload, deliverTicketIntakeWithRetry } from "../lib/support-n8n-intake.js";
 import {
-  buildSupportIntakePayload,
-  deliverTicketIntakeWithRetry,
-  type N8nIntakeResult,
-  type SupportIntakePayload,
-} from "../lib/support-n8n-intake.js";
+  attemptTicketIntakeDelivery,
+  enqueueIntakeRetry,
+  markIntakeDelivered,
+} from "../lib/support-intake-queue.js";
 
 const router = Router();
 
@@ -33,8 +33,6 @@ const INTAKE_PENDING_USER_NOTE =
 
 const SUPPORT_BRIDGE_SECRET = process.env.SUPPORT_BRIDGE_SECRET?.trim() || "";
 const SUPPORT_N8N_NOTIFY_URL = process.env.SUPPORT_N8N_NOTIFY_URL?.trim() || "";
-/** Delayed background retry after inline attempts fail (ms). */
-const DEFERRED_INTAKE_RETRY_MS = Number(process.env.SUPPORT_INTAKE_RETRY_DELAY_MS || 15_000);
 // Prefer Support-specific owner chat; TELEGRAM_ADMIN_CHAT_ID may point at a different ops chat.
 const OWNER_CHAT_ID =
   process.env.SUPPORT_OWNER_CHAT_ID?.trim() ||
@@ -101,82 +99,8 @@ async function notifyN8nOwner(
   }
 }
 
-/** In-flight deferred retries — one background job per ticket. */
-const deferredIntakeRetries = new Set<number>();
-
-function isIntakePending(ticket: {
-  status: string;
-  n8nTicketId: number | null;
-  n8nPublicId: string | null;
-}): boolean {
-  // After successful delivery we move to analyzing (even without n8n ids from plain 2xx).
-  if (ticket.status !== "open") return false;
-  return ticket.n8nTicketId == null && !ticket.n8nPublicId;
-}
-
-async function markIntakeDelivered(
-  ticketId: number,
-  n8n: Extract<N8nIntakeResult, { ok: true }>,
-) {
-  const database = requireDb();
-  const [updated] = await database
-    .update(supportTickets)
-    .set({
-      status: "analyzing",
-      n8nTicketId: n8n.ticket_id ?? null,
-      n8nPublicId: n8n.public_id ?? null,
-      updatedAt: new Date(),
-    })
-    .where(eq(supportTickets.id, ticketId))
-    .returning();
-  return updated;
-}
-
-function scheduleDeferredIntakeRetry(ticketId: number, payload: SupportIntakePayload) {
-  if (deferredIntakeRetries.has(ticketId)) return;
-  deferredIntakeRetries.add(ticketId);
-
-  const delay = Number.isFinite(DEFERRED_INTAKE_RETRY_MS)
-    ? Math.max(1_000, DEFERRED_INTAKE_RETRY_MS)
-    : 15_000;
-
-  setTimeout(() => {
-    void (async () => {
-      try {
-        if (!db) return;
-        const [ticket] = await db
-          .select()
-          .from(supportTickets)
-          .where(eq(supportTickets.id, ticketId))
-          .limit(1);
-        if (!ticket || !isIntakePending(ticket)) return;
-
-        const n8n = await deliverTicketIntakeWithRetry(payload, {
-          attempts: 3,
-          delaysMs: [0, 500, 1500],
-        });
-        if (!n8n.ok) {
-          logger.warn(
-            { ticketId, reason: n8n.reason },
-            "Deferred support intake retry still failing",
-          );
-          return;
-        }
-
-        await markIntakeDelivered(ticketId, n8n);
-        await db.insert(supportMessages).values({
-          ticketId,
-          role: "system",
-          content: "Обращение доставлено в поддержку (повторная отправка).",
-          source: "system",
-        });
-      } catch (err) {
-        logger.warn({ err, ticketId }, "Deferred support intake retry crashed");
-      } finally {
-        deferredIntakeRetries.delete(ticketId);
-      }
-    })();
-  }, delay).unref?.();
+function isIntakePending(ticket: { intakeDeliveredAt: Date | null }): boolean {
+  return ticket.intakeDeliveredAt == null;
 }
 
 function coerceConversationId(raw: unknown): number | undefined {
@@ -419,37 +343,32 @@ router.post("/tickets", async (req, res) => {
       source: "system",
     });
 
-    const intakePayload = buildSupportIntakePayload({
-      description,
-      expectedBehavior,
-      screenshotUrl,
-      sessionId,
-      conversationId,
-      publicId: ticket.publicId,
-      appTicketId: ticket.id,
-      clientContext: clientContextRaw ?? null,
-    });
+    const firstShot = await deliverTicketIntakeWithRetry(
+      buildSupportIntakePayload({
+        description,
+        expectedBehavior,
+        screenshotUrl,
+        sessionId,
+        conversationId,
+        publicId: ticket.publicId,
+        appTicketId: ticket.id,
+        clientContext: clientContextRaw ?? null,
+      }),
+      { attempts: 3, delaysMs: [0, 250, 750] },
+    );
 
-    const n8n = await deliverTicketIntakeWithRetry(intakePayload, {
-      attempts: 3,
-      delaysMs: [0, 250, 750],
-    });
-
-    if (n8n.ok) {
-      const updated = await markIntakeDelivered(ticket.id, n8n);
-      Object.assign(ticket, updated);
-      res.status(201).json({ ticket, intakeDelivered: true, autoReply: AUTO_REPLY_TEXT });
+    if (firstShot.ok) {
+      const updated = await markIntakeDelivered(ticket.id, firstShot);
+      res.status(201).json({
+        ticket: updated,
+        intakeDelivered: true,
+        autoReply: AUTO_REPLY_TEXT,
+      });
       return;
     }
 
-    // Keep the local ticket; do not create another one on retry.
-    const [pending] = await database
-      .update(supportTickets)
-      .set({ status: "open", updatedAt: new Date() })
-      .where(eq(supportTickets.id, ticket.id))
-      .returning();
-    ticket.status = pending.status;
-
+    // Durable schedule in Postgres (not in-process setTimeout).
+    const pending = await enqueueIntakeRetry(ticket.id, firstShot.reason);
     await database.insert(supportMessages).values({
       ticketId: ticket.id,
       role: "system",
@@ -457,14 +376,13 @@ router.post("/tickets", async (req, res) => {
       source: "system",
     });
 
-    scheduleDeferredIntakeRetry(ticket.id, intakePayload);
-
     res.status(202).json({
-      ticket,
+      ticket: pending,
       intakeDelivered: false,
-      intakeError: n8n.reason,
+      intakeError: firstShot.reason,
       autoReply: AUTO_REPLY_TEXT,
       retryScheduled: true,
+      intakeNextRetryAt: pending?.intakeNextRetryAt ?? null,
     });
   } catch (err) {
     logger.error({ err }, "POST /support/tickets failed");
@@ -501,39 +419,21 @@ router.post("/tickets/:id/retry-intake", async (req, res) => {
       return;
     }
 
-    const intakePayload = buildSupportIntakePayload({
-      description: ticket.description,
-      expectedBehavior: ticket.expectedBehavior,
-      screenshotUrl: ticket.screenshotUrl,
-      sessionId: ticket.sessionId,
-      conversationId: ticket.conversationId,
-      publicId: ticket.publicId,
-      appTicketId: ticket.id,
+    const { result, ticket: updated } = await attemptTicketIntakeDelivery(ticket, {
+      appendSystemNoteOnSuccess: true,
+      inlineAttempts: 3,
     });
 
-    const n8n = await deliverTicketIntakeWithRetry(intakePayload, {
-      attempts: 3,
-      delaysMs: [0, 250, 750],
-    });
-
-    if (!n8n.ok) {
-      scheduleDeferredIntakeRetry(ticket.id, intakePayload);
+    if (!result.ok) {
       res.status(202).json({
-        ticket,
+        ticket: updated,
         intakeDelivered: false,
-        intakeError: n8n.reason,
+        intakeError: result.reason,
         retryScheduled: true,
+        intakeNextRetryAt: updated?.intakeNextRetryAt ?? null,
       });
       return;
     }
-
-    const updated = await markIntakeDelivered(ticket.id, n8n);
-    await database.insert(supportMessages).values({
-      ticketId: ticket.id,
-      role: "system",
-      content: "Обращение доставлено в поддержку (повторная отправка).",
-      source: "system",
-    });
 
     res.status(200).json({
       ticket: updated,
@@ -580,27 +480,12 @@ router.post("/tickets/:id/messages", async (req, res) => {
       .set({ updatedAt: new Date() })
       .where(eq(supportTickets.id, id));
 
-    // If intake never reached n8n, retry with the same idempotent payload before notify.
+    // If intake never reached n8n, retry same idempotent payload before notify.
     if (isIntakePending(ticket)) {
-      const intakePayload = buildSupportIntakePayload({
-        description: ticket.description,
-        expectedBehavior: ticket.expectedBehavior,
-        screenshotUrl: ticket.screenshotUrl,
-        sessionId: ticket.sessionId,
-        conversationId: ticket.conversationId,
-        publicId: ticket.publicId,
-        appTicketId: ticket.id,
+      const { ticket: updated } = await attemptTicketIntakeDelivery(ticket, {
+        inlineAttempts: 2,
       });
-      const intake = await deliverTicketIntakeWithRetry(intakePayload, {
-        attempts: 2,
-        delaysMs: [0, 300],
-      });
-      if (intake.ok) {
-        const updated = await markIntakeDelivered(ticket.id, intake);
-        Object.assign(ticket, updated);
-      } else {
-        scheduleDeferredIntakeRetry(ticket.id, intakePayload);
-      }
+      if (updated) Object.assign(ticket, updated);
     }
 
     const n8nRef = ticket.n8nTicketId ? `#${ticket.n8nTicketId}` : `#app-${ticket.id}`;

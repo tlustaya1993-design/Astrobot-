@@ -157,6 +157,10 @@ export async function ensureBootstrapSchema(pool: Pool): Promise<void> {
     n8n_ticket_id integer,
     n8n_public_id text,
     bridge_open boolean NOT NULL DEFAULT false,
+    intake_delivered_at timestamptz,
+    intake_attempts integer NOT NULL DEFAULT 0,
+    intake_next_retry_at timestamptz,
+    intake_last_error text,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   )`);
@@ -165,6 +169,11 @@ export async function ensureBootstrapSchema(pool: Pool): Promise<void> {
   );
   await pool.query(
     `CREATE INDEX IF NOT EXISTS support_tickets_session_id_idx ON support_tickets (session_id)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS support_tickets_intake_retry_idx
+     ON support_tickets (intake_next_retry_at)
+     WHERE intake_delivered_at IS NULL AND intake_next_retry_at IS NOT NULL`,
   );
 
   await pool.query(`CREATE TABLE IF NOT EXISTS support_messages (

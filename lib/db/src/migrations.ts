@@ -158,6 +158,25 @@ async function applySchemaPatches(pool: Pool): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS support_messages_ticket_id_idx ON support_messages (ticket_id)`,
   );
+
+  // Durable intake retry queue (survives Railway restarts).
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_delivered_at timestamptz`,
+  );
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_attempts integer NOT NULL DEFAULT 0`,
+  );
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_next_retry_at timestamptz`,
+  );
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_last_error text`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS support_tickets_intake_retry_idx
+     ON support_tickets (intake_next_retry_at)
+     WHERE intake_delivered_at IS NULL AND intake_next_retry_at IS NOT NULL`,
+  );
 }
 
 export async function runDbMigrations(pool: Pool): Promise<void> {

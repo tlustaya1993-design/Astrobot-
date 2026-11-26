@@ -22,6 +22,12 @@ export const supportTickets = pgTable("support_tickets", {
   n8nTicketId: integer("n8n_ticket_id"),
   n8nPublicId: text("n8n_public_id"),
   bridgeOpen: boolean("bridge_open").notNull().default(false),
+  /** Set when intake webhook accepted (any HTTP 2xx). Durable marker — not process memory. */
+  intakeDeliveredAt: timestamp("intake_delivered_at", { withTimezone: true }),
+  intakeAttempts: integer("intake_attempts").notNull().default(0),
+  /** Next time the durable poller should retry undelivered intake. */
+  intakeNextRetryAt: timestamp("intake_next_retry_at", { withTimezone: true }),
+  intakeLastError: text("intake_last_error"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

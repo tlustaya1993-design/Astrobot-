@@ -1,0 +1,54 @@
+-- Staging/ops Postgres (n8n account 2): make Create Ticket SQL idempotent.
+-- Apply BEFORE updating the n8n "Create Ticket SQL" node.
+-- Without this, retries with the same external_ref create duplicate tickets.
+
+-- 1) Unique key for non-empty external_ref
+CREATE UNIQUE INDEX IF NOT EXISTS tickets_external_ref_uidx
+  ON tickets (external_ref)
+  WHERE external_ref IS NOT NULL AND external_ref <> '';
+
+-- 2) Replace n8n node "Create Ticket SQL" query with:
+--
+-- WITH existing AS (
+--   SELECT id, public_id, status, description, expected_behavior,
+--          screenshot_url, session_id, conversation_id, source, external_ref
+--   FROM tickets
+--   WHERE external_ref = NULLIF($7, '')
+--     AND NULLIF($7, '') IS NOT NULL
+--   LIMIT 1
+-- ),
+-- created AS (
+--   INSERT INTO tickets (
+--     description, expected_behavior, screenshot_url,
+--     session_id, conversation_id, source, external_ref, status
+--   )
+--   SELECT
+--     $1,
+--     NULLIF($2, ''),
+--     NULLIF($3, ''),
+--     NULLIF($4, ''),
+--     NULLIF($5, ''),
+--     $6,
+--     NULLIF($7, ''),
+--     'analyzing'
+--   WHERE NOT EXISTS (SELECT 1 FROM existing)
+--   RETURNING id, public_id, status, description, expected_behavior,
+--             screenshot_url, session_id, conversation_id, source, external_ref
+-- ),
+-- hist AS (
+--   INSERT INTO tickets_history (ticket_id, ticket_pk, role, event_type, content, to_status)
+--   SELECT c.id::text, c.id, 'user', 'message', c.description, c.status
+--   FROM created c
+--   RETURNING ticket_pk
+-- ),
+-- resolved AS (
+--   SELECT * FROM existing
+--   UNION ALL
+--   SELECT * FROM created
+-- )
+-- SELECT r.*, r.id AS ticket_id
+-- FROM resolved r;
+--
+-- Query params stay the same ($1..$7): description, expected_behavior, screenshot_url,
+-- session_id, conversation_id, source, external_ref.
+-- App sends external_ref = support_tickets.public_id (= idempotency_key).

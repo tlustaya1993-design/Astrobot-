@@ -112,6 +112,12 @@ export function startDbInitInBackground(
         { db: diag.target, tables, usersExists: tables.includes("users") },
         "Database migrations complete",
       );
+      try {
+        const { startSupportIntakeRetryPoller } = await import("./support-intake-queue.js");
+        startSupportIntakeRetryPoller();
+      } catch (err) {
+        logger.warn({ err }, "Failed to start support intake retry poller");
+      }
     } catch (err) {
       lastError = err;
       status = "failed";
