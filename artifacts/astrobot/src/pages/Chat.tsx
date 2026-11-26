@@ -747,6 +747,7 @@ export default function Chat() {
   };
 
   const handleUrgentSupport = async () => {
+    // Best-effort signal, then open the Support form (M1 ticket intake + auto-reply).
     try {
       await fetch('/api/support/urgent', {
         method: 'POST',
@@ -754,13 +755,12 @@ export default function Chat() {
         body: JSON.stringify({ sessionId: getSessionId(), conversationId, failureCount }),
       });
     } catch {
-      /* best-effort */
+      /* ignore */
     }
-    toast({
-      title: 'Запрос отправлен',
-      description: 'Мы получили сигнал и скоро разберёмся. Спасибо за терпение ❤️',
-      duration: 4000,
-    });
+    const q = new URLSearchParams();
+    if (conversationId != null) q.set('conversationId', String(conversationId));
+    q.set('failureCount', String(failureCount));
+    setLocation(`/support?${q.toString()}`);
   };
 
   const inputTooLong = inputValue.length > MAX_CHAT_MESSAGE_CHARS;

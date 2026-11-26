@@ -14,6 +14,7 @@ import {
   GraduationCap,
   LifeBuoy,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import { useTutorial } from "@/context/TutorialContext";
 import { type AvatarConfig, DEFAULT_AVATAR } from "@/components/ui/AstroAvatar";
 import IllustratedAvatar, {
@@ -29,7 +30,6 @@ import AddContactModal from "@/components/chat/AddContactModal";
 import type { Contact } from "@/components/chat/PeoplePanel";
 import { CityAutocomplete } from "@/components/ui/CityAutocomplete";
 import PaywallSheet from "@/components/billing/PaywallSheet";
-import SupportModal from "@/components/support/SupportModal";
 
 interface UserProfile {
   name?: string | null;
@@ -125,6 +125,7 @@ export default function ProfileSheet({
   conversationId,
 }: Props) {
   const { isLoggedIn, email, logout } = useAuth();
+  const [, setLocation] = useLocation();
   const { start: startTutorial } = useTutorial();
   const { avatarConfig, setAvatarConfigLocal } = useAvatarSync();
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -141,7 +142,6 @@ export default function ProfileSheet({
   const [showAddContact, setShowAddContact] = useState(false);
   const [contactToEdit, setContactToEdit] = useState<Contact | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
-  const [showSupport, setShowSupport] = useState(false);
 
   const [editName, setEditName] = useState("");
   const [editBirthDate, setEditBirthDate] = useState("");
@@ -575,7 +575,12 @@ export default function ProfileSheet({
 
                   <button
                     type="button"
-                    onClick={() => setShowSupport(true)}
+                    onClick={() => {
+                      onClose();
+                      const q =
+                        conversationId != null ? `?conversationId=${conversationId}` : "";
+                      setLocation(`/support${q}`);
+                    }}
                     className="w-full flex items-center gap-3 py-3 px-4 rounded-2xl border border-border/40 hover:border-primary/30 hover:bg-white/5 transition"
                   >
                     <LifeBuoy className="w-4 h-4 text-primary shrink-0" />
@@ -607,11 +612,6 @@ export default function ProfileSheet({
 
               <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} initialTab="login" />
               <PaywallSheet open={showPaywall} onClose={() => setShowPaywall(false)} />
-              <SupportModal
-                open={showSupport}
-                onClose={() => setShowSupport(false)}
-                conversationId={conversationId}
-              />
 
               {section === "memories" && (
                 <div
