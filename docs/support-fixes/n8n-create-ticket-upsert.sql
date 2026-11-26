@@ -1,5 +1,6 @@
 -- Staging/ops Postgres (n8n account 2) + n8n node "Create Ticket SQL"
--- Source of truth (exported strings): artifacts/api-server/src/lib/n8n-create-ticket-upsert.ts
+-- Source of truth: artifacts/api-server/src/lib/n8n-create-ticket-upsert.ts
+-- DO NOT run on Production / Postgres account 1.
 --
 -- Why UPSERT: SELECT…WHERE NOT EXISTS then INSERT is not atomic under concurrency.
 -- Unique index alone turns races into unique_violation; ON CONFLICT returns the row.
