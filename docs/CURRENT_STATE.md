@@ -71,6 +71,12 @@
 
 ---
 
+## Support M1 (staging)
+
+**Статус: готово на `astrobot-dev` (2026-11-26).** Active deploy commit **`340f6c6`** (PR #196 + hotfix #197). Production не трогали. Полный отчёт: [`support-fixes/M1_STATUS.md`](./support-fixes/M1_STATUS.md).
+
+---
+
 ## Следующие шаги (согласованный порядок)
 
 1. ~~PR1 SWE gate~~  
@@ -78,4 +84,5 @@
 3. ~~PR3 docs~~  
 4. Technical note streaming → согласование PR  
 5. Billing analysis (без pending table без отдельного OK)  
-6. Prompt behavior audit (read-only)
+6. Support: **Production GO** только по явному OK владельца (см. M1_STATUS)  
+7. Prompt behavior audit (read-only)
