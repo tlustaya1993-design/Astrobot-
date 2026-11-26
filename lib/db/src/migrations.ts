@@ -122,6 +122,61 @@ async function applySchemaPatches(pool: Pool): Promise<void> {
     EXCEPTION WHEN duplicate_object THEN NULL;
     END $$
   `);
+
+  await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS support_tickets (
+    id serial PRIMARY KEY,
+    public_id uuid NOT NULL DEFAULT gen_random_uuid(),
+    session_id text NOT NULL,
+    conversation_id integer,
+    status text NOT NULL DEFAULT 'open',
+    description text NOT NULL,
+    expected_behavior text,
+    screenshot_url text,
+    n8n_ticket_id integer,
+    n8n_public_id text,
+    bridge_open boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+  )`);
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS support_tickets_public_id_uidx ON support_tickets (public_id)`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS support_tickets_session_id_idx ON support_tickets (session_id)`,
+  );
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS support_messages (
+    id serial PRIMARY KEY,
+    ticket_id integer NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+    role text NOT NULL,
+    content text NOT NULL,
+    source text NOT NULL DEFAULT 'app',
+    created_at timestamptz NOT NULL DEFAULT now()
+  )`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS support_messages_ticket_id_idx ON support_messages (ticket_id)`,
+  );
+
+  // Durable intake retry queue (survives Railway restarts).
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_delivered_at timestamptz`,
+  );
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_attempts integer NOT NULL DEFAULT 0`,
+  );
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_next_retry_at timestamptz`,
+  );
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_last_error text`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS support_tickets_intake_retry_idx
+     ON support_tickets (intake_next_retry_at)
+     WHERE intake_delivered_at IS NULL AND intake_next_retry_at IS NOT NULL`,
+  );
 }
 
 export async function runDbMigrations(pool: Pool): Promise<void> {

@@ -5,3 +5,4 @@ export * from "./contacts";
 export * from "./memories";
 export * from "./payments";
 export * from "./request-ledger";
+export * from "./support";
