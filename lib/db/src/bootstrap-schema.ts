@@ -164,6 +164,20 @@ export async function ensureBootstrapSchema(pool: Pool): Promise<void> {
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
   )`);
+  // Legacy DBs already have support_tickets without intake_* — CREATE TABLE IF NOT EXISTS
+  // is a no-op, so add columns before the partial index that references them.
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_delivered_at timestamptz`,
+  );
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_attempts integer NOT NULL DEFAULT 0`,
+  );
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_next_retry_at timestamptz`,
+  );
+  await pool.query(
+    `ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS intake_last_error text`,
+  );
   await pool.query(
     `CREATE UNIQUE INDEX IF NOT EXISTS support_tickets_public_id_uidx ON support_tickets (public_id)`,
   );
